@@ -1,12 +1,49 @@
-// use prisma-8
+// use prisma-next
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  username  String?
-  name      String?
-  avatar    String?
+  id         String       @id @default(cuid(2))
+  email      String       @unique
+  username   String?
+  name       String?
+  avatar     String?
+  rooms      Room[]       @relation("RoomAdmin")
+  chats      Chat[]
+  membership RoomMember[]
+  createdAt  TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
+}
+
+model Room {
+  id        Int          @id @default(autoincrement())
+  slug      String       @unique
+  adminId   String
+  admin     User         @relation("RoomAdmin", fields: [adminId], references: [id])
+  chats     Chat[]
+  members   RoomMember[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
 
+model RoomMember {
+  id       Int    @id @default(autoincrement())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId   Int
+  room     Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  joinedAt TimestamptzString @default(now())
+
+  @@unique([userId, roomId])
+}
+
+model Chat {
+  id        Int    @id @default(autoincrement())
+  roomId    Int
+  room      Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  message   String
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+  createdAt TimestamptzString @default(now())
+
+  @@index([roomId])
+  @@index([userId])
+}

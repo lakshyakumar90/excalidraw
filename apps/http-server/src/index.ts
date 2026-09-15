@@ -4,6 +4,7 @@ import { z } from "zod";
 import { JWT_SECRET } from "@repo/backend-common";
 import { middleware } from "./middleware.js";
 import { CreateUserSchema, SigninSchema, RoomSchema } from "@repo/validations";
+import { db } from "@repo/db";
 
 const app = express();
 
