@@ -60,49 +60,70 @@ app.post("/signup", async (req, res) => {
 });
 
 app.post("/signin", async (req, res) => {
-  const { email, password } = req.body;
-  const result = SigninSchema.safeParse({ email, password });
+  try{
+    const { email, password } = req.body;
+    const result = SigninSchema.safeParse({ email, password });
 
-  if (!result.success) {
-    return res.status(400).json(result.error);
+    if (!result.success) {
+      return res.status(400).json(result.error);
+    }
+
+    const { email: userEmail, password: userPassword } = result.data;
+
+    const existingUser = await db.orm?.public?.User
+      .select("id", "email", "name")
+      .where({ email: userEmail })
+      .first();
+
+    if (!existingUser) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    const userId = existingUser.id;
+    const token = jwt.sign(
+      {
+        userId,
+      },
+      JWT_SECRET,
+    );
+
+    res.json({
+      token,
+    });
+  } catch (e) {
+    return res.status(500).json({
+      message: "Internal server error",
+      error: e instanceof Error ? e.message : String(e)
+    });
   }
-
-  const { email: userEmail, password: userPassword } = result.data;
-
-  const existingUser = await db.orm?.public?.User
-    .select("id", "email", "name")
-    .where({ email: userEmail })
-    .first();
-
-  if (!existingUser) {
-    return res.status(400).json({ message: "User not found" });
-  }
-
-  const userId = existingUser.id;
-  const token = jwt.sign(
-    {
-      userId,
-    },
-    JWT_SECRET,
-  );
-
-  res.json({
-    token,
-  });
 });
 
-app.post("/room", middleware, (req, res) => {
-  const { name } = req.body;
-  const result = RoomSchema.safeParse({ name });
+app.post("/room", middleware, async (req, res) => {
+  try{
+    const { name } = req.body;
+    const result = RoomSchema.safeParse({ name });
 
-  if (!result.success) {
-    return res.status(400).json(result.error);
+    if (!result.success) {
+      return res.status(400).json(result.error);
+    }
+
+    const room = await db.orm?.public?.Room
+      .create({ slug: result.data.name, adminId: req.userId });
+
+    if(!room) {
+      return res.status(500).json({ message: "Failed to create room" });
+    }
+
+    res.json({
+      message: "Room created successfully",
+      roomId: room.id,
+    });
+  } catch (e) {
+    return res.status(500).json({
+      message: "Internal server error",
+      error: e instanceof Error ? e.message : String(e)
+    });
   }
-
-  res.json({
-    message: "Room created successfully",
-    roomId: "123",
-  });
 });
 
 async function startServer() {
