@@ -59,7 +59,7 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-app.post("/signin", (req, res) => {
+app.post("/signin", async (req, res) => {
   const { email, password } = req.body;
   const result = SigninSchema.safeParse({ email, password });
 
@@ -67,7 +67,18 @@ app.post("/signin", (req, res) => {
     return res.status(400).json(result.error);
   }
 
-  const userId = "123";
+  const { email: userEmail, password: userPassword } = result.data;
+
+  const existingUser = await db.orm?.public?.User
+    .select("id", "email", "name")
+    .where({ email: userEmail })
+    .first();
+
+  if (!existingUser) {
+    return res.status(400).json({ message: "User not found" });
+  }
+
+  const userId = existingUser.id;
   const token = jwt.sign(
     {
       userId,
