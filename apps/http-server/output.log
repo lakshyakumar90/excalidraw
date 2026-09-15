@@ -1,0 +1,13 @@
+Γùç injected env (0) from .env // tip: Γùê encrypted .env [www.dotenvx.com]
+Γ¥î Failed to connect to the database: Error [StructuredError]: Postgres binding not configured. Pass url/pg/binding to postgres(...) or call db.connect({ ... }).
+    at structuredError (file:///C:/Lakshya/excalidraw/node_modules/.pnpm/@prisma+orm-framework@8.0.0-rc.11_typescript@7.0.2/node_modules/@prisma/orm-framework/dist/structured-error-BXbihKQ-.mjs:12:91)
+    at postgresError (file:///C:/Lakshya/excalidraw/node_modules/.pnpm/@prisma+orm-postgres@8.0.0-_04f2c23f7f4df19e23efea649644f9cf/node_modules/@prisma/orm-postgres/dist/errors-DfWK9xep-CYOOg0sB.mjs:4:9)
+    at Object.connect (file:///C:/Lakshya/excalidraw/node_modules/.pnpm/@prisma+orm-postgres@8.0.0-_04f2c23f7f4df19e23efea649644f9cf/node_modules/@prisma/orm-postgres/dist/runtime.mjs:195:34)
+    at startServer (file:///C:/Lakshya/excalidraw/apps/http-server/dist/index.js:68:18)
+    at file:///C:/Lakshya/excalidraw/apps/http-server/dist/index.js:79:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
+    at async node:internal/modules/esm/loader:650:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  code: 'RUNTIME.BINDING_MISSING',
+  meta: { extension: 'postgres' }
+}
