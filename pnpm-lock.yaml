@@ -142,6 +142,12 @@ importers:
         specifier: 26.4.1
         version: 26.4.1
 
+  packages/common:
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+
   packages/db:
     dependencies:
       '@prisma/orm-postgres':
