@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@repo/common": "workspace:*",
+    "@repo/engine": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

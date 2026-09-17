@@ -76,6 +76,9 @@ importers:
       '@repo/common':
         specifier: workspace:*
         version: link:../../packages/common
+      '@repo/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
