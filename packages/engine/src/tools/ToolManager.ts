@@ -1,8 +1,10 @@
 import type { Element, Point } from "@repo/common";
 import { RectangleTool } from "./RectangleTool";
+import { DiamondTool } from "./DiamondTool";
+import { EllipseTool } from "./EllipseTool";
 import type { Tool, ToolPointerEvent } from "./Tool";
 
-export type ToolType = "selection" | "rectangle";
+export type ToolType = "rectangle" | "diamond" | "ellipse";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
@@ -16,7 +18,11 @@ export class ToolManager {
   private readonly subscribers = new Set<() => void>();
 
   constructor(options: ToolManagerOptions) {
-    this.tools = new Map([["rectangle", new RectangleTool()]]);
+    this.tools = new Map<ToolType, Tool>([
+      ["rectangle", new RectangleTool()],
+      ["diamond", new DiamondTool()],
+      ["ellipse", new EllipseTool()],
+    ]);
     this.onCommit = options.onCommit;
   }
 

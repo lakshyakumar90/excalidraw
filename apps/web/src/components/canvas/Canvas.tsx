@@ -234,16 +234,20 @@ export function Canvas() {
         return;
       }
 
-      if (event.key.toLowerCase() === "r") {
-        if (
-          event.target instanceof HTMLInputElement ||
-          event.target instanceof HTMLTextAreaElement ||
-          event.target instanceof HTMLSelectElement
-        ) {
-          return;
-        }
+      const key = event.key.toLowerCase();
 
+      if (key === "r") {
         toolManager.setActiveTool("rectangle");
+        return;
+      }
+
+      if (key === "e") {
+        toolManager.setActiveTool("ellipse");
+        return;
+      }
+
+      if (key === "d") {
+        toolManager.setActiveTool("diamond");
         return;
       }
 

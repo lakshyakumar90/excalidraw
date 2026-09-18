@@ -135,6 +135,87 @@ function drawRectangle(
   context.restore();
 }
 
+function drawEllipse(
+  context: CanvasRenderingContext2D,
+  element: Extract<Element, { type: "ellipse" }>,
+): void {
+  const x = element.x ?? 0;
+  const y = element.y ?? 0;
+  const width = element.width ?? 0;
+  const height = element.height ?? 0;
+  const angle = element.angle ?? 0;
+  const opacity = element.opacity ?? 100;
+  const backgroundColor = element.backgroundColor ?? "transparent";
+  const strokeColor = element.strokeColor ?? "#000000";
+  const strokeWidth = element.strokeWidth ?? 1;
+
+  context.save();
+  context.translate(x + width / 2, y + height / 2);
+  context.rotate(angle);
+  context.globalAlpha = opacity / 100;
+
+  context.beginPath();
+  context.ellipse(
+    0,
+    0,
+    Math.abs(width) / 2,
+    Math.abs(height) / 2,
+    0,
+    0,
+    Math.PI * 2,
+  );
+
+  if (backgroundColor !== "transparent") {
+    context.fillStyle = backgroundColor;
+    context.fill();
+  }
+
+  context.strokeStyle = strokeColor;
+  context.lineWidth = strokeWidth;
+  context.stroke();
+  context.restore();
+}
+
+function drawDiamond(
+  context: CanvasRenderingContext2D,
+  element: Extract<Element, { type: "diamond" }>,
+): void {
+  const x = element.x ?? 0;
+  const y = element.y ?? 0;
+  const width = element.width ?? 0;
+  const height = element.height ?? 0;
+  const angle = element.angle ?? 0;
+  const opacity = element.opacity ?? 100;
+  const backgroundColor = element.backgroundColor ?? "transparent";
+  const strokeColor = element.strokeColor ?? "#000000";
+  const strokeWidth = element.strokeWidth ?? 1;
+
+  context.save();
+  context.translate(x + width / 2, y + height / 2);
+  context.rotate(angle);
+  context.globalAlpha = opacity / 100;
+
+  const halfWidth = Math.abs(width) / 2;
+  const halfHeight = Math.abs(height) / 2;
+
+  context.beginPath();
+  context.moveTo(0, -halfHeight);
+  context.lineTo(halfWidth, 0);
+  context.lineTo(0, halfHeight);
+  context.lineTo(-halfWidth, 0);
+  context.closePath();
+
+  if (backgroundColor !== "transparent") {
+    context.fillStyle = backgroundColor;
+    context.fill();
+  }
+
+  context.strokeStyle = strokeColor;
+  context.lineWidth = strokeWidth;
+  context.stroke();
+  context.restore();
+}
+
 function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
@@ -142,6 +223,14 @@ function drawElement(
   switch (element.type) {
     case "rectangle":
       drawRectangle(context, element);
+      break;
+    
+    case "ellipse":
+      drawEllipse(context, element);
+      break;
+
+    case "diamond":
+      drawDiamond(context, element);
       break;
 
     default:

@@ -147,4 +147,112 @@ describe("ToolManager", () => {
 
     unsubscribe();
   });
+
+  it("creates an ellipse", () => {
+    const onCommit = vi.fn();
+
+    const manager = new ToolManager({
+      onCommit,
+    });
+
+    manager.setActiveTool("ellipse");
+
+    manager.onPointerDown(
+      {
+        x: 100,
+        y: 100,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    manager.onPointerMove(
+      {
+        x: 300,
+        y: 200,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    expect(manager.getPreviewElement()).toMatchObject({
+      type: "ellipse",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+    });
+
+    manager.onPointerUp(
+      {
+        x: 300,
+        y: 200,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+
+    expect(onCommit.mock.calls[0][0]).toMatchObject({
+      type: "ellipse",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+    });
+  });
+
+  it("creates a diamond", () => {
+    const onCommit = vi.fn();
+
+    const manager = new ToolManager({
+      onCommit,
+    });
+
+    manager.setActiveTool("diamond");
+
+    manager.onPointerDown(
+      {
+        x: 400,
+        y: 300,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    manager.onPointerUp(
+      {
+        x: 200,
+        y: 100,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    expect(onCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "diamond",
+        x: 200,
+        y: 100,
+        width: 200,
+        height: 200,
+      }),
+    );
+  });
 });

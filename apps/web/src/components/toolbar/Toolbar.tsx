@@ -5,8 +5,15 @@ import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 
 const TOOL_LABELS: Record<ToolType, string> = {
-  selection: "Select",
   rectangle: "Rectangle",
+  ellipse: "Ellipse",
+  diamond: "Diamond",
+};
+
+const TOOL_SHORTCUTS: Record<ToolType, string> = {
+  rectangle: "R",
+  ellipse: "E",
+  diamond: "D",
 };
 
 function ToolButton({
@@ -33,7 +40,10 @@ function ToolButton({
           : "text-neutral-700 hover:bg-neutral-100",
       ].join(" ")}
     >
-      {label}
+      <span>{label}</span>
+      <span className="ml-2 text-[10px] opacity-50">
+        {TOOL_SHORTCUTS[type]}
+      </span>
     </button>
   );
 }
