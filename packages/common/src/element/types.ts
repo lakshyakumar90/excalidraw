@@ -28,7 +28,7 @@ export interface BaseElement {
   groupIds?: string[];
   boundElements?: string[];
   frameId?: string | null;
-  version?: number;
+  version?: number | 1;
   versionNonce?: number;
   isDeleted?: boolean;
   updated?: number;
