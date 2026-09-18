@@ -52,12 +52,12 @@ export class Scene {
     return this.elementMap.has(id);
   }
 
-  subscribe(listener: () => void): () => void {
+  subscribe = (listener: () => void): () => void => {
     this.subscribers.add(listener);
     return () => {
       this.subscribers.delete(listener);
     };
-  }
+  };
 
   private notify(): void {
     for (const listener of this.subscribers) {
@@ -91,6 +91,10 @@ export class Scene {
   get size(): number {
     return this.elements.length;
   }
+
+  getSnapshot = (): number => {
+    return this.sceneVersion;
+  };
 
   markClean(): void {
     this.dirty = false;

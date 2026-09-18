@@ -184,7 +184,7 @@ describe("Scene", () => {
 
   it("can mark the scene clean", () => {
     const scene = new Scene();
-  
+
     const element = createRectangleElement({
       id: "test-id8",
       type: "rectangle",
@@ -199,5 +199,30 @@ describe("Scene", () => {
     scene.markClean();
 
     expect(scene.isDirty).toBe(false);
+  });
+
+  it("increments its snapshot version when the scene changes", () => {
+    const scene = new Scene();
+
+    expect(scene.getSnapshot()).toBe(0);
+
+    const element = createRectangleElement({
+      x: 0,
+      y: 0,
+    });
+
+    scene.addElement(element);
+
+    expect(scene.getSnapshot()).toBe(1);
+
+    scene.mutateElement(element.id, {
+      x: 100,
+    });
+
+    expect(scene.getSnapshot()).toBe(2);
+
+    scene.removeElement(element.id);
+
+    expect(scene.getSnapshot()).toBe(3);
   });
 });
