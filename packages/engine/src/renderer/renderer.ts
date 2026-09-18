@@ -180,7 +180,27 @@ export function renderStatic(
   return visibleElements.length;
 }
 
-export function renderInteractive(renderContext: RenderContext): void {
+export function renderInteractive(
+  renderContext: RenderContext,
+  previewElement: Element | null = null,
+): void {
   const { context, width, height } = renderContext;
-  clearCanvas(context, width, height);
+
+  context.clearRect(0, 0, width, height);
+
+  if (!previewElement) return;
+
+  context.save();
+
+  context.translate(
+    renderContext.viewport.scrollX,
+    renderContext.viewport.scrollY,
+  );
+
+  context.scale(renderContext.viewport.zoom, renderContext.viewport.zoom);
+  context.globalAlpha = 0.6;
+  context.setLineDash([6, 4]);
+  drawElement(context, previewElement);
+
+  context.restore();
 }

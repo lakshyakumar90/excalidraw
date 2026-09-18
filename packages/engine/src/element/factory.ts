@@ -1,4 +1,4 @@
-import type { BaseElement, Element } from "@repo/common";
+import type { BaseElement, Element, RectangleElement } from "@repo/common";
 
 export type ElementOptions = Partial<BaseElement>;
 
@@ -11,7 +11,7 @@ function generateSeed(): number {
   return Math.floor(Math.random() * 2_147_483_647);
 }
 
-export function createRectangleElement(options: ElementOptions = {}): Element {
+export function createRectangleElement(options: ElementOptions = {}): RectangleElement {
   return {
     id: options.id ?? generateElementId(),
     type: "rectangle",
