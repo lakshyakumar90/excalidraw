@@ -69,6 +69,15 @@ export function Canvas() {
 
     const drawGrid = (context: CanvasRenderingContext2D, size: Size) => {
       const viewport = viewportRef.current;
+      // const baseGridSize = 20;
+
+      // const gridSize =
+      //   viewport.zoom < 0.5
+      //     ? baseGridSize * 2
+      //     : viewport.zoom < 0.25
+      //       ? baseGridSize * 4
+      //       : baseGridSize;
+      // 
       const gridSize = 20;
       context.save();
 
@@ -117,7 +126,9 @@ export function Canvas() {
       context.restore();
     };
 
-    const getPointerPosition = (event: Pick<MouseEvent, "clientX" | "clientY">): Point => {
+    const getPointerPosition = (
+      event: Pick<MouseEvent, "clientX" | "clientY">,
+    ): Point => {
       const rect = canvas.getBoundingClientRect();
       return {
         x: event.clientX - rect.left,
@@ -156,7 +167,6 @@ export function Canvas() {
         width: canvas.clientWidth,
         height: canvas.clientHeight,
       });
-
     };
 
     // Space + Left Mouse → Pan
@@ -188,6 +198,50 @@ export function Canvas() {
         spacePressRef.current = true;
         event.preventDefault();
       }
+
+      if (!event.ctrlKey && !event.metaKey) {
+        return;
+      }
+
+      const center: Point = {
+        x: canvas.clientWidth / 2,
+        y: canvas.clientHeight / 2,
+      };
+
+      const viewport = viewportRef.current;
+
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        viewportRef.current = zoomAtPoint(
+          viewport,
+          center,
+          viewport.zoom * 1.2,
+        );
+      }
+
+      if (event.key === "-") {
+        event.preventDefault();
+        viewportRef.current = zoomAtPoint(
+          viewport,
+          center,
+          viewport.zoom / 1.2,
+        );
+      }
+
+      if (event.key === "0") {
+        event.preventDefault();
+        viewportRef.current = zoomAtPoint(viewport, center, 1);
+      }
+
+      scenePointerRef.current = viewportToScene(
+        pointerRef.current,
+        viewportRef.current,
+      );
+
+      draw(ctx, {
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+      });
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
@@ -211,7 +265,6 @@ export function Canvas() {
         width: canvas.clientWidth,
         height: canvas.clientHeight,
       });
-
     };
 
     const updateFps = () => {
@@ -230,7 +283,6 @@ export function Canvas() {
 
       frameCountRef.current = 0;
       lastFpsTimeRef.current = now;
-
     };
 
     resize();
