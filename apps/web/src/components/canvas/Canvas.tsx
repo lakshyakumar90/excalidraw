@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Point, Size, Viewport } from "@repo/common";
-import { renderInteractive, renderStatic, viewportToScene, zoomAtPoint } from "@repo/engine";
+import type { Point, Viewport } from "@repo/common";
+import {
+  createRenderState,
+  RenderLoop,
+  renderInteractive,
+  renderStatic,
+  viewportToScene,
+  zoomAtPoint,
+} from "@repo/engine";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -21,8 +28,6 @@ export function Canvas() {
   const isPanningRef = useRef(false);
   const lastPointerRef = useRef<Point>({ x: 0, y: 0 });
   const spacePressRef = useRef(false);
-  const staticDirtyRef = useRef(true);
-  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
@@ -34,13 +39,45 @@ export function Canvas() {
 
     const staticContext = staticCanvas.getContext("2d");
     const interactiveContext = interactiveCanvas.getContext("2d");
+
     if (!staticContext || !interactiveContext) {
       return;
     }
 
     let width = 0;
     let height = 0;
-    let dpr = 1;
+
+    const renderState = createRenderState();
+
+    const renderLoop = new RenderLoop(
+      renderState,
+      {
+        renderStatic: () => {
+          renderStatic(
+            {
+              context: staticContext,
+              width,
+              height,
+              viewport: viewportRef.current,
+            },
+            scene.getElements(),
+          );
+        },
+
+        renderInteractive: () => {
+          renderInteractive({
+            context: interactiveContext,
+            width,
+            height,
+            viewport: viewportRef.current,
+          });
+        },
+      },
+      {
+        requestFrame: (callback) => window.requestAnimationFrame(callback),
+        cancelFrame: (handle) => window.cancelAnimationFrame(handle),
+      },
+    );
 
     const getPointerPosition = (
       event: Pick<MouseEvent, "clientX" | "clientY">,
@@ -59,7 +96,7 @@ export function Canvas() {
       width = rect.width;
       height = rect.height;
 
-      dpr = window.devicePixelRatio || 1;
+      const dpr = window.devicePixelRatio || 1;
       staticCanvas.width = Math.round(width * dpr);
       staticCanvas.height = Math.round(height * dpr);
       interactiveCanvas.width = Math.round(width * dpr);
@@ -70,36 +107,7 @@ export function Canvas() {
       interactiveCanvas.style.height = `${height}px`;
       staticContext.setTransform(dpr, 0, 0, dpr, 0, 0);
       interactiveContext.setTransform(dpr, 0, 0, dpr, 0, 0);
-      staticDirtyRef.current = true;
-    };
-
-    const render = () => {
-      if (staticDirtyRef.current) {
-        renderStatic(
-          {
-            context: staticContext,
-            width,
-            height,
-            viewport: viewportRef.current,
-          },
-          scene.getElements(),
-        );
-
-        staticDirtyRef.current = false;
-      }
-
-      renderInteractive({
-        context: interactiveContext,
-        width,
-        height,
-        viewport: viewportRef.current,
-      });
-
-      animationFrameRef.current = requestAnimationFrame(render);
-    };
-
-    const requestStaticRender = () => {
-      staticDirtyRef.current = true;
+      renderLoop.invalidateAll();
     };
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -115,7 +123,6 @@ export function Canvas() {
       const dx = point.x - lastPointerRef.current.x;
       const dy = point.y - lastPointerRef.current.y;
       const viewport = viewportRef.current;
-
       viewportRef.current = {
         ...viewport,
         scrollX: viewport.scrollX + dx,
@@ -124,7 +131,7 @@ export function Canvas() {
 
       lastPointerRef.current = point;
       scenePointerRef.current = viewportToScene(point, viewportRef.current);
-      requestStaticRender();
+      renderLoop.invalidateStatic();
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -176,7 +183,7 @@ export function Canvas() {
           viewport.zoom * 1.2,
         );
 
-        requestStaticRender();
+        renderLoop.invalidateStatic();
       }
 
       if (event.key === "-") {
@@ -188,14 +195,15 @@ export function Canvas() {
           viewport.zoom / 1.2,
         );
 
-        requestStaticRender();
+        renderLoop.invalidateStatic();
       }
 
       if (event.key === "0") {
         event.preventDefault();
 
         viewportRef.current = zoomAtPoint(viewport, center, 1);
-        requestStaticRender();
+
+        renderLoop.invalidateStatic();
       }
 
       scenePointerRef.current = viewportToScene(
@@ -214,18 +222,17 @@ export function Canvas() {
       event.preventDefault();
 
       const cursor = getPointerPosition(event);
-
       pointerRef.current = cursor;
       const viewport = viewportRef.current;
       const zoomFactor = Math.exp(-event.deltaY * 0.001);
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
       scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
-      requestStaticRender();
+      renderLoop.invalidateStatic();
     };
 
     const unsubscribe = scene.subscribe(() => {
-      requestStaticRender();
+      renderLoop.invalidateStatic();
     });
 
     resizeCanvas();
@@ -239,11 +246,11 @@ export function Canvas() {
     });
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
-    animationFrameRef.current = requestAnimationFrame(render);
+    renderLoop.start();
 
     return () => {
       unsubscribe();
-
+      renderLoop.stop();
       window.removeEventListener("resize", resizeCanvas);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
       interactiveCanvas.removeEventListener("pointermove", handlePointerMove);
@@ -251,9 +258,6 @@ export function Canvas() {
       interactiveCanvas.removeEventListener("wheel", handleWheel);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     };
   }, []);
 
