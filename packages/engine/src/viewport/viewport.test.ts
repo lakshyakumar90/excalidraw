@@ -4,6 +4,7 @@ import {
   clampZoom,
   zoomAtPoint,
 } from "./viewport";
+import { viewportToScene } from "../geometry";
 
 describe("clampZoom", () => {
   it("clamps zoom below minimum", () => {
@@ -53,5 +54,42 @@ describe("zoomAtPoint", () => {
     expect(
       sceneY * next.zoom + next.scrollY,
     ).toBeCloseTo(cursor.y);
+  });
+
+  it("preserves the scene point under the cursor", () => {
+    const viewport = {
+      scrollX: 100,
+      scrollY: 50,
+      zoom: 1,
+    };
+  
+    const cursor = {
+      x: 500,
+      y: 300,
+    };
+  
+    const before = viewportToScene(
+      cursor,
+      viewport,
+    );
+  
+    const next = zoomAtPoint(
+      viewport,
+      cursor,
+      2,
+    );
+  
+    const after = viewportToScene(
+      cursor,
+      next,
+    );
+  
+    expect(after.x).toBeCloseTo(
+      before.x,
+    );
+  
+    expect(after.y).toBeCloseTo(
+      before.y,
+    );
   });
 });
