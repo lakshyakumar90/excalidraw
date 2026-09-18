@@ -17,6 +17,10 @@ export function Canvas() {
   const isPanningRef = useRef(false);
   const lastPointerRef = useRef<Point>({ x: 0, y: 0 });
   const spacePressRef = useRef(false);
+  const scenePointerRef = useRef<Point>({ x: 0, y: 0 });
+  const fpsRef = useRef(0);
+  const frameCountRef = useRef(0);
+  const lastFpsTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,6 +34,8 @@ export function Canvas() {
     if (!ctx) {
       return;
     }
+
+    lastFpsTimeRef.current = performance.now();
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -53,12 +59,65 @@ export function Canvas() {
     const draw = (context: CanvasRenderingContext2D, size: Size) => {
       context.clearRect(0, 0, size.width, size.height);
 
-      context.fillStyle = "#000000";
+      context.fillStyle = "#ffffff";
 
       context.fillRect(0, 0, size.width, size.height);
+
+      drawGrid(context, size);
+      drawOrigin(context);
     };
 
-    const getPointerPosition = (event: PointerEvent): Point => {
+    const drawGrid = (context: CanvasRenderingContext2D, size: Size) => {
+      const viewport = viewportRef.current;
+      const gridSize = 20;
+      context.save();
+
+      context.translate(viewport.scrollX, viewport.scrollY);
+      context.scale(viewport.zoom, viewport.zoom);
+      const startX =
+        Math.floor(-viewport.scrollX / viewport.zoom / gridSize) * gridSize;
+      const startY =
+        Math.floor(-viewport.scrollY / viewport.zoom / gridSize) * gridSize;
+
+      const endX = startX + size.width / viewport.zoom + gridSize * 2;
+      const endY = startY + size.height / viewport.zoom + gridSize * 2;
+
+      context.beginPath();
+
+      for (let x = startX; x <= endX; x += gridSize) {
+        context.moveTo(x, startY);
+        context.lineTo(x, endY);
+      }
+
+      for (let y = startY; y <= endY; y += gridSize) {
+        context.moveTo(startX, y);
+        context.lineTo(endX, y);
+      }
+
+      context.strokeStyle = "#e5e5e5";
+      context.lineWidth = 1 / viewport.zoom;
+      context.stroke();
+      context.restore();
+    };
+
+    const drawOrigin = (context: CanvasRenderingContext2D) => {
+      const viewport = viewportRef.current;
+      context.save();
+
+      context.translate(viewport.scrollX, viewport.scrollY);
+      context.scale(viewport.zoom, viewport.zoom);
+      context.beginPath();
+      context.moveTo(-30, 0);
+      context.lineTo(30, 0);
+      context.moveTo(0, -30);
+      context.lineTo(0, 30);
+      context.strokeStyle = "#737373";
+      context.lineWidth = 1 / viewport.zoom;
+      context.stroke();
+      context.restore();
+    };
+
+    const getPointerPosition = (event: Pick<MouseEvent, "clientX" | "clientY">): Point => {
       const rect = canvas.getBoundingClientRect();
       return {
         x: event.clientX - rect.left,
@@ -69,6 +128,9 @@ export function Canvas() {
     const handlePointerMove = (event: PointerEvent) => {
       const point = getPointerPosition(event);
       pointerRef.current = point;
+
+      const scenePoint = viewportToScene(point, viewportRef.current);
+      scenePointerRef.current = scenePoint;
 
       if (!isPanningRef.current) {
         return;
@@ -87,10 +149,14 @@ export function Canvas() {
 
       lastPointerRef.current = point;
 
+      const updatedScenePoint = viewportToScene(point, viewportRef.current);
+      scenePointerRef.current = updatedScenePoint;
+
       draw(ctx, {
         width: canvas.clientWidth,
         height: canvas.clientHeight,
       });
+
     };
 
     // Space + Left Mouse → Pan
@@ -134,15 +200,37 @@ export function Canvas() {
       event.preventDefault();
 
       const cursor = getPointerPosition(event);
+      pointerRef.current = cursor;
       const viewport = viewportRef.current;
       const zoomFactor = Math.exp(-event.deltaY * 0.001);
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
+      scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
 
       draw(ctx, {
         width: canvas.clientWidth,
         height: canvas.clientHeight,
       });
+
+    };
+
+    const updateFps = () => {
+      frameCountRef.current += 1;
+      const now = performance.now();
+
+      if (lastFpsTimeRef.current === null) {
+        lastFpsTimeRef.current = now;
+        return;
+      }
+
+      const elapsed = now - lastFpsTimeRef.current;
+      if (elapsed >= 1000) {
+        fpsRef.current = Math.round((frameCountRef.current * 1000) / elapsed);
+      }
+
+      frameCountRef.current = 0;
+      lastFpsTimeRef.current = now;
+
     };
 
     resize();
