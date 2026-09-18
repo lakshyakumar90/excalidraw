@@ -9,9 +9,9 @@ import {
   renderStatic,
   viewportToScene,
   zoomAtPoint,
-  ToolManager,
   Tool,
 } from "@repo/engine";
+import { toolManager } from "@/lib/tools/toolManager";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 
 import { scene } from "@/lib/scene/scene";
@@ -53,15 +53,6 @@ export function Canvas() {
 
     const renderState = createRenderState();
 
-    const toolManager = new ToolManager({
-      onCommit: (element) => {
-        scene.addElement(element);
-      },
-      onChange: () => {
-        renderLoop.invalidateInteractive();
-      },
-    });
-
     const renderLoop = new RenderLoop(
       renderState,
       {
@@ -94,6 +85,10 @@ export function Canvas() {
         cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       },
     );
+
+    const unsubscribeToolManager = toolManager.subscribe(() => {
+      renderLoop.invalidateInteractive();
+    });
 
     const publishDiagnostics = () => {
       renderDiagnostics.update(
@@ -239,6 +234,19 @@ export function Canvas() {
         return;
       }
 
+      if (event.key.toLowerCase() === "r") {
+        if (
+          event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLTextAreaElement ||
+          event.target instanceof HTMLSelectElement
+        ) {
+          return;
+        }
+
+        toolManager.setActiveTool("rectangle");
+        return;
+      }
+
       if (!event.ctrlKey && !event.metaKey) {
         return;
       }
@@ -325,6 +333,7 @@ export function Canvas() {
     renderLoop.start();
 
     return () => {
+      unsubscribeToolManager();
       clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();

@@ -2,33 +2,32 @@ import type { Element, Point } from "@repo/common";
 import { RectangleTool } from "./RectangleTool";
 import type { Tool, ToolPointerEvent } from "./Tool";
 
-export type ToolType = "rectangle";
+export type ToolType = "selection" | "rectangle";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
-  onChange?: () => void;
 }
 
 export class ToolManager {
   private readonly tools: Map<ToolType, Tool>;
-  private activeToolType: ToolType;
+  private activeToolType: ToolType = "rectangle";
   private previewElement: Element | null = null;
   private readonly onCommit: (element: Element) => void;
-  private readonly onChange: (() => void) | undefined;
+  private readonly subscribers = new Set<() => void>();
 
   constructor(options: ToolManagerOptions) {
     this.tools = new Map([["rectangle", new RectangleTool()]]);
-
-    this.activeToolType = "rectangle";
     this.onCommit = options.onCommit;
-    this.onChange = options.onChange;
   }
 
   setActiveTool(type: ToolType): void {
-    if (this.activeToolType === type) return;
+    if (this.activeToolType === type) {
+      return;
+    }
+
     this.cancel();
     this.activeToolType = type;
-    this.onChange?.();
+    this.notify();
   }
 
   getActiveTool(): ToolType {
@@ -39,6 +38,14 @@ export class ToolManager {
     return this.previewElement;
   }
 
+  subscribe = (listener: () => void): (() => void) => {
+    this.subscribers.add(listener);
+
+    return () => {
+      this.subscribers.delete(listener);
+    };
+  };
+
   onPointerDown(
     point: Point,
     event: {
@@ -48,7 +55,10 @@ export class ToolManager {
     },
   ): void {
     const tool = this.tools.get(this.activeToolType);
-    if (!tool) return;
+
+    if (!tool) {
+      return;
+    }
 
     const toolEvent: ToolPointerEvent = {
       point,
@@ -58,7 +68,6 @@ export class ToolManager {
     };
 
     const result = tool.onPointerDown(toolEvent);
-
     this.applyResult(result);
   }
 
@@ -84,7 +93,6 @@ export class ToolManager {
     };
 
     const result = tool.onPointerMove(toolEvent);
-
     this.applyResult(result);
   }
 
@@ -110,7 +118,6 @@ export class ToolManager {
     };
 
     const result = tool.onPointerUp(toolEvent);
-
     this.applyResult(result);
   }
 
@@ -118,61 +125,50 @@ export class ToolManager {
     const tool = this.tools.get(this.activeToolType);
 
     if (!tool) {
+      this.previewElement = null;
       return;
     }
 
     const result = tool.cancel();
-
     this.applyResult(result);
   }
 
   get isDrawing(): boolean {
-      const tool =
-        this.tools.get(
-          this.activeToolType,
-        );
+    const tool = this.tools.get(this.activeToolType);
 
-      if (!tool) {
-        return false;
-      }
-
-      if (
-        "isDrawing" in tool
-      ) {
-        return Boolean(
-          (
-            tool as Tool & {
-              isDrawing: boolean;
-            }
-          ).isDrawing,
-        );
-      }
-
+    if (!tool) {
       return false;
     }
 
-    private applyResult(
-      result: {
-        previewElement:
-          | Element
-          | null;
+    if ("isDrawing" in tool) {
+      return Boolean(
+        (
+          tool as Tool & {
+            isDrawing: boolean;
+          }
+        ).isDrawing,
+      );
+    }
 
-        committedElement:
-          | Element
-          | null;
-      },
-    ): void {
-      this.previewElement =
-        result.previewElement;
+    return false;
+  }
 
-      if (
-        result.committedElement
-      ) {
-        this.onCommit(
-          result.committedElement,
-        );
-      }
+  private applyResult(result: {
+    previewElement: Element | null;
+    committedElement: Element | null;
+  }): void {
+    this.previewElement = result.previewElement;
 
-      this.onChange?.();
+    if (result.committedElement) {
+      this.onCommit(result.committedElement);
+    }
+
+    this.notify();
+  }
+
+  private notify(): void {
+    for (const listener of this.subscribers) {
+      listener();
     }
   }
+}

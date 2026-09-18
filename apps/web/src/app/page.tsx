@@ -1,6 +1,8 @@
 import { Canvas } from "@/components/canvas/Canvas";
 import { CanvasDiagnostics } from "@/components/canvas/CanvasDiagnostics";
 import { SceneDebug } from "@/components/scene/SceneDebug";
+import { Toolbar } from "@/components/toolbar/Toolbar";
+
 
 export default function Home() {
   return (
@@ -8,6 +10,7 @@ export default function Home() {
       <Canvas />
       <SceneDebug />
       <CanvasDiagnostics />
+      <Toolbar />
     </main>
   );
 }
