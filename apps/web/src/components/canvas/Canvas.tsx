@@ -10,6 +10,7 @@ import {
   viewportToScene,
   zoomAtPoint,
 } from "@repo/engine";
+import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -28,6 +29,7 @@ export function Canvas() {
   const isPanningRef = useRef(false);
   const lastPointerRef = useRef<Point>({ x: 0, y: 0 });
   const spacePressRef = useRef(false);
+  const visibleElementCountRef = useRef(0);
 
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
@@ -53,7 +55,7 @@ export function Canvas() {
       renderState,
       {
         renderStatic: () => {
-          renderStatic(
+          visibleElementCountRef.current = renderStatic(
             {
               context: staticContext,
               width,
@@ -78,6 +80,24 @@ export function Canvas() {
         cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       },
     );
+
+    const publishDiagnostics = () => {
+      renderDiagnostics.update(
+        renderLoop.getStats(),
+        scene.size,
+        visibleElementCountRef.current,
+        viewportRef.current.zoom,
+      );
+    };
+
+    renderLoop.start();
+    publishDiagnostics();
+    
+    const diagnosticsInterval =
+      window.setInterval(
+        publishDiagnostics,
+        500,
+      );
 
     const getPointerPosition = (
       event: Pick<MouseEvent, "clientX" | "clientY">,
@@ -249,6 +269,7 @@ export function Canvas() {
     renderLoop.start();
 
     return () => {
+      clearInterval(diagnosticsInterval)
       unsubscribe();
       renderLoop.stop();
       window.removeEventListener("resize", resizeCanvas);

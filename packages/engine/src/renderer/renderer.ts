@@ -160,7 +160,7 @@ function applyViewportTransform(
 export function renderStatic(
   renderContext: RenderContext,
   elements: readonly Element[],
-): void {
+): number {
   const { context, width, height, viewport } = renderContext;
   clearCanvas(context, width, height);
   drawBackground(context, width, height);
@@ -177,6 +177,7 @@ export function renderStatic(
     drawElement(context, element);
   }
   context.restore();
+  return visibleElements.length;
 }
 
 export function renderInteractive(renderContext: RenderContext): void {
