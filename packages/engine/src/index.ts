@@ -3,4 +3,5 @@ export * from "./viewport";
 export * from "./element";
 export * from "./scene";
 export * from "./renderer";
+export * from "./tools";
 

@@ -9,6 +9,8 @@ import {
   renderStatic,
   viewportToScene,
   zoomAtPoint,
+  ToolManager,
+  Tool,
 } from "@repo/engine";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 
@@ -51,6 +53,15 @@ export function Canvas() {
 
     const renderState = createRenderState();
 
+    const toolManager = new ToolManager({
+      onCommit: (element) => {
+        scene.addElement(element);
+      },
+      onChange: () => {
+        renderLoop.invalidateInteractive();
+      },
+    });
+
     const renderLoop = new RenderLoop(
       renderState,
       {
@@ -67,12 +78,15 @@ export function Canvas() {
         },
 
         renderInteractive: () => {
-          renderInteractive({
-            context: interactiveContext,
-            width,
-            height,
-            viewport: viewportRef.current,
-          });
+          renderInteractive(
+            {
+              context: interactiveContext,
+              width,
+              height,
+              viewport: viewportRef.current,
+            },
+            toolManager.getPreviewElement(),
+          );
         },
       },
       {
@@ -92,12 +106,8 @@ export function Canvas() {
 
     renderLoop.start();
     publishDiagnostics();
-    
-    const diagnosticsInterval =
-      window.setInterval(
-        publishDiagnostics,
-        500,
-      );
+
+    const diagnosticsInterval = window.setInterval(publishDiagnostics, 500);
 
     const getPointerPosition = (
       event: Pick<MouseEvent, "clientX" | "clientY">,
@@ -136,40 +146,80 @@ export function Canvas() {
       pointerRef.current = point;
       scenePointerRef.current = viewportToScene(point, viewportRef.current);
 
-      if (!isPanningRef.current) {
+      if (isPanningRef.current) {
+        const dx = point.x - lastPointerRef.current.x;
+        const dy = point.y - lastPointerRef.current.y;
+        const viewport = viewportRef.current;
+        viewportRef.current = {
+          ...viewport,
+          scrollX: viewport.scrollX + dx,
+          scrollY: viewport.scrollY + dy,
+        };
+
+        lastPointerRef.current = point;
+        scenePointerRef.current = viewportToScene(point, viewportRef.current);
+        renderLoop.invalidateStatic();
         return;
       }
 
-      const dx = point.x - lastPointerRef.current.x;
-      const dy = point.y - lastPointerRef.current.y;
-      const viewport = viewportRef.current;
-      viewportRef.current = {
-        ...viewport,
-        scrollX: viewport.scrollX + dx,
-        scrollY: viewport.scrollY + dy,
-      };
-
-      lastPointerRef.current = point;
-      scenePointerRef.current = viewportToScene(point, viewportRef.current);
-      renderLoop.invalidateStatic();
+      const scenePoint = viewportToScene(point, viewportRef.current);
+      toolManager.onPointerMove(scenePoint, {
+        shiftKey: event.shiftKey,
+        button: event.button,
+        pointerId: event.pointerId,
+      });
     };
 
     const handlePointerDown = (event: PointerEvent) => {
       const isMiddleMouse = event.button === 1;
       const isSpacePan = event.button === 0 && spacePressRef.current;
 
-      if (!isMiddleMouse && !isSpacePan) {
+      if (isMiddleMouse || isSpacePan) {
+        event.preventDefault();
+
+        isPanningRef.current = true;
+        lastPointerRef.current = getPointerPosition(event);
+        interactiveCanvas.setPointerCapture(event.pointerId);
         return;
       }
 
-      event.preventDefault();
-      isPanningRef.current = true;
-      lastPointerRef.current = getPointerPosition(event);
+      if (event.button !== 0) return;
+
+      const viewportPoint = getPointerPosition(event);
+      const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
+
+      toolManager.onPointerDown(scenePoint, {
+        shiftKey: event.shiftKey,
+        button: event.button,
+        pointerId: event.pointerId,
+      });
+
       interactiveCanvas.setPointerCapture(event.pointerId);
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      isPanningRef.current = false;
+      if (isPanningRef.current) {
+        isPanningRef.current = false;
+
+        if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
+          interactiveCanvas.releasePointerCapture(event.pointerId);
+        }
+
+        return;
+      }
+
+      if (event.button !== 0) {
+        return;
+      }
+
+      const viewportPoint = getPointerPosition(event);
+      const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
+
+      toolManager.onPointerUp(scenePoint, {
+        shiftKey: event.shiftKey,
+        button: event.button,
+        pointerId: event.pointerId,
+      });
 
       if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
         interactiveCanvas.releasePointerCapture(event.pointerId);
@@ -180,6 +230,12 @@ export function Canvas() {
       if (event.code === "Space") {
         spacePressRef.current = true;
         event.preventDefault();
+        return;
+      }
+
+      if (event.key === "Escape") {
+        toolManager.cancel();
+        renderLoop.invalidateInteractive();
         return;
       }
 
@@ -269,7 +325,7 @@ export function Canvas() {
     renderLoop.start();
 
     return () => {
-      clearInterval(diagnosticsInterval)
+      clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();
       window.removeEventListener("resize", resizeCanvas);
