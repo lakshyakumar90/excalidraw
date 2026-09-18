@@ -1,4 +1,6 @@
 import type { Element, Viewport } from "@repo/common";
+import { viewportToSceneBounds } from "./viewport";
+import { getVisibleElements } from "./culling";
 
 export interface RenderContext {
   context: CanvasRenderingContext2D;
@@ -164,15 +166,14 @@ export function renderStatic(
   drawBackground(context, width, height);
   drawGrid(context, width, height, viewport);
   drawOrigin(context, viewport);
+
+  const viewportBounds = viewportToSceneBounds({ width, height }, viewport);
+  const visibleElements = getVisibleElements(elements, viewportBounds);
   context.save();
 
   applyViewportTransform(context, viewport);
 
-  for (const element of elements) {
-    if (element.isDeleted) {
-      continue;
-    }
-
+  for (const element of visibleElements) {
     drawElement(context, element);
   }
   context.restore();
