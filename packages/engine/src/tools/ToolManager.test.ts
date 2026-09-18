@@ -1,13 +1,6 @@
-import {
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import {
-  ToolManager,
-} from "./ToolManager";
+import { ToolManager } from "./ToolManager";
 
 function pointerEvent(
   x: number,
@@ -22,10 +15,8 @@ function pointerEvent(
       x,
       y,
     },
-    shiftKey:
-      options.shiftKey ?? false,
-    button:
-      options.button ?? 0,
+    shiftKey: options.shiftKey ?? false,
+    button: options.button ?? 0,
     pointerId: 1,
   };
 }
@@ -34,36 +25,25 @@ describe("ToolManager", () => {
   it("starts with rectangle tool", () => {
     const onCommit = vi.fn();
 
-    const manager =
-      new ToolManager({
-        onCommit,
-      });
+    const manager = new ToolManager({
+      onCommit,
+    });
 
-    expect(
-      manager.getActiveTool(),
-    ).toBe("rectangle");
+    expect(manager.getActiveTool()).toBe("rectangle");
   });
 
   it("creates a preview", () => {
     const onCommit = vi.fn();
 
-    const manager =
-      new ToolManager({
-        onCommit,
-      });
+    const manager = new ToolManager({
+      onCommit,
+    });
 
-    manager.onPointerDown(
-      pointerEvent(100, 100).point,
-      pointerEvent(100, 100),
-    );
+    manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
-    manager.onPointerMove(
-      pointerEvent(300, 200).point,
-      pointerEvent(300, 200),
-    );
+    manager.onPointerMove(pointerEvent(300, 200).point, pointerEvent(300, 200));
 
-    const preview =
-      manager.getPreviewElement();
+    const preview = manager.getPreviewElement();
 
     expect(preview).not.toBeNull();
 
@@ -75,36 +55,23 @@ describe("ToolManager", () => {
       height: 100,
     });
 
-    expect(
-      onCommit,
-    ).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it("commits the element", () => {
     const onCommit = vi.fn();
 
-    const manager =
-      new ToolManager({
-        onCommit,
-      });
-
-    manager.onPointerDown(
-      pointerEvent(100, 100).point,
-      pointerEvent(100, 100),
-    );
-
-    manager.onPointerUp(
-      pointerEvent(300, 200).point,
-      pointerEvent(300, 200),
-    );
-
-    expect(
+    const manager = new ToolManager({
       onCommit,
-    ).toHaveBeenCalledTimes(1);
+    });
 
-    expect(
-      onCommit.mock.calls[0][0],
-    ).toMatchObject({
+    manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
+
+    manager.onPointerUp(pointerEvent(300, 200).point, pointerEvent(300, 200));
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+
+    expect(onCommit.mock.calls[0][0]).toMatchObject({
       type: "rectangle",
       x: 100,
       y: 100,
@@ -114,55 +81,70 @@ describe("ToolManager", () => {
   });
 
   it("clears preview after commit", () => {
-    const manager =
-      new ToolManager({
-        onCommit: () => {},
-      });
+    const manager = new ToolManager({
+      onCommit: () => {},
+    });
 
-    manager.onPointerDown(
-      pointerEvent(100, 100).point,
-      pointerEvent(100, 100),
-    );
+    manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
-    manager.onPointerMove(
-      pointerEvent(300, 200).point,
-      pointerEvent(300, 200),
-    );
+    manager.onPointerMove(pointerEvent(300, 200).point, pointerEvent(300, 200));
 
-    expect(
-      manager.getPreviewElement(),
-    ).not.toBeNull();
+    expect(manager.getPreviewElement()).not.toBeNull();
 
-    manager.onPointerUp(
-      pointerEvent(300, 200).point,
-      pointerEvent(300, 200),
-    );
+    manager.onPointerUp(pointerEvent(300, 200).point, pointerEvent(300, 200));
 
-    expect(
-      manager.getPreviewElement(),
-    ).toBeNull();
+    expect(manager.getPreviewElement()).toBeNull();
   });
 
   it("cancels the active drawing", () => {
-    const manager =
-      new ToolManager({
-        onCommit: () => {},
-      });
+    const manager = new ToolManager({
+      onCommit: () => {},
+    });
 
-    manager.onPointerDown(
-      pointerEvent(100, 100).point,
-      pointerEvent(100, 100),
-    );
+    manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
-    manager.onPointerMove(
-      pointerEvent(300, 200).point,
-      pointerEvent(300, 200),
-    );
+    manager.onPointerMove(pointerEvent(300, 200).point, pointerEvent(300, 200));
 
     manager.cancel();
 
-    expect(
-      manager.getPreviewElement(),
-    ).toBeNull();
+    expect(manager.getPreviewElement()).toBeNull();
+  });
+
+  it("changes the active tool", () => {
+    const manager = new ToolManager({
+      onCommit: () => {},
+    });
+
+    expect(manager.getActiveTool()).toBe("rectangle");
+
+    manager.setActiveTool("rectangle");
+
+    expect(manager.getActiveTool()).toBe("rectangle");
+  });
+
+  it("notifies subscribers when the tool changes", () => {
+    const manager = new ToolManager({
+      onCommit: () => {},
+    });
+
+    const listener = vi.fn();
+
+    const unsubscribe = manager.subscribe(listener);
+
+    manager.onPointerDown(
+      {
+        x: 100,
+        y: 100,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    expect(listener).toHaveBeenCalled();
+
+    unsubscribe();
   });
 });

@@ -25,11 +25,17 @@ export class ToolManager {
       return;
     }
 
-    this.cancel();
+    const tool = this.tools.get(this.activeToolType);
+
+    if (tool) {
+      const result = tool.cancel();
+      this.previewElement = result.previewElement;
+    }
+
     this.activeToolType = type;
     this.notify();
   }
-
+  
   getActiveTool(): ToolType {
     return this.activeToolType;
   }
