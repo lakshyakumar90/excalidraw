@@ -10,7 +10,7 @@ export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type StrokeWidth = number;
 
 export interface BaseElement {
-  id: String;
+  id: string;
   type: ElementType;
   x: number;
   y: number;
