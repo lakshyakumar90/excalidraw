@@ -104,7 +104,7 @@ describe("Scene", () => {
 
     scene.addElement(element);
 
-    const initialVersion = element.version;
+    const initialVersion = element.version ?? 1;
 
     const sceneVersion = scene.version;
 

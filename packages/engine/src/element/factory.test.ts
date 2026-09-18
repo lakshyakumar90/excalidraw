@@ -12,8 +12,6 @@ describe("createRectangleElement", () => {
   it("creates a rectangle with valid defaults", () => {
     const element =
       createRectangleElement({
-        id: "1",
-        type: "rectangle",
         x: 100,
         y: 200,
         width: 300,
