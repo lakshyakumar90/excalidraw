@@ -216,6 +216,51 @@ function drawDiamond(
   context.restore();
 }
 
+function drawLine(
+  context: CanvasRenderingContext2D,
+  element: Extract<Element, { type: "line" }>,
+): void {
+  const x = element.x ?? 0;
+  const y = element.y ?? 0;
+  const angle = element.angle ?? 0;
+  const opacity = element.opacity ?? 100;
+  const strokeColor = element.strokeColor ?? "#000000";
+  const strokeWidth = element.strokeWidth ?? 1;
+  const points = element.points ?? [];
+
+  if (points.length < 2) {
+    return;
+  }
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(angle);
+  context.globalAlpha = opacity / 100;
+  context.strokeStyle = strokeColor;
+  context.lineWidth = strokeWidth;
+  context.beginPath();
+
+  const firstPoint = points[0];
+
+  if (!firstPoint) {
+    context.restore();
+    return;
+  }
+
+  context.moveTo(firstPoint.x, firstPoint.y);
+
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index];
+
+    if (point) {
+      context.lineTo(point.x, point.y);
+    }
+  }
+
+  context.stroke();
+  context.restore();
+}
+
 function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
@@ -224,13 +269,17 @@ function drawElement(
     case "rectangle":
       drawRectangle(context, element);
       break;
-    
+
     case "ellipse":
       drawEllipse(context, element);
       break;
 
     case "diamond":
       drawDiamond(context, element);
+      break;
+
+    case "line":
+      drawLine(context, element);
       break;
 
     default:

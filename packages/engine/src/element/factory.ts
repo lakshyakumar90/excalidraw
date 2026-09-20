@@ -1,6 +1,17 @@
-import type { BaseElement, DiamondElement, Element, EllipseElement, RectangleElement } from "@repo/common";
+import type {
+  BaseElement,
+  DiamondElement,
+  LineElement,
+  EllipseElement,
+  RectangleElement,
+  Point,
+} from "@repo/common";
 
 export type ElementOptions = Partial<BaseElement>;
+
+export interface CreateLineElementOptions extends ElementOptions {
+  points: Point[];
+}
 
 function generateElementId(): string {
   return crypto.randomUUID();
@@ -40,9 +51,7 @@ export function createRectangleElement(
   };
 }
 
-export function createEllipseElement(
-  options: ElementOptions,
-): EllipseElement {
+export function createEllipseElement(options: ElementOptions): EllipseElement {
   const now = Date.now();
 
   return {
@@ -71,9 +80,7 @@ export function createEllipseElement(
   };
 }
 
-export function createDiamondElement(
-  options: ElementOptions,
-): DiamondElement {
+export function createDiamondElement(options: ElementOptions): DiamondElement {
   const now = Date.now();
 
   return {
@@ -99,5 +106,37 @@ export function createDiamondElement(
     versionNonce: generateSeed(),
     isDeleted: false,
     updated: now,
+  };
+}
+
+export function createLineElement(
+  options: CreateLineElementOptions,
+): LineElement {
+  const now = Date.now();
+
+  return {
+    id: generateElementId(),
+    type: "line",
+    x: options.x ?? 0,
+    y: options.y ?? 0,
+    width: options.width ?? 0,
+    height: options.height ?? 0,
+    angle: 0,
+    strokeColor: options.strokeColor ?? "#1e1e1e",
+    backgroundColor: options.backgroundColor ?? "transparent",
+    fillStyle: options.fillStyle ?? "none",
+    strokeWidth: options.strokeWidth ?? 1,
+    strokeStyle: options.strokeStyle ?? "solid",
+    roughness: options.roughness ?? 1,
+    opacity: options.opacity ?? 100,
+    seed: options.seed ?? generateSeed(),
+    groupIds: [],
+    boundElements: [],
+    frameId: null,
+    version: 1,
+    versionNonce: generateSeed(),
+    isDeleted: false,
+    updated: now,
+    points: options.points,
   };
 }

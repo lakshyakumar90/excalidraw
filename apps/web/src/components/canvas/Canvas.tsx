@@ -251,6 +251,11 @@ export function Canvas() {
         return;
       }
 
+      if (key === "l") {
+        toolManager.setActiveTool("line");
+        return;
+      }
+
       if (!event.ctrlKey && !event.metaKey) {
         return;
       }

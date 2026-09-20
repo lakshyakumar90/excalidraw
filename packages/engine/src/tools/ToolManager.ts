@@ -2,9 +2,10 @@ import type { Element, Point } from "@repo/common";
 import { RectangleTool } from "./RectangleTool";
 import { DiamondTool } from "./DiamondTool";
 import { EllipseTool } from "./EllipseTool";
+import { LineTool } from "./LineTool";
 import type { Tool, ToolPointerEvent } from "./Tool";
 
-export type ToolType = "rectangle" | "diamond" | "ellipse";
+export type ToolType = "rectangle" | "diamond" | "ellipse" | "line";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
@@ -22,6 +23,7 @@ export class ToolManager {
       ["rectangle", new RectangleTool()],
       ["diamond", new DiamondTool()],
       ["ellipse", new EllipseTool()],
+      ["line", new LineTool()],
     ]);
     this.onCommit = options.onCommit;
   }

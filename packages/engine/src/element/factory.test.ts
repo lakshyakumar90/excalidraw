@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createDiamondElement, createEllipseElement, createRectangleElement } from "./factory";
+import {
+  createDiamondElement,
+  createEllipseElement,
+  createLineElement,
+  createRectangleElement,
+} from "./factory";
 
 describe("createRectangleElement", () => {
   it("creates a rectangle with valid defaults", () => {
@@ -76,6 +81,56 @@ describe("createRectangleElement", () => {
       y: 200,
       width: 300,
       height: 150,
+      angle: 0,
+      strokeColor: "#1e1e1e",
+      backgroundColor: "transparent",
+      fillStyle: "none",
+      strokeWidth: 1,
+      strokeStyle: "solid",
+      roughness: 1,
+      opacity: 100,
+      groupIds: [],
+      boundElements: [],
+      frameId: null,
+      version: 1,
+      isDeleted: false,
+    });
+  });
+
+  it("creates a line element", () => {
+    const element = createLineElement({
+      x: 100,
+      y: 200,
+      width: 300,
+      height: 150,
+      points: [
+        {
+          x: 0,
+          y: 0,
+        },
+        {
+          x: 300,
+          y: 150,
+        },
+      ],
+    });
+
+    expect(element).toMatchObject({
+      type: "line",
+      x: 100,
+      y: 200,
+      width: 300,
+      height: 150,
+      points: [
+        {
+          x: 0,
+          y: 0,
+        },
+        {
+          x: 300,
+          y: 150,
+        },
+      ],
       angle: 0,
       strokeColor: "#1e1e1e",
       backgroundColor: "transparent",

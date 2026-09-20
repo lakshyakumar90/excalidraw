@@ -8,12 +8,14 @@ const TOOL_LABELS: Record<ToolType, string> = {
   rectangle: "Rectangle",
   ellipse: "Ellipse",
   diamond: "Diamond",
+  line: "Line",
 };
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
   rectangle: "R",
   ellipse: "E",
   diamond: "D",
+  line: "L",
 };
 
 function ToolButton({

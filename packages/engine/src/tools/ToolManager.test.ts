@@ -255,4 +255,68 @@ describe("ToolManager", () => {
       }),
     );
   });
+
+  it("creates a line", () => {
+    const onCommit = vi.fn();
+
+    const manager = new ToolManager({
+      onCommit,
+    });
+
+    manager.setActiveTool("line");
+
+    manager.onPointerDown(
+      {
+        x: 100,
+        y: 100,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    manager.onPointerMove(
+      {
+        x: 300,
+        y: 200,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    expect(manager.getPreviewElement()).toMatchObject({
+      type: "line",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+    });
+
+    manager.onPointerUp(
+      {
+        x: 300,
+        y: 200,
+      },
+      {
+        shiftKey: false,
+        button: 0,
+        pointerId: 1,
+      },
+    );
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+
+    expect(onCommit.mock.calls[0][0]).toMatchObject({
+      type: "line",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+    });
+  });
 });
