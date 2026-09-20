@@ -1,5 +1,6 @@
 import type { FreedrawElement, Point } from "@repo/common";
 import { createFreedrawElementFromPoints } from "../element/factory";
+import { simplifyPoints } from "../geometry/simplify";
 import type { Tool, ToolPointerEvent, ToolResult } from "./Tool";
 
 type FreedrawToolState =
@@ -7,6 +8,7 @@ type FreedrawToolState =
   | { status: "drawing"; points: Point[]; preview: FreedrawElement | null };
 
 const MIN_POINT_DISTANCE = 3;
+const SIMPLIFY_TOLERANCE = 1.5;
 
 function empty(): ToolResult {
   return { previewElement: null, committedElement: null };
@@ -47,7 +49,12 @@ export class FreedrawTool implements Tool {
     if (last && (last.x !== event.point.x || last.y !== event.point.y)) {
       points.push(event.point);
     }
-    const element = this.createPreview(points);
+    const simplifiedPoints = simplifyPoints(points, SIMPLIFY_TOLERANCE);
+    if (simplifiedPoints.length < 2) {
+      this.state = { status: "idle" };
+      return empty();
+    }
+    const element = this.createPreview(simplifiedPoints);
     this.state = { status: "idle" };
     if (!element) return empty();
     return { previewElement: null, committedElement: element };
