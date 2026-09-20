@@ -51,5 +51,18 @@ describe("simplifyPoints", () => {
       simplifyPoints(points, 1),
     ).toEqual(points);
   });
+
+  it("preserves pressure while simplifying", () => {
+    const points = [
+      { x: 0, y: 0, pressure: 0.2 },
+      { x: 10, y: 0.1, pressure: 0.5 },
+      { x: 20, y: 0, pressure: 0.9 },
+    ];
+
+    const result = simplifyPoints(points, 1);
+
+    expect(result[0]?.pressure).toBe(0.2);
+    expect(result[result.length - 1]?.pressure).toBe(0.9);
+  });
 });
 

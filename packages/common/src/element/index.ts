@@ -10,6 +10,7 @@ export type {
   LineElement,
   ArrowElement,
   FreedrawElement,
+  FreedrawPoint,
   TextElement,
   Element,
 } from "./types";

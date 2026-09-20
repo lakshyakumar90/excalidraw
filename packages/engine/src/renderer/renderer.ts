@@ -8,6 +8,7 @@ import type {
 import { viewportToSceneBounds } from "./viewport";
 import { getVisibleElements } from "./culling";
 import { getArrowHeadPoints, sampleCatmullRom } from "../geometry";
+import { getPressureWidth } from "../geometry/stroke";
 
 export interface RenderContext {
   context: CanvasRenderingContext2D;
@@ -407,17 +408,19 @@ export function drawFreedraw(
   context.rotate(element.angle ?? 0);
   context.globalAlpha = (element.opacity ?? 100) / 100;
   context.strokeStyle = element.strokeColor ?? "#000000";
-  context.lineWidth = element.strokeWidth ?? 1;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  context.beginPath();
-  context.moveTo(firstPoint.x, firstPoint.y);
   for (let i = 1; i < points.length; i += 1) {
-    const point = points[i];
-    if (!point) continue;
-    context.lineTo(point.x, point.y);
+    const previous = points[i - 1] ?? firstPoint;
+    const current = points[i] ?? previous;
+    const pressure = (previous.pressure + current.pressure) / 2;
+    const width = getPressureWidth(element.strokeWidth ?? 1, pressure);
+    context.lineWidth = width;
+    context.lineCap = "round";
+    context.lineJoin = "round";    
+    context.beginPath();
+    context.moveTo(previous.x, previous.y);
+    context.lineTo(current.x, current.y);
+    context.stroke();
   }
-  context.stroke();
   context.restore();
 }
 

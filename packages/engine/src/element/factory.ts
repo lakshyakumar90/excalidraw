@@ -7,6 +7,7 @@ import type {
   Point,
   ArrowElement,
   FreedrawElement,
+  FreedrawPoint,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
 
@@ -246,7 +247,7 @@ export function createLineElementFromPoints(
 }
 
 export function createFreedrawElementFromPoints(
-  points: Point[],
+  points: FreedrawPoint[],
 ): FreedrawElement {
   if (points.length < 2) {
     throw new Error("A freedraw stroke requires at least two points");
@@ -283,6 +284,7 @@ export function createFreedrawElementFromPoints(
     points: points.map((point) => ({
       x: point.x - (minX ?? 0),
       y: point.y - (minY ?? 0),
+      pressure: point.pressure,
     })),
   };
 }

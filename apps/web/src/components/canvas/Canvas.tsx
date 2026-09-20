@@ -162,6 +162,7 @@ export function Canvas() {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
+        pressure: event.pressure,
       });
     };
 
@@ -187,6 +188,7 @@ export function Canvas() {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
+        pressure: event.pressure,
       });
 
       interactiveCanvas.setPointerCapture(event.pointerId);
@@ -214,6 +216,7 @@ export function Canvas() {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
+        pressure: event.pressure,
       });
 
       if (interactiveCanvas.hasPointerCapture(event.pointerId)) {

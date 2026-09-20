@@ -1,5 +1,10 @@
 import type { Point } from "@repo/common";
 
+interface SimplifiablePoint {
+  x: number;
+  y: number;
+}
+
 function perpendicularDistance(
   point: Point,
   lineStart: Point,
@@ -22,7 +27,10 @@ function perpendicularDistance(
   );
 }
 
-export function simplifyPoints(points: Point[], tolerance: number): Point[] {
+export function simplifyPoints<T extends SimplifiablePoint>(
+  points: T[],
+  tolerance: number,
+): T[] {
   if (points.length <= 2) {
     return [...points];
   }

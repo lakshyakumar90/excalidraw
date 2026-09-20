@@ -56,14 +56,12 @@ export interface LineElement extends BaseElement {
 
 export interface ArrowElement extends BaseElement {
   type: "arrow";
-
   points: Point[];
 }
 
 export interface FreedrawElement extends BaseElement {
   type: "freedraw";
-
-  points: Point[];
+  points: FreedrawPoint[];
 }
 
 export interface TextElement extends BaseElement {
@@ -73,6 +71,10 @@ export interface TextElement extends BaseElement {
   fontFamily: string;
   textAlign: "left" | "center" | "right";
   verticalAlign: "top" | "middle" | "bottom";
+}
+
+export interface FreedrawPoint extends Point {
+  pressure: number;
 }
 
 export type Element =

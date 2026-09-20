@@ -74,6 +74,7 @@ export class ToolManager {
       shiftKey: boolean;
       button: number;
       pointerId: number;
+      pressure: number;
     },
   ): void {
     const tool = this.tools.get(this.activeToolType);
@@ -87,6 +88,7 @@ export class ToolManager {
       shiftKey: event.shiftKey,
       button: event.button,
       pointerId: event.pointerId,
+      pressure: event.pressure,
     };
 
     const result = tool.onPointerDown(toolEvent);
@@ -99,6 +101,7 @@ export class ToolManager {
       shiftKey: boolean;
       button: number;
       pointerId: number;
+      pressure: number;
     },
   ): void {
     const tool = this.tools.get(this.activeToolType);
@@ -112,6 +115,7 @@ export class ToolManager {
       shiftKey: event.shiftKey,
       button: event.button,
       pointerId: event.pointerId,
+      pressure: event.pressure,
     };
 
     const result = tool.onPointerMove(toolEvent);
@@ -124,6 +128,7 @@ export class ToolManager {
       shiftKey: boolean;
       button: number;
       pointerId: number;
+      pressure: number;
     },
   ): void {
     const tool = this.tools.get(this.activeToolType);
@@ -137,6 +142,7 @@ export class ToolManager {
       shiftKey: event.shiftKey,
       button: event.button,
       pointerId: event.pointerId,
+      pressure: event.pressure,
     };
 
     const result = tool.onPointerUp(toolEvent);

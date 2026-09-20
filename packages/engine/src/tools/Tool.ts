@@ -6,6 +6,7 @@ export interface ToolPointerEvent {
   shiftKey: boolean;
   button: number;
   pointerId: number;
+  pressure: number;
 }
 
 export interface ToolResult {
