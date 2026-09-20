@@ -221,6 +221,15 @@ export function Canvas() {
       }
     };
 
+    const handleDoubleClick = (event: MouseEvent) => {
+      if (toolManager.getActiveTool() !== "multiPointLine") {
+        return;
+      }
+      event.preventDefault();
+      toolManager.commit();
+      renderLoop.invalidateInteractive();
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.code === "Space") {
         spacePressRef.current = true;
@@ -230,6 +239,12 @@ export function Canvas() {
 
       if (event.key === "Escape") {
         toolManager.cancel();
+        renderLoop.invalidateInteractive();
+        return;
+      }
+
+      if (event.key === "Enter") {
+        toolManager.commit();
         renderLoop.invalidateInteractive();
         return;
       }
@@ -253,6 +268,11 @@ export function Canvas() {
 
       if (key === "l") {
         toolManager.setActiveTool("line");
+        return;
+      }
+
+      if (key === "p") {
+        toolManager.setActiveTool("multiPointLine");
         return;
       }
 
@@ -332,6 +352,7 @@ export function Canvas() {
 
     window.addEventListener("resize", resizeCanvas);
     interactiveCanvas.addEventListener("pointerdown", handlePointerDown);
+    interactiveCanvas.addEventListener("dblclick", handleDoubleClick);
     interactiveCanvas.addEventListener("pointermove", handlePointerMove);
     interactiveCanvas.addEventListener("pointerup", handlePointerUp);
     interactiveCanvas.addEventListener("wheel", handleWheel, {

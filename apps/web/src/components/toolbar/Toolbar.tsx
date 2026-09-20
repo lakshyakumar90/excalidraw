@@ -9,6 +9,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
   ellipse: "Ellipse",
   diamond: "Diamond",
   line: "Line",
+  multiPointLine: "MultiPointLine",
 };
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
@@ -16,6 +17,7 @@ const TOOL_SHORTCUTS: Record<ToolType, string> = {
   ellipse: "E",
   diamond: "D",
   line: "L",
+  multiPointLine: "P",
 };
 
 function ToolButton({

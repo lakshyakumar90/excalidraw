@@ -20,6 +20,7 @@ export interface Tool {
   onPointerMove(event: ToolPointerEvent): ToolResult;
   onPointerUp(event: ToolPointerEvent): ToolResult;
   cancel(): ToolResult;
+  commit?(): ToolResult;
   get isDrawing(): boolean;
 }
 

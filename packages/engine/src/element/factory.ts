@@ -6,6 +6,8 @@ import type {
   RectangleElement,
   Point,
 } from "@repo/common";
+import { getPolylineBounds, toLocalPoints } from "../geometry";
+
 
 export type ElementOptions = Partial<BaseElement>;
 
@@ -139,4 +141,17 @@ export function createLineElement(
     updated: now,
     points: options.points,
   };
+}
+
+export function createPolylineElement(points: readonly Point[]) {
+  const bounds = getPolylineBounds(points);
+  const localPoints = toLocalPoints(points, bounds);
+
+  return createLineElement({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    points: localPoints,
+  });
 }

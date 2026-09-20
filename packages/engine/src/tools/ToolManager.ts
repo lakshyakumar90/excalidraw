@@ -4,8 +4,9 @@ import { DiamondTool } from "./DiamondTool";
 import { EllipseTool } from "./EllipseTool";
 import { LineTool } from "./LineTool";
 import type { Tool, ToolPointerEvent } from "./Tool";
+import { MultiPointLineTool } from "./MultiPointLineTool";
 
-export type ToolType = "rectangle" | "diamond" | "ellipse" | "line";
+export type ToolType = "rectangle" | "diamond" | "ellipse" | "line" | "multiPointLine";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
@@ -24,6 +25,7 @@ export class ToolManager {
       ["diamond", new DiamondTool()],
       ["ellipse", new EllipseTool()],
       ["line", new LineTool()],
+      ["multiPointLine", new MultiPointLineTool()],
     ]);
     this.onCommit = options.onCommit;
   }
@@ -43,7 +45,7 @@ export class ToolManager {
     this.activeToolType = type;
     this.notify();
   }
-  
+
   getActiveTool(): ToolType {
     return this.activeToolType;
   }
@@ -144,6 +146,17 @@ export class ToolManager {
     }
 
     const result = tool.cancel();
+    this.applyResult(result);
+  }
+
+  commit(): void {
+    const tool = this.tools.get(this.activeToolType);
+
+    if (!tool?.commit) {
+      return;
+    }
+
+    const result = tool.commit();
     this.applyResult(result);
   }
 
