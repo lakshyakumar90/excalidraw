@@ -2,173 +2,91 @@ import type { LineElement, Point } from "@repo/common";
 import { createLineElementFromPoints } from "../element/factory";
 import type { Tool, ToolPointerEvent, ToolResult } from "./Tool";
 
+// Controlled 3-point curve:
+// drag start -> end (chord), release, then move to bend (control point), click to commit.
 type CurvedLineToolState =
-  | {
-      status: "idle";
-    }
-  | {
-      status: "drawing";
-      points: Point[];
-      preview: LineElement | null;
-    };
+  | { status: "idle" }
+  | { status: "chord"; start: Point; end: Point; preview: LineElement | null }
+  | { status: "bending"; start: Point; end: Point; control: Point; preview: LineElement | null };
 
-const MIN_POINT_DISTANCE = 3;
+const MIN_SIZE = 1;
+
+function empty(): ToolResult {
+  return { previewElement: null, committedElement: null };
+}
+
+function midpoint(a: Point, b: Point): Point {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
 
 export class CurvedLineTool implements Tool {
   readonly type = "curved-line";
 
-  private state: CurvedLineToolState = {
-    status: "idle",
-  };
+  private state: CurvedLineToolState = { status: "idle" };
 
   onPointerDown(event: ToolPointerEvent): ToolResult {
-    if (event.button !== 0) {
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
+    if (event.button !== 0) return empty();
+
+    if (this.state.status === "bending") {
+      const { start, end, control } = this.state;
+      const element = this.buildElement(start, control, end);
+      this.state = { status: "idle" };
+      if (!element) return empty();
+      return { previewElement: null, committedElement: element };
     }
 
-    const points = [event.point];
-
-    this.state = {
-      status: "drawing",
-      points,
-      preview: null,
-    };
-
-    return {
-      previewElement: null,
-      committedElement: null,
-    };
+    this.state = { status: "chord", start: event.point, end: event.point, preview: null };
+    return empty();
   }
 
   onPointerMove(event: ToolPointerEvent): ToolResult {
-    if (this.state.status !== "drawing") {
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
+    if (this.state.status === "chord") {
+      const preview = this.buildElement(this.state.start, midpoint(this.state.start, event.point), event.point);
+      this.state = { ...this.state, end: event.point, preview };
+      return { previewElement: preview, committedElement: null };
     }
-
-    const points = this.state.points;
-    const lastPoint = points[points.length - 1];
-
-    if (!lastPoint) {
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
+    if (this.state.status === "bending") {
+      const preview = this.buildElement(this.state.start, event.point, this.state.end);
+      this.state = { ...this.state, control: event.point, preview };
+      return { previewElement: preview, committedElement: null };
     }
-
-    const dx = event.point.x - lastPoint.x;
-    const dy = event.point.y - lastPoint.y;
-
-    const distance = Math.hypot(dx, dy);
-
-    if (distance >= MIN_POINT_DISTANCE) {
-      points.push(event.point);
-    }
-
-    const preview = this.createPreview(points);
-
-    this.state = {
-      status: "drawing",
-      points,
-      preview,
-    };
-
-    return {
-      previewElement: preview,
-      committedElement: null,
-    };
+    return empty();
   }
 
   onPointerUp(event: ToolPointerEvent): ToolResult {
-    if (this.state.status !== "drawing") {
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
+    if (this.state.status !== "chord") return empty();
+    const { start } = this.state;
+    const end = event.point;
+    if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_SIZE) {
+      this.state = { status: "idle" };
+      return empty();
     }
-
-    const points = this.state.points;
-
-    if (points.length < 2) {
-      this.state = {
-        status: "idle",
-      };
-
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
-    }
-
-    const lastPoint = points[points.length - 1];
-
-    if (!lastPoint) {
-      this.state = {
-        status: "idle",
-      };
-
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
-    }
-
-    if (lastPoint.x !== event.point.x || lastPoint.y !== event.point.y) {
-      points.push(event.point);
-    }
-
-    const element = this.createPreview(points);
-
-    this.state = {
-      status: "idle",
-    };
-
-    if (!element) {
-      return {
-        previewElement: null,
-        committedElement: null,
-      };
-    }
-
-    return {
-      previewElement: null,
-      committedElement: element,
-    };
+    const control = midpoint(start, end);
+    const preview = this.buildElement(start, control, end);
+    this.state = { status: "bending", start, end, control, preview };
+    return { previewElement: preview, committedElement: null };
   }
 
   cancel(): ToolResult {
-    this.state = {
-      status: "idle",
-    };
-
-    return {
-      previewElement: null,
-      committedElement: null,
-    };
+    this.state = { status: "idle" };
+    return empty();
   }
 
-  getPreviewElement(): LineElement | null {
-    if (this.state.status !== "drawing") {
-      return null;
-    }
-
-    return this.state.preview;
+  commit(): ToolResult {
+    if (this.state.status !== "bending") return empty();
+    const { start, control, end } = this.state;
+    const element = this.buildElement(start, control, end);
+    this.state = { status: "idle" };
+    if (!element) return empty();
+    return { previewElement: null, committedElement: element };
   }
 
   get isDrawing(): boolean {
-    return this.state.status === "drawing";
+    return this.state.status !== "idle";
   }
 
-  private createPreview(points: readonly Point[]): LineElement | null {
-    if (points.length < 2) {
-      return null;
-    }
-
-    return createLineElementFromPoints([...points], "curved");
+  private buildElement(start: Point, control: Point, end: Point): LineElement | null {
+    if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_SIZE) return null;
+    return createLineElementFromPoints([start, control, end], "curved");
   }
 }

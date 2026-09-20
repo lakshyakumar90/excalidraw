@@ -6,6 +6,7 @@ import type {
   RectangleElement,
   Point,
   ArrowElement,
+  FreedrawElement,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
 
@@ -237,6 +238,48 @@ export function createLineElementFromPoints(
     isDeleted: false,
     updated: Date.now(),
     lineType,
+    points: points.map((point) => ({
+      x: point.x - (minX ?? 0),
+      y: point.y - (minY ?? 0),
+    })),
+  };
+}
+
+export function createFreedrawElementFromPoints(
+  points: Point[],
+): FreedrawElement {
+  if (points.length < 2) {
+    throw new Error("A freedraw stroke requires at least two points");
+  }
+
+  const minX = Math.min(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const maxY = Math.max(...points.map((point) => point.y));
+
+  return {
+    id: crypto.randomUUID(),
+    type: "freedraw",
+    x: minX ?? 0,
+    y: minY ?? 0,
+    width: (maxX ?? 0) - (minX ?? 0),
+    height: (maxY ?? 0) - (minY ?? 0),
+    angle: 0,
+    strokeColor: "#1e1e1e",
+    backgroundColor: "transparent",
+    fillStyle: "none",
+    strokeWidth: 1,
+    strokeStyle: "solid",
+    roughness: 1,
+    opacity: 100,
+    seed: Math.floor(Math.random() * 2_147_483_647),
+    groupIds: [],
+    boundElements: [],
+    frameId: null,
+    version: 1,
+    versionNonce: Math.floor(Math.random() * 2_147_483_647),
+    isDeleted: false,
+    updated: Date.now(),
     points: points.map((point) => ({
       x: point.x - (minX ?? 0),
       y: point.y - (minY ?? 0),

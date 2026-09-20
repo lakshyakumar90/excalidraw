@@ -286,6 +286,11 @@ export function Canvas() {
         return;
       }
 
+      if (key === "f") {
+        toolManager.setActiveTool("freedraw");
+        return;
+      }
+
       if (!event.ctrlKey && !event.metaKey) {
         return;
       }

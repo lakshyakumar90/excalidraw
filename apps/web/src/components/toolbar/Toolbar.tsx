@@ -12,6 +12,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
   multiPointLine: "MultiPointLine",
   arrow: "Arrow",
   "curved-line": "Curve",
+  freedraw: "Pencil",
 };
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
@@ -22,6 +23,7 @@ const TOOL_SHORTCUTS: Record<ToolType, string> = {
   multiPointLine: "P",
   arrow: "A",
   "curved-line": "C",
+  freedraw: "F",
 };
 
 function ToolButton({

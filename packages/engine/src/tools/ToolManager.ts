@@ -7,8 +7,9 @@ import { ArrowTool } from "./ArrowTool";
 import type { Tool, ToolPointerEvent } from "./Tool";
 import { MultiPointLineTool } from "./MultiPointLineTool";
 import { CurvedLineTool } from "./CurvedLineTool";
+import { FreedrawTool } from "./FreedrawTool";
 
-export type ToolType = "rectangle" | "diamond" | "ellipse" | "line" | "multiPointLine" | "arrow" | "curved-line";
+export type ToolType = "rectangle" | "diamond" | "ellipse" | "line" | "multiPointLine" | "arrow" | "curved-line" | "freedraw";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
@@ -30,6 +31,7 @@ export class ToolManager {
       ["arrow", new ArrowTool()],
       ["multiPointLine", new MultiPointLineTool()],
       ["curved-line", new CurvedLineTool()],
+      ["freedraw", new FreedrawTool()],
     ]);
     this.onCommit = options.onCommit;
   }

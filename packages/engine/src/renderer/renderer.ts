@@ -1,6 +1,7 @@
 import type {
   ArrowElement,
   Element,
+  FreedrawElement,
   LineElement,
   Viewport,
 } from "@repo/common";
@@ -392,6 +393,34 @@ export function drawCurvedLine(
   context.restore();
 }
 
+export function drawFreedraw(
+  context: CanvasRenderingContext2D,
+  element: FreedrawElement,
+): void {
+  const points = element.points ?? [];
+  if (points.length < 2) return;
+  const firstPoint = points[0];
+  if (!firstPoint) return;
+
+  context.save();
+  context.translate(element.x ?? 0, element.y ?? 0);
+  context.rotate(element.angle ?? 0);
+  context.globalAlpha = (element.opacity ?? 100) / 100;
+  context.strokeStyle = element.strokeColor ?? "#000000";
+  context.lineWidth = element.strokeWidth ?? 1;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(firstPoint.x, firstPoint.y);
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+    if (!point) continue;
+    context.lineTo(point.x, point.y);
+  }
+  context.stroke();
+  context.restore();
+}
+
 function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
@@ -419,6 +448,10 @@ function drawElement(
 
     case "arrow":
       drawArrow(context, element);
+      break;
+
+    case "freedraw":
+      drawFreedraw(context, element);
       break;
 
     default:
