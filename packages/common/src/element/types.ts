@@ -46,18 +46,11 @@ export interface DiamondElement extends BaseElement {
   type: "diamond";
 }
 
-export interface LineElement extends BaseElement {
-  type: "line";
-
-  points: Array<{
-    x: number;
-    y: number;
-  }>;
-}
+export type LineType = "straight" | "curved";
 
 export interface LineElement extends BaseElement {
   type: "line";
-
+  lineType: LineType;
   points: Point[];
 }
 

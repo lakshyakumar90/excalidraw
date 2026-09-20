@@ -10,6 +10,8 @@ const TOOL_LABELS: Record<ToolType, string> = {
   diamond: "Diamond",
   line: "Line",
   multiPointLine: "MultiPointLine",
+  arrow: "Arrow",
+  "curved-line": "Curve",
 };
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
@@ -18,6 +20,8 @@ const TOOL_SHORTCUTS: Record<ToolType, string> = {
   diamond: "D",
   line: "L",
   multiPointLine: "P",
+  arrow: "A",
+  "curved-line": "C",
 };
 
 function ToolButton({

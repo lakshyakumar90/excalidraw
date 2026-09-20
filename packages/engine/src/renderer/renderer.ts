@@ -1,6 +1,12 @@
-import type { Element, Viewport } from "@repo/common";
+import type {
+  ArrowElement,
+  Element,
+  LineElement,
+  Viewport,
+} from "@repo/common";
 import { viewportToSceneBounds } from "./viewport";
 import { getVisibleElements } from "./culling";
+import { getArrowHeadPoints, sampleCatmullRom } from "../geometry";
 
 export interface RenderContext {
   context: CanvasRenderingContext2D;
@@ -261,6 +267,131 @@ function drawLine(
   context.restore();
 }
 
+export function drawArrow(
+  context: CanvasRenderingContext2D,
+  element: ArrowElement,
+): void {
+  const points = element.points ?? [];
+
+  if (points.length < 2) {
+    return;
+  }
+
+  const start = points[0];
+  const end = points[points.length - 1];
+  const previous = points[points.length - 2];
+
+  if (!start || !end || !previous) {
+    return;
+  }
+
+  const x = element.x ?? 0;
+  const y = element.y ?? 0;
+  const angle = element.angle ?? 0;
+  const opacity = element.opacity ?? 100;
+  const strokeColor = element.strokeColor ?? "#000000";
+  const strokeWidth = element.strokeWidth ?? 1;
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(angle);
+  context.globalAlpha = opacity / 100;
+  context.strokeStyle = strokeColor;
+  context.lineWidth = strokeWidth;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  // Body
+  context.beginPath();
+  context.moveTo(start.x, start.y);
+
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+
+    if (!point) {
+      continue;
+    }
+
+    context.lineTo(point.x, point.y);
+  }
+
+  context.stroke();
+
+  // Arrowhead
+  const arrowHead = getArrowHeadPoints(
+    previous,
+    end,
+    Math.max(10, strokeWidth * 4),
+  );
+
+  if (arrowHead) {
+    context.beginPath();
+
+    context.moveTo(end.x, end.y);
+    context.lineTo(arrowHead.left.x, arrowHead.left.y);
+
+    context.moveTo(end.x, end.y);
+    context.lineTo(arrowHead.right.x, arrowHead.right.y);
+
+    context.stroke();
+  }
+
+  context.restore();
+}
+
+export function drawCurvedLine(
+  context: CanvasRenderingContext2D,
+  element: LineElement,
+): void {
+  const sourcePoints = element.points ?? [];
+
+  if (sourcePoints.length < 2) {
+    return;
+  }
+
+  const points = sampleCatmullRom(sourcePoints, 12);
+
+  if (points.length < 2) {
+    return;
+  }
+
+  const firstPoint = points[0];
+
+  if (!firstPoint) {
+    return;
+  }
+
+  const x = element.x ?? 0;
+  const y = element.y ?? 0;
+  const angle = element.angle ?? 0;
+  const opacity = element.opacity ?? 100;
+  const strokeColor = element.strokeColor ?? "#000000";
+  const strokeWidth = element.strokeWidth ?? 1;
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(angle);
+  context.globalAlpha = opacity / 100;
+  context.strokeStyle = strokeColor;
+  context.lineWidth = strokeWidth;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(firstPoint.x, firstPoint.y);
+
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+
+    if (!point) {
+      continue;
+    }
+    context.lineTo(point.x, point.y);
+  }
+
+  context.stroke();
+  context.restore();
+}
+
 function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
@@ -279,7 +410,15 @@ function drawElement(
       break;
 
     case "line":
-      drawLine(context, element);
+      if (element.lineType === "curved") {
+        drawCurvedLine(context, element);
+      } else {
+        drawLine(context, element);
+      }
+      break;
+
+    case "arrow":
+      drawArrow(context, element);
       break;
 
     default:

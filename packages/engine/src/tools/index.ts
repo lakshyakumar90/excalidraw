@@ -5,3 +5,5 @@ export * from "./DiamondTool";
 export * from "./EllipseTool";
 export * from "./LineTool";
 export * from "./MultiPointLineTool";
+export * from "./ArrowTool";
+export * from "./CurvedLineTool";

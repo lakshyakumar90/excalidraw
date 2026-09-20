@@ -3,10 +3,12 @@ import { RectangleTool } from "./RectangleTool";
 import { DiamondTool } from "./DiamondTool";
 import { EllipseTool } from "./EllipseTool";
 import { LineTool } from "./LineTool";
+import { ArrowTool } from "./ArrowTool";
 import type { Tool, ToolPointerEvent } from "./Tool";
 import { MultiPointLineTool } from "./MultiPointLineTool";
+import { CurvedLineTool } from "./CurvedLineTool";
 
-export type ToolType = "rectangle" | "diamond" | "ellipse" | "line" | "multiPointLine";
+export type ToolType = "rectangle" | "diamond" | "ellipse" | "line" | "multiPointLine" | "arrow" | "curved-line";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
@@ -25,7 +27,9 @@ export class ToolManager {
       ["diamond", new DiamondTool()],
       ["ellipse", new EllipseTool()],
       ["line", new LineTool()],
+      ["arrow", new ArrowTool()],
       ["multiPointLine", new MultiPointLineTool()],
+      ["curved-line", new CurvedLineTool()],
     ]);
     this.onCommit = options.onCommit;
   }

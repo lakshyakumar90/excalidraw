@@ -5,14 +5,15 @@ import type {
   EllipseElement,
   RectangleElement,
   Point,
+  ArrowElement,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
-
 
 export type ElementOptions = Partial<BaseElement>;
 
 export interface CreateLineElementOptions extends ElementOptions {
   points: Point[];
+  lineType?: "straight" | "curved";
 }
 
 function generateElementId(): string {
@@ -140,6 +141,7 @@ export function createLineElement(
     isDeleted: false,
     updated: now,
     points: options.points,
+    lineType: options.lineType ?? "straight",
   };
 }
 
@@ -154,4 +156,90 @@ export function createPolylineElement(points: readonly Point[]) {
     height: bounds.height,
     points: localPoints,
   });
+}
+
+export function createArrowElement(start: Point, end: Point): ArrowElement {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.abs(end.x - start.x);
+  const height = Math.abs(end.y - start.y);
+
+  return {
+    id: crypto.randomUUID(),
+    type: "arrow",
+    x,
+    y,
+    width,
+    height,
+    angle: 0,
+    strokeColor: "#1e1e1e",
+    backgroundColor: "transparent",
+    fillStyle: "none",
+    strokeWidth: 1,
+    strokeStyle: "solid",
+    roughness: 1,
+    opacity: 100,
+    seed: Math.floor(Math.random() * 2_147_483_647),
+    groupIds: [],
+    boundElements: [],
+    frameId: null,
+    version: 1,
+    versionNonce: Math.floor(Math.random() * 2_147_483_647),
+    isDeleted: false,
+    updated: Date.now(),
+    points: [
+      {
+        x: start.x - x,
+        y: start.y - y,
+      },
+      {
+        x: end.x - x,
+        y: end.y - y,
+      },
+    ],
+  };
+}
+
+export function createLineElementFromPoints(
+  points: Point[],
+  lineType: "straight" | "curved" = "straight",
+): LineElement {
+  if (points.length < 2) {
+    throw new Error("A line requires at least two points");
+  }
+
+  const minX = Math.min(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const maxY = Math.max(...points.map((point) => point.y));
+
+  return {
+    id: crypto.randomUUID(),
+    type: "line",
+    x: minX ?? 0,
+    y: minY ?? 0,
+    width: (maxX ?? 0) - (minX ?? 0),
+    height: (maxY ?? 0) - (minY ?? 0),
+    angle: 0,
+    strokeColor: "#1e1e1e",
+    backgroundColor: "transparent",
+    fillStyle: "none",
+    strokeWidth: 1,
+    strokeStyle: "solid",
+    roughness: 1,
+    opacity: 100,
+    seed: Math.floor(Math.random() * 2_147_483_647),
+    groupIds: [],
+    boundElements: [],
+    frameId: null,
+    version: 1,
+    versionNonce: Math.floor(Math.random() * 2_147_483_647),
+    isDeleted: false,
+    updated: Date.now(),
+    lineType,
+    points: points.map((point) => ({
+      x: point.x - (minX ?? 0),
+      y: point.y - (minY ?? 0),
+    })),
+  };
 }

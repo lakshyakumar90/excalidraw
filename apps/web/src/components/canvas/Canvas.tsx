@@ -276,6 +276,16 @@ export function Canvas() {
         return;
       }
 
+      if (key === "a") {
+        toolManager.setActiveTool("arrow");
+        return;
+      }
+
+      if (key === "c") {
+        toolManager.setActiveTool("curved-line");
+        return;
+      }
+
       if (!event.ctrlKey && !event.metaKey) {
         return;
       }
