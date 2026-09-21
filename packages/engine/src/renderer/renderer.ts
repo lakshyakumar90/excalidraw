@@ -8,7 +8,6 @@ import type {
 import { viewportToSceneBounds } from "./viewport";
 import { getVisibleElements } from "./culling";
 import { getArrowHeadPoints, sampleCatmullRom } from "../geometry";
-import { getPressureWidth } from "../geometry/stroke";
 import {
   buildStrokeOutline,
   getStrokeOutlinePath,

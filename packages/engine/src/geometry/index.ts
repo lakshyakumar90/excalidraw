@@ -7,4 +7,5 @@ export * from "./curve";
 export * from "./simplify";
 export * from "./pressure";
 export * from "./stroke";
+export * from "./strokeOutline";
 
