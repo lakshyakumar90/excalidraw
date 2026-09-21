@@ -1,6 +1,6 @@
 import type { Element } from "@repo/common";
 import { boundsIntersect, type Bounds } from "./viewport";
-import { getElementBounds } from "./elementBounds";
+import { getElementBounds } from "../geometry/element";
 
 export function isElementVisible(
   element: Element,

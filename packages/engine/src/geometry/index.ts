@@ -10,5 +10,7 @@ export * from "./stroke";
 export * from "./strokeOutline";
 export * from "./bounds";
 export * from "./elementBounds";
-export * from "./element"
-
+export * from "./element";
+export * from "./elementLocalBounds";
+export * from "./elementCorners";
+export * from "./rotation";
