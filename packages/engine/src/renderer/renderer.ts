@@ -8,10 +8,7 @@ import type {
 import { viewportToSceneBounds } from "./viewport";
 import { getVisibleElements } from "./culling";
 import { getArrowHeadPoints, sampleCatmullRom } from "../geometry";
-import {
-  buildStrokeOutline,
-  getStrokeOutlinePath,
-} from "../geometry/strokeOutline";
+import { buildClosedStrokePath } from "../geometry/strokeOutline";
 
 export interface RenderContext {
   context: CanvasRenderingContext2D;
@@ -405,8 +402,10 @@ function drawFreedraw(
     return;
   }
 
-  const outline = buildStrokeOutline(element.points, element.strokeWidth ?? 1);
-  const path = getStrokeOutlinePath(outline);
+  const path = buildClosedStrokePath(
+    element.points,
+    element.strokeWidth ?? 1,
+  );
 
   if (path.length < 3) {
     return;

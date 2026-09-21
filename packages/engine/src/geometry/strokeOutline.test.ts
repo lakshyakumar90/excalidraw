@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildStrokeOutline, getStrokeOutlinePath } from "./strokeOutline";
+import {
+  buildClosedStrokePath,
+  buildStrokeOutline,
+  getStrokeOutlinePath,
+} from "./strokeOutline";
 
 describe("buildStrokeOutline", () => {
   it("creates both sides of a horizontal stroke", () => {
@@ -43,5 +47,27 @@ describe("buildStrokeOutline", () => {
     );
     const path = getStrokeOutlinePath(outline);
     expect(path).toHaveLength(4);
+  });
+
+  it("adds round caps beyond the endpoints", () => {
+    const points = [
+      { x: 0, y: 0, pressure: 0.5 },
+      { x: 100, y: 0, pressure: 0.5 },
+    ];
+    const flat = getStrokeOutlinePath(buildStrokeOutline(points, 2));
+    const capped = buildClosedStrokePath(points, 2, 8);
+    // 4 flat corners + 7 interior arc points per cap
+    expect(capped).toHaveLength(flat.length + 2 * (8 - 1));
+    const xs = capped.map((p) => p.x);
+    // start cap extends left of x=0, end cap extends right of x=100
+    expect(Math.min(...xs)).toBeLessThan(0);
+    expect(Math.max(...xs)).toBeGreaterThan(100);
+  });
+
+  it("returns empty for a degenerate stroke", () => {
+    expect(buildClosedStrokePath([], 2)).toEqual([]);
+    expect(
+      buildClosedStrokePath([{ x: 0, y: 0, pressure: 0.5 }], 2),
+    ).toEqual([]);
   });
 });

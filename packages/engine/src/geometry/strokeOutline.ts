@@ -119,3 +119,63 @@ export function getStrokeOutlinePath(outline: StrokeOutline): Point[] {
 
   return [...outline.left, ...outline.right.reverse()];
 }
+
+function getCapTangent(a: Point, b: Point): Point {
+  const t = normalize({ x: b.x - a.x, y: b.y - a.y });
+  // normalize() falls back to {1,0} on zero length; guard the {0,0} path too.
+  if (t.x === 0 && t.y === 0) return { x: 1, y: 0 };
+  return t;
+}
+
+/** Interior points of a semicircular cap (excludes the two corner endpoints). */
+function capArc(
+  center: Point,
+  normal: Point,
+  tangent: Point,
+  radius: number,
+  segments: number,
+  sign: 1 | -1,
+): Point[] {
+  const arc: Point[] = [];
+  for (let i = 1; i < segments; i += 1) {
+    const theta = (Math.PI * i) / segments;
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    arc.push({
+      x: center.x + radius * (normal.x * cos + sign * tangent.x * sin),
+      y: center.y + radius * (normal.y * cos + sign * tangent.y * sin),
+    });
+  }
+  return arc;
+}
+
+/**
+ * Full closed stroke path with round caps:
+ * left[0..n] → end cap → right[n..0] → start cap → close.
+ */
+export function buildClosedStrokePath(
+  points: FreedrawPoint[],
+  baseWidth: number,
+  capSegments = 8,
+): Point[] {
+  const outline = buildStrokeOutline(points, baseWidth);
+  if (outline.left.length === 0 || outline.right.length === 0) return [];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (!first || !last) return [];
+
+  const startTangent = getCapTangent(first, points[1] ?? first);
+  const endTangent = getCapTangent(points[points.length - 2] ?? last, last);
+  const startNormal = getNormal(startTangent);
+  const endNormal = getNormal(endTangent);
+  const startRadius = getRadius(baseWidth, first.pressure);
+  const endRadius = getRadius(baseWidth, last.pressure);
+  const segments = Math.max(2, Math.floor(capSegments));
+
+  return [
+    ...outline.left,
+    ...capArc(last, endNormal, endTangent, endRadius, segments, 1),
+    ...outline.right.reverse(),
+    ...capArc(first, startNormal, startTangent, startRadius, segments, -1),
+  ];
+}
