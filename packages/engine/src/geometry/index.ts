@@ -8,4 +8,7 @@ export * from "./simplify";
 export * from "./pressure";
 export * from "./stroke";
 export * from "./strokeOutline";
+export * from "./bounds";
+export * from "./elementBounds";
+export * from "./element"
 

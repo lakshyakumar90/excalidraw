@@ -1,11 +1,7 @@
 import type { Point, Size, Viewport } from "@repo/common";
+import type { Bounds } from "../geometry/bounds";
 
-export interface Bounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
+export type { Bounds };
 
 export function viewportToSceneBounds(size: Size, viewport: Viewport): Bounds {
   return {
