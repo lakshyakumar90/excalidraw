@@ -9,6 +9,10 @@ import { viewportToSceneBounds } from "./viewport";
 import { getVisibleElements } from "./culling";
 import { getArrowHeadPoints, sampleCatmullRom } from "../geometry";
 import { getPressureWidth } from "../geometry/stroke";
+import {
+  buildStrokeOutline,
+  getStrokeOutlinePath,
+} from "../geometry/strokeOutline";
 
 export interface RenderContext {
   context: CanvasRenderingContext2D;
@@ -394,33 +398,52 @@ export function drawCurvedLine(
   context.restore();
 }
 
-export function drawFreedraw(
+function drawFreedraw(
   context: CanvasRenderingContext2D,
   element: FreedrawElement,
 ): void {
-  const points = element.points ?? [];
-  if (points.length < 2) return;
-  const firstPoint = points[0];
-  if (!firstPoint) return;
+  if (element.points.length < 2) {
+    return;
+  }
+
+  const outline = buildStrokeOutline(element.points, element.strokeWidth ?? 1);
+  const path = getStrokeOutlinePath(outline);
+
+  if (path.length < 3) {
+    return;
+  }
+
+  const firstPoint = path[0];
+
+  if (!firstPoint) {
+    return;
+  }
+
+  const x = element.x ?? 0;
+  const y = element.y ?? 0;
+  const angle = element.angle ?? 0;
+  const opacity = element.opacity ?? 100;
+  const strokeColor = element.strokeColor ?? "#000000";
 
   context.save();
-  context.translate(element.x ?? 0, element.y ?? 0);
-  context.rotate(element.angle ?? 0);
-  context.globalAlpha = (element.opacity ?? 100) / 100;
-  context.strokeStyle = element.strokeColor ?? "#000000";
-  for (let i = 1; i < points.length; i += 1) {
-    const previous = points[i - 1] ?? firstPoint;
-    const current = points[i] ?? previous;
-    const pressure = (previous.pressure + current.pressure) / 2;
-    const width = getPressureWidth(element.strokeWidth ?? 1, pressure);
-    context.lineWidth = width;
-    context.lineCap = "round";
-    context.lineJoin = "round";    
-    context.beginPath();
-    context.moveTo(previous.x, previous.y);
-    context.lineTo(current.x, current.y);
-    context.stroke();
+  context.translate(x, y);
+  context.rotate(angle);
+  context.globalAlpha = opacity / 100;
+  context.fillStyle = strokeColor;
+  context.beginPath();
+  context.moveTo(firstPoint.x, firstPoint.y);
+
+  for (let i = 1; i < path.length; i += 1) {
+    const point = path[i];
+
+    if (!point) {
+      continue;
+    }
+
+    context.lineTo(point.x, point.y);
   }
+  context.closePath();
+  context.fill();
   context.restore();
 }
 

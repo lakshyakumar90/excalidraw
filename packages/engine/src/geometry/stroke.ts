@@ -7,3 +7,4 @@ export function getPressureWidth(baseWidth: number, pressure: number): number {
 
   return baseWidth * scale;
 }
+
