@@ -67,7 +67,7 @@ export function measureText(
   fontSize = DEFAULT_TEXT_FONT_SIZE,
   fontFamily = DEFAULT_TEXT_FONT_FAMILY,
 ): TextMeasurement {
-  const lines = text.split("\n");
+  const lines = text.split(/\r\n?|\n/);
   const lineHeight = fontSize * TEXT_LINE_HEIGHT;
 
   return {

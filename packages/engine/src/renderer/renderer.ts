@@ -18,7 +18,7 @@ import { buildClosedStrokePath } from "../geometry/strokeOutline";
 import {
   DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
-  TEXT_LINE_HEIGHT,
+  measureText,
 } from "../text";
 
 export interface RenderContext {
@@ -601,18 +601,23 @@ function drawText(
   context.globalAlpha = (element.opacity ?? 100) / 100;
   context.fillStyle = element.strokeColor ?? "#1e1e1e";
   const fontSize = element.fontSize || DEFAULT_TEXT_FONT_SIZE;
-  context.font = `${fontSize}px ${element.fontFamily || DEFAULT_TEXT_FONT_FAMILY}`;
-  context.textAlign = element.textAlign ?? "left";
+  const fontFamily = element.fontFamily || DEFAULT_TEXT_FONT_FAMILY;
+  const textAlign = element.textAlign ?? "left";
+  context.font = `${fontSize}px ${fontFamily}`;
+  context.textAlign = textAlign;
   context.textBaseline = "top";
   const x =
-    element.textAlign === "center"
+    textAlign === "center"
       ? (element.width ?? 0) / 2
-      : element.textAlign === "right"
+      : textAlign === "right"
         ? (element.width ?? 0)
         : 0;
-  const lines = element.text.split("\n");
-  const lineHeight = fontSize * TEXT_LINE_HEIGHT;
-  const textHeight = lines.length * lineHeight;
+  const lines = element.text.split(/\r\n?|\n/);
+  const { height: textHeight, lineHeight } = measureText(
+    element.text,
+    fontSize,
+    fontFamily,
+  );
   const y =
     element.verticalAlign === "middle"
       ? ((element.height ?? textHeight) - textHeight) / 2
