@@ -84,7 +84,7 @@ export class HistoryManager {
     const entry = this.undoStack.pop();
     if (!entry) return false;
     for (const change of [...entry.changes].reverse()) {
-      this.applyChange(change.id, change.before);
+      this.applyChange(change.id, change.before, change.beforeIndex);
     }
     this.restoreSelection(entry.beforeSelection);
     this.redoStack.push(entry);
@@ -95,14 +95,18 @@ export class HistoryManager {
     const entry = this.redoStack.pop();
     if (!entry) return false;
     for (const change of entry.changes) {
-      this.applyChange(change.id, change.after);
+      this.applyChange(change.id, change.after, change.afterIndex);
     }
     this.restoreSelection(entry.afterSelection);
     this.undoStack.push(entry);
     return true;
   }
 
-  private applyChange(id: string, target: Record<string, unknown> | null): void {
+  private applyChange(
+    id: string,
+    target: Record<string, unknown> | null,
+    targetIndex?: number,
+  ): void {
     const current = this.scene.getElement(id);
     if (!target) {
       if (current && !current.isDeleted) {
@@ -121,11 +125,17 @@ export class HistoryManager {
         isDeleted:
           typeof next.isDeleted === "boolean" ? next.isDeleted : current.isDeleted,
       } as Partial<Omit<Element, "id" | "type">>);
+      if (targetIndex !== undefined) {
+        this.scene.moveElementToIndex(id, targetIndex);
+      }
       return;
     }
 
     this.scene.addElement({ id, ...next } as Element);
     this.scene.mutateElement(id, {});
+    if (targetIndex !== undefined) {
+      this.scene.moveElementToIndex(id, targetIndex);
+    }
   }
 
   private restoreSelection(ids: Iterable<string>): void {

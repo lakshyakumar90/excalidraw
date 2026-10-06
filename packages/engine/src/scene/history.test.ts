@@ -185,4 +185,29 @@ describe("HistoryManager", () => {
     expect(history.undo()).toBe(true);
     expect(scene.getElement(rectangle.id)?.isDeleted).toBe(true);
   });
+
+  it("undoes and redoes layer order changes", () => {
+    const scene = new Scene();
+    const back = createRectangleElement({ id: "layer-back" });
+    const front = createRectangleElement({ id: "layer-front" });
+    scene.addElement(back);
+    scene.addElement(front);
+    const history = new HistoryManager(scene, () => [], () => {});
+
+    history.captureUpdate(() => scene.reorderElements([back.id], "front"));
+    expect(scene.getElements().map((element) => element.id)).toEqual([
+      front.id,
+      back.id,
+    ]);
+    history.undo();
+    expect(scene.getElements().map((element) => element.id)).toEqual([
+      back.id,
+      front.id,
+    ]);
+    history.redo();
+    expect(scene.getElements().map((element) => element.id)).toEqual([
+      front.id,
+      back.id,
+    ]);
+  });
 });

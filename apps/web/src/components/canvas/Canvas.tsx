@@ -388,6 +388,12 @@ export function Canvas() {
     };
 
     const handlePointerDown = (event: PointerEvent) => {
+      if (textEditorRef.current) {
+        commitTextElement(textEditorRef.current);
+        textEditorRef.current = null;
+        setTextEditorPosition(null);
+      }
+
       const eyedropperTarget = eyedropperStore.getTarget();
       if (eyedropperTarget) {
         if (event.button !== 0) return;

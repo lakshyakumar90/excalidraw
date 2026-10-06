@@ -4,11 +4,14 @@ export interface SceneElementChange {
   id: string;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
+  beforeIndex?: number;
+  afterIndex?: number;
 }
 
 interface PendingElementChange {
   before: Element | null;
   changedFields: Set<string>;
+  beforeIndex?: number;
 }
 
 function cloneElement(element: Element): Element {
@@ -80,11 +83,17 @@ export class Scene {
               afterElement[field as keyof Element],
             ),
         );
-        if (changedFields.length === 0) continue;
+        const afterIndex = this.elements.findIndex((element) => element.id === id);
+        const indexChanged =
+          change.beforeIndex !== undefined && change.beforeIndex !== afterIndex;
+        if (changedFields.length === 0 && !indexChanged) continue;
         changes.push({
           id,
           before: pickFields(change.before, changedFields),
           after: pickFields(afterElement, changedFields),
+          ...(indexChanged
+            ? { beforeIndex: change.beforeIndex, afterIndex }
+            : {}),
         });
         continue;
       }
@@ -192,6 +201,20 @@ export class Scene {
     const nextIndexById = new Map(
       next.map((element, index) => [element.id, index]),
     );
+    for (const element of previous) {
+      const beforeIndex = previousIndexById.get(element.id);
+      const afterIndex = nextIndexById.get(element.id);
+      if (
+        selectedIds.has(element.id) &&
+        beforeIndex !== undefined &&
+        afterIndex !== undefined &&
+        beforeIndex !== afterIndex
+      ) {
+        this.recordChange(element.id, element);
+        const pending = this.pendingChanges?.get(element.id);
+        if (pending) pending.beforeIndex = beforeIndex;
+      }
+    }
     const now = Date.now();
     for (const element of next) {
       if (
@@ -235,6 +258,18 @@ export class Scene {
 
   hasElement(id: string): boolean {
     return this.elementMap.has(id);
+  }
+
+  moveElementToIndex(id: string, index: number): boolean {
+    const currentIndex = this.elements.findIndex((element) => element.id === id);
+    if (currentIndex < 0) return false;
+    const targetIndex = Math.max(0, Math.min(index, this.elements.length - 1));
+    if (currentIndex === targetIndex) return false;
+    const [element] = this.elements.splice(currentIndex, 1);
+    if (!element) return false;
+    this.elements.splice(targetIndex, 0, element);
+    this.mutateElement(id, {});
+    return true;
   }
 
   subscribe = (listener: () => void): (() => void) => {
