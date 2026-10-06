@@ -2,6 +2,64 @@ import type { Element, Viewport } from "@repo/common";
 import { getElementCorners } from "@repo/engine";
 import type { MarqueePreview } from "@/lib/selection/selectionController";
 
+function expandCorners(
+  corners: ReturnType<typeof getElementCorners>,
+  padding: number,
+): ReturnType<typeof getElementCorners> {
+  if (corners.length !== 4) return corners;
+
+  const topLeft = corners[0];
+  const topRight = corners[1];
+  const bottomLeft = corners[3];
+
+  if (!topLeft || !topRight || !bottomLeft) return corners;
+
+  function unitVector(vector: { x: number; y: number }) {
+    const length = Math.hypot(vector.x, vector.y);
+
+    if (length === 0) return null;
+
+    return {
+      x: vector.x / length,
+      y: vector.y / length,
+    };
+  }
+
+  const xAxis = unitVector({
+    x: topRight.x - topLeft.x,
+    y: topRight.y - topLeft.y,
+  });
+
+  const yAxis = unitVector({
+    x: bottomLeft.x - topLeft.x,
+    y: bottomLeft.y - topLeft.y,
+  });
+
+  // A line element can have zero height or width. Use a perpendicular axis
+  // in that case so the selection outline still gets visible padding.
+  const horizontal =
+    xAxis ?? (yAxis ? { x: yAxis.y, y: -yAxis.x } : { x: 1, y: 0 });
+  const vertical = yAxis ?? { x: -horizontal.y, y: horizontal.x };
+
+  const signs = [
+    { x: -1, y: -1 },
+    { x: 1, y: -1 },
+    { x: 1, y: 1 },
+    { x: -1, y: 1 },
+  ];
+
+  return corners.map((corner, index) => {
+    const sign = signs[index];
+
+    if (!sign) return corner;
+
+    return {
+      x: corner.x + (horizontal.x * sign.x + vertical.x * sign.y) * padding,
+      y: corner.y + (horizontal.y * sign.x + vertical.y * sign.y) * padding,
+    };
+  });
+}
+
 export function drawSelectionOverlay(
   context: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -22,7 +80,10 @@ export function drawSelectionOverlay(
   for (const element of selectedElements ?? []) {
     if (element.isDeleted) continue;
 
-    const corners = getElementCorners(element);
+    const corners = expandCorners(
+      getElementCorners(element),
+      4 / viewport.zoom,
+    );
     const first = corners[0];
 
     if (!first) continue;

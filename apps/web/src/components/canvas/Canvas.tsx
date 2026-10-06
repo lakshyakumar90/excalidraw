@@ -181,11 +181,11 @@ export function Canvas() {
       const scenePoint = viewportToScene(point, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        selectionController.updateMarquee(scenePoint);
+        selectionController.pointerMove(scenePoint);
         renderLoop.invalidateInteractive();
         return;
       }
-      
+
       toolManager.onPointerMove(scenePoint, {
         shiftKey: event.shiftKey,
         button: event.button,
@@ -213,15 +213,11 @@ export function Canvas() {
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        const hit = selectionController.selectAt(
+        selectionController.pointerDown(
           scenePoint,
           event.shiftKey,
           viewportRef.current.zoom,
         );
-
-        if (!hit) {
-          selectionController.beginMarquee(scenePoint);
-        }
 
         renderLoop.invalidateInteractive();
         interactiveCanvas.setPointerCapture(event.pointerId);
@@ -254,16 +250,16 @@ export function Canvas() {
       }
 
       const viewportPoint = getPointerPosition(event);
-      const scenePoint = viewportToScene(viewportPoint, viewportRef.current); 
+      const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        selectionController.endMarquee();
+        selectionController.pointerUp(scenePoint);
         renderLoop.invalidateInteractive();
-      
+
         if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
           interactiveCanvas.releasePointerCapture(event.pointerId);
         }
-      
+
         return;
       }
 
