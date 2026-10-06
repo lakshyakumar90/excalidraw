@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Element } from "@repo/common";
 import { ColorPicker } from "@/components/styles/ColorPicker";
 import { toolManager } from "@/lib/tools/toolManager";
@@ -32,12 +32,26 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-neutral-200 pt-4">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+    <details open className="group border-t border-neutral-200 pt-3">
+      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between rounded-sm text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden">
         {title}
-      </h3>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 16 16"
+          fill="none"
+          className="h-4 w-4 transition-transform group-open:rotate-180"
+        >
+          <path
+            d="m4 6 4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </summary>
       {children}
-    </section>
+    </details>
   );
 }
 
@@ -68,6 +82,7 @@ const Z_ORDER_ACTIONS = [
 ];
 
 export function StylePanel() {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
@@ -159,26 +174,58 @@ export function StylePanel() {
   return (
     <aside
       aria-label="Style properties"
-      className="fixed bottom-4 right-4 top-32 z-50 flex w-[min(18rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+      className={`fixed right-4 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.12)] ${
+        isCollapsed ? "w-auto" : "w-[min(18rem,calc(100vw-2rem))]"
+      }`}
     >
-      <header className="flex items-start justify-between px-4 pb-4 pt-5">
-        <div>
+      <header
+        className={`flex items-center justify-between gap-4 px-4 ${isCollapsed ? "py-3" : "pb-4 pt-5"}`}
+      >
+        <div className={isCollapsed ? "flex items-center gap-3" : ""}>
           <h2 className="text-base font-semibold tracking-[-0.02em] text-neutral-900">
             Style
           </h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            {selectedCount > 0
-              ? `${selectedCount} element${selectedCount === 1 ? "" : "s"} selected`
-              : `Defaults for ${TOOL_NAMES[activeTool]}`}
-          </p>
+          {!isCollapsed && (
+            <p className="mt-1 text-xs text-neutral-500">
+              {selectedCount > 0
+                ? `${selectedCount} element${selectedCount === 1 ? "" : "s"} selected`
+                : `Defaults for ${TOOL_NAMES[activeTool]}`}
+            </p>
+          )}
         </div>
-        <span
-          aria-hidden="true"
-          className="mt-1 h-2 w-2 rounded-full bg-blue-500"
-        />
+        <button
+          type="button"
+          aria-label={
+            isCollapsed ? "Expand style panel" : "Collapse style panel"
+          }
+          aria-expanded={!isCollapsed}
+          aria-controls="style-panel-content"
+          title={isCollapsed ? "Expand style panel" : "Collapse style panel"}
+          onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            className={`h-4 w-4 transition-transform ${isCollapsed ? "rotate-180" : ""}`}
+          >
+            <path
+              d="m12 4-6 6 6 6"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </header>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
+      <div
+        id="style-panel-content"
+        hidden={isCollapsed}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]"
+      >
         <Section title="Stroke">
           <div className="space-y-2">
             <ColorPicker
