@@ -115,7 +115,7 @@ function isPointInPolygon(point: Point, polygon: readonly Point[]): boolean {
 }
 
 function hitRectangle(
-  element: Extract<Element, { type: "rectangle" | "text" }>,
+  element: Extract<Element, { type: "rectangle" | "text" | "image" }>,
   point: Point,
   tolerance: number,
 ): boolean {
@@ -275,6 +275,7 @@ export function isPointOnElement(
   switch (element.type) {
     case "rectangle":
     case "text":
+    case "image":
       return hitRectangle(element, point, tolerance);
 
     case "ellipse":

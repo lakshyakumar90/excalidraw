@@ -1,6 +1,7 @@
 import type { Element } from "@repo/common";
 import { getElementAxisAlignedBounds, renderStatic } from "@repo/engine";
 import { downloadBlob } from "./excalidrawFile";
+import { loadImageAssets } from "./imageFiles";
 
 const PADDING = 24;
 const MAX_SIDE = 16_000;
@@ -35,30 +36,36 @@ export async function exportElementsToPng(
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Could not prepare the PNG export");
 
-  renderStatic(
-    {
-      context,
-      width: canvas.width,
-      height: canvas.height,
-      viewport: {
-        scrollX: (PADDING - minX) * scale,
-        scrollY: (PADDING - minY) * scale,
-        zoom: scale,
+  const imageAssets = await loadImageAssets(elements);
+  try {
+    renderStatic(
+      {
+        context,
+        width: canvas.width,
+        height: canvas.height,
+        viewport: {
+          scrollX: (PADDING - minX) * scale,
+          scrollY: (PADDING - minY) * scale,
+          zoom: scale,
+        },
       },
-    },
-    elements,
-    {
-      background: !options.transparentBackground,
-      grid: false,
-      origin: false,
-    },
-  );
+      elements,
+      {
+        background: !options.transparentBackground,
+        grid: false,
+        origin: false,
+      },
+      imageAssets,
+    );
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (result) resolve(result);
-      else reject(new Error("The browser could not encode the PNG export"));
-    }, "image/png");
-  });
-  downloadBlob(blob, "drawing.png");
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) resolve(result);
+        else reject(new Error("The browser could not encode the PNG export"));
+      }, "image/png");
+    });
+    downloadBlob(blob, "drawing.png");
+  } finally {
+    for (const bitmap of imageAssets.values()) bitmap.close();
+  }
 }

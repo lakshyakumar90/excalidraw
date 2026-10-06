@@ -33,8 +33,10 @@ export function startAutosave(
     do {
       dirty = false;
       saveAgain = false;
+      const sceneVersion = scene.version;
       try {
         await saveScene(scene.getElements(), getViewport());
+        if (scene.version === sceneVersion) scene.markClean();
       } catch (error) {
         dirty = true;
         console.error("Could not save the local drawing", error);

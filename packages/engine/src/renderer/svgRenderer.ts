@@ -10,6 +10,7 @@ import { measureText } from "../text/measureText";
 export interface SvgRenderOptions {
   padding?: number;
   background?: string | null;
+  imageFiles?: ReadonlyMap<string, string>;
 }
 
 function escapeXml(value: string): string {
@@ -111,7 +112,11 @@ function elementTransform(element: Element): string {
   return `translate(${element.x + center.x} ${element.y + center.y}) rotate(${rotation}) translate(${-center.x} ${-center.y})`;
 }
 
-function renderElement(element: Element, defs: string[]): string {
+function renderElement(
+  element: Element,
+  defs: string[],
+  imageFiles: ReadonlyMap<string, string>,
+): string {
   const id = `fill-${element.id.replaceAll(/[^a-zA-Z0-9_-]/g, "-")}`;
   const fillStyle = element.fillStyle;
   if (
@@ -191,6 +196,11 @@ function renderElement(element: Element, defs: string[]): string {
       const anchor = element.textAlign === "center" ? "middle" : element.textAlign === "right" ? "end" : "start";
       return `<g transform="${elementTransform(element)}" opacity="${(element.opacity ?? 100) / 100}"><text fill="${escapeXml(element.strokeColor ?? "#1e1e1e")}" font-family="${escapeXml(element.fontFamily)}" font-size="${fontSize}" text-anchor="${anchor}">${tspans}</text></g>`;
     }
+    case "image": {
+      const href = imageFiles.get(element.fileId);
+      if (!href) return "";
+      return `<g transform="${elementTransform(element)}" opacity="${(element.opacity ?? 100) / 100}"><image x="0" y="0" width="${element.width ?? 0}" height="${element.height ?? 0}" preserveAspectRatio="none" href="${escapeXml(href)}"/></g>`;
+    }
     default:
       return "";
   }
@@ -211,7 +221,10 @@ export function renderSceneToSvg(
   const width = Math.ceil(maxX - minX + padding * 2);
   const height = Math.ceil(maxY - minY + padding * 2);
   const defs: string[] = [];
-  const rendered = elements.map((element) => renderElement(element, defs)).join("");
+  const imageFiles = options.imageFiles ?? new Map<string, string>();
+  const rendered = elements
+    .map((element) => renderElement(element, defs, imageFiles))
+    .join("");
   const background = options.background
     ? `<rect width="100%" height="100%" fill="${escapeXml(options.background)}"/>`
     : "";

@@ -2,6 +2,7 @@ import type { Element, Viewport } from "@repo/common";
 import { historyStore } from "@/lib/history/historyStore";
 import { scene } from "@/lib/scene/scene";
 import { selectionStore } from "@/lib/selection/selectionStore";
+import { saveFile } from "./indexedDb";
 import { setCurrentViewport } from "./viewportStore";
 
 const ELEMENT_TYPES = new Set([
@@ -12,6 +13,7 @@ const ELEMENT_TYPES = new Set([
   "arrow",
   "freedraw",
   "text",
+  "image",
 ]);
 
 export interface ImportedDocument {
@@ -65,6 +67,7 @@ function validateElement(value: unknown): value is Element {
   ) {
     return false;
   }
+  if (value.type === "image" && typeof value.fileId !== "string") return false;
   return true;
 }
 
@@ -96,6 +99,14 @@ export function parseExcalidrawDocument(value: unknown): ImportedDocument {
     zoom: isFiniteNumber(zoom) && zoom > 0 ? zoom : 1,
   };
   const files = isRecord(value.files) ? value.files : {};
+  for (const element of value.elements) {
+    if (element.type === "image") {
+      const file = files[element.fileId];
+      if (!isRecord(file) || typeof file.dataURL !== "string") {
+        throw new Error(`The image file "${element.fileId}" is missing`);
+      }
+    }
+  }
 
   return {
     elements: structuredClone(value.elements) as Element[],
@@ -114,7 +125,35 @@ export async function readExcalidrawFile(file: File): Promise<ImportedDocument> 
   return parseExcalidrawDocument(parsed);
 }
 
-export function applyImportedDocument(document: ImportedDocument): void {
+function dataUrlToBlob(dataUrl: string, expectedMimeType?: string): Blob {
+  const match = /^data:([^;,]*)(;base64)?,([\s\S]*)$/.exec(dataUrl);
+  if (!match) throw new Error("An imported image has invalid file data");
+  const mimeType = match[1] || expectedMimeType || "application/octet-stream";
+  const payload = match[3] ?? "";
+  const bytes = match[2]
+    ? Uint8Array.from(atob(payload), (character) => character.charCodeAt(0))
+    : new TextEncoder().encode(decodeURIComponent(payload));
+  return new Blob([bytes], { type: mimeType });
+}
+
+export async function applyImportedDocument(
+  document: ImportedDocument,
+): Promise<void> {
+  for (const [fileId, rawFile] of Object.entries(document.files)) {
+    if (!isRecord(rawFile) || typeof rawFile.dataURL !== "string") continue;
+    const blob = dataUrlToBlob(
+      rawFile.dataURL,
+      typeof rawFile.mimeType === "string" ? rawFile.mimeType : undefined,
+    );
+    const mimeType =
+      typeof rawFile.mimeType === "string" ? rawFile.mimeType : blob.type;
+    await saveFile({
+      id: fileId,
+      blob,
+      mimeType,
+      created: isFiniteNumber(rawFile.created) ? rawFile.created : Date.now(),
+    });
+  }
   scene.replaceAll(document.elements);
   selectionStore.clear();
   historyStore.clear();

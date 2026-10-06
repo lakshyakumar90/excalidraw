@@ -5,6 +5,30 @@ import { createRectangleElement } from "../element";
 import { Scene } from "./scene";
 
 describe("Scene", () => {
+  it("replaces scene contents while preserving imported element ids", () => {
+    const scene = new Scene();
+    scene.addElement(createRectangleElement({ id: "before-import" }));
+    const imported = createRectangleElement({ id: "imported-id", x: 25 });
+
+    scene.replaceAll([imported]);
+
+    expect(scene.getElements().map((element) => element.id)).toEqual([
+      "imported-id",
+    ]);
+    expect(scene.getElement("before-import")).toBeUndefined();
+    expect(scene.getElement("imported-id")?.x).toBe(25);
+  });
+
+  it("rejects duplicate ids when replacing a scene", () => {
+    const scene = new Scene();
+    const first = createRectangleElement({ id: "duplicate-import-id" });
+    const second = createRectangleElement({ id: "duplicate-import-id" });
+
+    expect(() => scene.replaceAll([first, second])).toThrow(
+      "Scene elements must have unique ids",
+    );
+  });
+
   it("starts empty", () => {
     const scene = new Scene();
 

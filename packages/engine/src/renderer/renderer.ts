@@ -745,6 +745,7 @@ function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
   elements: readonly Element[] = [element],
+  imageAssets: ReadonlyMap<string, CanvasImageSource> = new Map(),
 ): void {
   switch (element.type) {
     case "rectangle":
@@ -788,6 +789,23 @@ function drawElement(
       drawText(context, element);
       break;
 
+    case "image": {
+      context.save();
+      applyElementTransform(context, element);
+      context.globalAlpha = (element.opacity ?? 100) / 100;
+      const asset = imageAssets.get(element.fileId);
+      if (asset) {
+        context.drawImage(asset, 0, 0, element.width ?? 0, element.height ?? 0);
+      } else {
+        context.fillStyle = "#f1f3f5";
+        context.strokeStyle = "#adb5bd";
+        context.fillRect(0, 0, element.width ?? 0, element.height ?? 0);
+        context.strokeRect(0, 0, element.width ?? 0, element.height ?? 0);
+      }
+      context.restore();
+      break;
+    }
+
     default:
       break;
   }
@@ -805,6 +823,7 @@ export function renderStatic(
   renderContext: RenderContext,
   elements: readonly Element[],
   options: StaticRenderOptions = {},
+  imageAssets: ReadonlyMap<string, CanvasImageSource> = new Map(),
 ): number {
   const { context, width, height, viewport } = renderContext;
   clearCanvas(context, width, height);
@@ -819,7 +838,7 @@ export function renderStatic(
   applyViewportTransform(context, viewport);
 
   for (const element of visibleElements) {
-    drawElement(context, element, elements);
+    drawElement(context, element, elements, imageAssets);
   }
   context.restore();
   return visibleElements.length;

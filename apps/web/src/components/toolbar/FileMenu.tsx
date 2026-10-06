@@ -43,7 +43,7 @@ export function FileMenu() {
   const importFile = async (file: File) => {
     try {
       const document = await readExcalidrawFile(file);
-      applyImportedDocument(document);
+      await applyImportedDocument(document);
       publishImportStatus(`Imported ${file.name}`);
       setOpen(false);
     } catch (error) {
@@ -86,7 +86,13 @@ export function FileMenu() {
             type="button"
             role="menuitem"
             onClick={() => {
-              downloadExcalidrawFile(scene.getElements(), getCurrentViewport());
+              void downloadExcalidrawFile(scene.getElements(), getCurrentViewport())
+                .then(() => publishImportStatus("Drawing exported"))
+                .catch((error: unknown) =>
+                  publishImportStatus(
+                    error instanceof Error ? error.message : "Could not export this drawing",
+                  ),
+                );
               setOpen(false);
             }}
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -151,16 +157,15 @@ export function FileMenu() {
             type="button"
             role="menuitem"
             onClick={() => {
-              try {
-                exportElementsToSvg(scene.getElements());
-                publishImportStatus("SVG exported");
-              } catch (error) {
-                publishImportStatus(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not export the SVG",
+              void exportElementsToSvg(scene.getElements())
+                .then(() => publishImportStatus("SVG exported"))
+                .catch((error: unknown) =>
+                  publishImportStatus(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not export the SVG",
+                  ),
                 );
-              }
               setOpen(false);
             }}
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -176,18 +181,17 @@ export function FileMenu() {
             role="menuitem"
             disabled={selectedElements.length === 0}
             onClick={() => {
-              try {
-                downloadExcalidrawFile(
+              void downloadExcalidrawFile(
                   selectedElements,
                   getCurrentViewport(),
                   "selection.excalidraw",
+                )
+                .then(() => publishImportStatus("Selection exported"))
+                .catch((error: unknown) =>
+                  publishImportStatus(
+                    error instanceof Error ? error.message : "Could not export selection",
+                  ),
                 );
-                publishImportStatus("Selection exported");
-              } catch (error) {
-                publishImportStatus(
-                  error instanceof Error ? error.message : "Could not export selection",
-                );
-              }
               setOpen(false);
             }}
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -220,14 +224,15 @@ export function FileMenu() {
             role="menuitem"
             disabled={selectedElements.length === 0}
             onClick={() => {
-              try {
-                exportElementsToSvg(selectedElements);
-                publishImportStatus("Selection exported as SVG");
-              } catch (error) {
-                publishImportStatus(
-                  error instanceof Error ? error.message : "Could not export selection",
+              void exportElementsToSvg(selectedElements)
+                .then(() => publishImportStatus("Selection exported as SVG"))
+                .catch((error: unknown) =>
+                  publishImportStatus(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not export selection",
+                  ),
                 );
-              }
               setOpen(false);
             }}
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

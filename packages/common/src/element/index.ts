@@ -13,5 +13,6 @@ export type {
   FreedrawElement,
   FreedrawPoint,
   TextElement,
+  ImageElement,
   Element,
 } from "./types";

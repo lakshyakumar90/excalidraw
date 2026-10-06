@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createRectangleElement, createTextElement } from "../element";
+import {
+  createImageElement,
+  createRectangleElement,
+  createTextElement,
+} from "../element";
 import { renderSceneToSvg } from "./svgRenderer";
 
 describe("renderSceneToSvg", () => {
@@ -56,5 +60,19 @@ describe("renderSceneToSvg", () => {
     const svg = renderSceneToSvg([selected]);
     expect(svg.match(/<rect/g)).toHaveLength(1);
     expect(svg).not.toContain("not-selected");
+  });
+
+  it("renders an image element from its file id data URL", () => {
+    const image = createImageElement({
+      id: "svg-image",
+      fileId: "local-image-1",
+      width: 20,
+      height: 10,
+    });
+    const svg = renderSceneToSvg([image], {
+      imageFiles: new Map([["local-image-1", "data:image/png;base64,AAAA"]]),
+    });
+    expect(svg).toContain("<image x=\"0\" y=\"0\" width=\"20\" height=\"10\"");
+    expect(svg).toContain('href="data:image/png;base64,AAAA"');
   });
 });

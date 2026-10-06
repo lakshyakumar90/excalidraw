@@ -33,6 +33,10 @@ import { historyStore } from "@/lib/history/historyStore";
 import { startAutosave, type AutosaveHandle } from "@/lib/persistence/autosave";
 import { loadScene } from "@/lib/persistence/indexedDb";
 import {
+  createImageElementFromFile,
+  loadImageAsset,
+} from "@/lib/persistence/imageFiles";
+import {
   getCurrentViewport,
   getInitialViewport,
   setCurrentViewport,
@@ -150,10 +154,26 @@ export function Canvas() {
   const visibleElementCountRef = useRef(0);
   const eyedropperPointerIdRef = useRef<number | null>(null);
   const autosaveRef = useRef<AutosaveHandle | null>(null);
+  const imageAssetsRef = useRef(new Map<string, ImageBitmap>());
 
   const closeContextMenu = useCallback(() => {
     contextMenuRef.current = null;
     setContextMenu(null);
+  }, []);
+
+  const insertImage = useCallback(async (file: File, point: Point) => {
+    try {
+      const imageElement = await createImageElementFromFile(file, point);
+      historyStore.captureUpdate(() => {
+        scene.addElement(imageElement);
+        selectionStore.set([imageElement.id]);
+      });
+      publishImportStatus(`Added ${file.name}`);
+    } catch (error) {
+      publishImportStatus(
+        error instanceof Error ? error.message : "Could not add this image",
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -165,6 +185,7 @@ export function Canvas() {
         if (cancelled) return;
         if (saved) {
           scene.replaceAll(saved.elements);
+          scene.markClean();
           const restoredViewport = saved.viewport;
           if (
             Number.isFinite(restoredViewport.scrollX) &&
@@ -245,6 +266,7 @@ export function Canvas() {
     if (!staticCanvas || !interactiveCanvas) {
       return;
     }
+    const imageAssets = imageAssetsRef.current;
     viewportRef.current = getCurrentViewport();
 
     const staticContext = staticCanvas.getContext("2d");
@@ -271,6 +293,8 @@ export function Canvas() {
               viewport: viewportRef.current,
             },
             scene.getElements(),
+            {},
+            imageAssets,
           );
         },
 
@@ -312,6 +336,54 @@ export function Canvas() {
         cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       },
     );
+
+    let disposed = false;
+    const loadingImageIds = new Set<string>();
+    const syncImageAssets = () => {
+      const imageIds = new Set(
+        scene
+          .getElements()
+          .flatMap((element) =>
+            element.type === "image" && !element.isDeleted
+              ? [element.fileId]
+              : [],
+          ),
+      );
+      for (const [id, bitmap] of imageAssets) {
+        if (!imageIds.has(id)) {
+          bitmap.close();
+          imageAssets.delete(id);
+        }
+      }
+      for (const id of imageIds) {
+        if (imageAssets.has(id) || loadingImageIds.has(id)) continue;
+        loadingImageIds.add(id);
+        void loadImageAsset(id)
+          .then((bitmap) => {
+            loadingImageIds.delete(id);
+            const stillNeeded = scene.getElements().some(
+              (element) =>
+                element.type === "image" &&
+                element.fileId === id &&
+                !element.isDeleted,
+            );
+            if (!bitmap) {
+              console.error(`Could not find stored image ${id}`);
+              return;
+            }
+            if (disposed || !stillNeeded) {
+              bitmap.close();
+              return;
+            }
+            imageAssets.set(id, bitmap);
+            renderLoop.invalidateStatic();
+          })
+          .catch((error: unknown) => {
+            loadingImageIds.delete(id);
+            console.error("Could not load an image from local storage", error);
+          });
+      }
+    };
 
     const updateCanvasCursor = () => {
       const activeTool = toolManager.getActiveTool();
@@ -974,9 +1046,32 @@ export function Canvas() {
         event.code === "KeyV"
       ) {
         event.preventDefault();
-        void selectionController
-          .pasteFromClipboard(scenePointerRef.current)
-          .then(() => renderLoop.invalidateInteractive());
+        void (async () => {
+          let imageWasPasted = false;
+          try {
+            const clipboardItems = await navigator.clipboard.read();
+            for (const item of clipboardItems) {
+              const mimeType = item.types.find((type) =>
+                type.startsWith("image/"),
+              );
+              if (!mimeType) continue;
+              const blob = await item.getType(mimeType);
+              const extension = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
+              const file = new File([blob], `pasted-image.${extension}`, {
+                type: mimeType,
+              });
+              await insertImage(file, scenePointerRef.current);
+              imageWasPasted = true;
+              break;
+            }
+          } catch {
+            // Fall back to the app's JSON clipboard format when image access is unavailable.
+          }
+          if (!imageWasPasted) {
+            await selectionController.pasteFromClipboard(scenePointerRef.current);
+          }
+          renderLoop.invalidateInteractive();
+        })();
         return;
       }
 
@@ -1155,6 +1250,7 @@ export function Canvas() {
 
     const unsubscribe = scene.subscribe(() => {
       renderLoop.invalidateStatic();
+      syncImageAssets();
     });
     const unsubscribeViewport = subscribeViewport(() => {
       viewportRef.current = getCurrentViewport();
@@ -1163,6 +1259,7 @@ export function Canvas() {
     });
 
     resizeCanvas();
+    syncImageAssets();
 
     window.addEventListener("resize", resizeCanvas);
     interactiveCanvas.addEventListener("pointerdown", handlePointerDown);
@@ -1185,6 +1282,9 @@ export function Canvas() {
       clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();
+      disposed = true;
+      for (const bitmap of imageAssets.values()) bitmap.close();
+      imageAssets.clear();
       window.removeEventListener("resize", resizeCanvas);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
       interactiveCanvas.removeEventListener("contextmenu", handleContextMenu);
@@ -1195,7 +1295,7 @@ export function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [closeContextMenu, persistenceReady]);
+  }, [closeContextMenu, insertImage, persistenceReady]);
 
   const textEditorScreenPosition = textEditorPosition
     ? sceneToViewport(
@@ -1216,19 +1316,29 @@ export function Canvas() {
         const file = event.dataTransfer.files[0];
         if (!file) return;
         event.preventDefault();
-        if (!file.name.toLowerCase().endsWith(".excalidraw")) return;
-        void readExcalidrawFile(file)
-          .then((document) => {
-            applyImportedDocument(document);
-            publishImportStatus(`Imported ${file.name}`);
-          })
-          .catch((error: unknown) => {
-            publishImportStatus(
-              error instanceof Error
-                ? error.message
-                : "Could not import this drawing",
-            );
-          });
+        if (file.name.toLowerCase().endsWith(".excalidraw")) {
+          void readExcalidrawFile(file)
+            .then(async (document) => {
+              await applyImportedDocument(document);
+              publishImportStatus(`Imported ${file.name}`);
+            })
+            .catch((error: unknown) => {
+              publishImportStatus(
+                error instanceof Error
+                  ? error.message
+                  : "Could not import this drawing",
+              );
+            });
+          return;
+        }
+        if (file.type.startsWith("image/")) {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const point = viewportToScene(
+            { x: event.clientX - rect.left, y: event.clientY - rect.top },
+            viewportRef.current,
+          );
+          void insertImage(file, point);
+        }
       }}
     >
       <canvas

@@ -9,6 +9,7 @@ import type {
   FreedrawElement,
   FreedrawPoint,
   TextElement,
+  ImageElement,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
 import {
@@ -99,6 +100,30 @@ export function createTextElement(
     versionNonce: generateSeed(),
     isDeleted: false,
     updated: Date.now(),
+  };
+}
+
+export function createImageElement(
+  options: ElementOptions & { fileId: string },
+): ImageElement {
+  return {
+    id: options.id ?? generateElementId(),
+    type: "image",
+    fileId: options.fileId,
+    status: "saved",
+    scale: [1, 1],
+    crop: null,
+    x: options.x ?? 0,
+    y: options.y ?? 0,
+    width: options.width ?? 100,
+    height: options.height ?? 100,
+    angle: options.angle ?? 0,
+    strokeColor: options.strokeColor ?? "#000000",
+    opacity: options.opacity ?? 100,
+    version: options.version ?? 1,
+    versionNonce: options.versionNonce ?? generateSeed(),
+    isDeleted: options.isDeleted ?? false,
+    updated: options.updated ?? Date.now(),
   };
 }
 

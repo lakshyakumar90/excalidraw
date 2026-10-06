@@ -1,7 +1,14 @@
 import type { Point } from "../types";
 
 export type ElementType =
-  "rectangle" | "ellipse" | "diamond" | "line" | "arrow" | "freedraw" | "text";
+  | "rectangle"
+  | "ellipse"
+  | "diamond"
+  | "line"
+  | "arrow"
+  | "freedraw"
+  | "text"
+  | "image";
 
 export type FillStyle = "solid" | "hachure" | "cross-hatch" | "none";
 
@@ -78,6 +85,14 @@ export interface TextElement extends BaseElement {
   verticalAlign: "top" | "middle" | "bottom";
 }
 
+export interface ImageElement extends BaseElement {
+  type: "image";
+  fileId: string;
+  status?: "pending" | "saved" | "error";
+  scale?: [number, number];
+  crop?: { x: number; y: number; width: number; height: number } | null;
+}
+
 export interface FreedrawPoint extends Point {
   pressure: number;
 }
@@ -89,4 +104,5 @@ export type Element =
   | LineElement
   | ArrowElement
   | FreedrawElement
-  | TextElement;
+  | TextElement
+  | ImageElement;
