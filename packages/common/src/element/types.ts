@@ -70,6 +70,8 @@ export interface TextElement extends BaseElement {
   type: "text";
   text: string;
   containerId?: string;
+  /** Wraps free-standing text at its current element width after resizing. */
+  wrapText?: boolean;
   fontSize: number;
   fontFamily: string;
   textAlign: "left" | "center" | "right";

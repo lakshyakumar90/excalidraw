@@ -41,6 +41,7 @@ const INITIAL_VIEWPORT: Viewport = {
 interface TextEditorState {
   elementId: string;
   containerId?: string;
+  wrapText?: boolean;
   angle: number;
   fontSize: number;
   fontFamily: string;
@@ -634,6 +635,7 @@ export function Canvas() {
         const editor: TextEditorState = {
           elementId: textElement.id,
           containerId: container.id,
+          wrapText: textElement.wrapText,
           angle: textElement.angle ?? 0,
           fontSize: textElement.fontSize,
           fontFamily: textElement.fontFamily,
@@ -660,6 +662,7 @@ export function Canvas() {
         commitTextElement(textEditorRef.current);
         const editor: TextEditorState = {
           elementId: hitElement.id,
+          wrapText: hitElement.wrapText,
           angle: hitElement.angle ?? 0,
           fontSize: hitElement.fontSize,
           fontFamily: hitElement.fontFamily,
@@ -1098,7 +1101,9 @@ export function Canvas() {
             const maxWidth =
               container?.type === "rectangle"
                 ? (container.width ?? 0)
-                : undefined;
+                : textEditorPosition.wrapText
+                  ? textEditorPosition.inputWidth
+                  : undefined;
             const measured = measureText(
               value,
               textEditorPosition.fontSize,

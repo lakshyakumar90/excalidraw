@@ -718,7 +718,9 @@ function drawText(
     element.text,
     fontSize,
     fontFamily,
-    element.containerId ? (element.width ?? 0) : undefined,
+    element.containerId || element.wrapText
+      ? (element.width ?? 0)
+      : undefined,
   );
   const layoutHeight = lines.length * lineHeight;
   const y =
