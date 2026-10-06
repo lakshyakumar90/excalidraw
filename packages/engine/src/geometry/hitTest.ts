@@ -336,12 +336,12 @@ export function elementIntersectsRect(
 
   const bounds = getElementBounds(element);
 
-  // Match the plan's marquee rule: select an element when its full bounding
-  // box is inside the dragged rectangle.
-  return (
-    bounds.minX >= rect.minX &&
-    bounds.minY >= rect.minY &&
-    bounds.maxX <= rect.maxX &&
-    bounds.maxY <= rect.maxY
+  // Select an element when any part of its axis-aligned bounds overlaps
+  // the marquee rectangle.
+  return !(
+    bounds.maxX < rect.minX ||
+    bounds.minX > rect.maxX ||
+    bounds.maxY < rect.minY ||
+    bounds.minY > rect.maxY
   );
 }

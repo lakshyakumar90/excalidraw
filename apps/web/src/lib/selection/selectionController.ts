@@ -1,13 +1,15 @@
 /*
-This controller has three pointer behaviors:
+This controller has four pointer behaviors:
 - Click an element to select it.
 - Drag a selected element to move it. If several elements are selected, they move together.
-- Drag on empty canvas to select elements whose full bounds are inside the marquee. Shift-drag adds those elements to the current selection.
+- Drag on empty canvas to select elements whose bounds overlap the marquee. Shift-drag adds those elements to the current selection.
+- Pressing a resize handle starts a resize gesture; the resize math is added in the next step.
 */
 
 import type { Point } from "@repo/common";
 import { elementIntersectsRect, getElementAtPosition } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
+import { getResizeHandleAtPosition, type ResizeHandle } from "./handles";
 import { selectionStore } from "./selectionStore";
 
 export interface MarqueePreview {
@@ -29,6 +31,11 @@ type Gesture =
       kind: "move";
       start: Point;
       elements: Array<{ id: string; x: number; y: number }>;
+    }
+  | {
+      kind: "resize";
+      elementId: string;
+      handle: ResizeHandle;
     };
 
 let gesture: Gesture = { kind: "idle" };
@@ -37,6 +44,31 @@ const MIN_MARQUEE_PIXELS = 3;
 
 export const selectionController = {
   pointerDown(point: Point, shiftKey: boolean, zoom: number): void {
+    // Check handles before checking for an element under the pointer. Otherwise
+    // a handle sitting on the element edge would start a move instead.
+    const selectedIds = [...selectionStore.getSnapshot()];
+
+    if (selectedIds.length === 1) {
+      const selectedElement = scene.getElement(selectedIds[0]!);
+
+      if (selectedElement && !selectedElement.isDeleted) {
+        const handle = getResizeHandleAtPosition(
+          selectedElement,
+          point,
+          zoom,
+        );
+
+        if (handle) {
+          gesture = {
+            kind: "resize",
+            elementId: selectedElement.id,
+            handle,
+          };
+          return;
+        }
+      }
+    }
+
     const hit = getElementAtPosition(scene.getElements(), point, zoom);
 
     if (!hit) {

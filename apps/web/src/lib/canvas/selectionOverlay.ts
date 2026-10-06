@@ -1,6 +1,7 @@
 import type { Element, Viewport } from "@repo/common";
 import { getElementCorners } from "@repo/engine";
 import type { MarqueePreview } from "@/lib/selection/selectionController";
+import { getResizeHandles } from "@/lib/selection/handles";
 
 function expandCorners(
   corners: ReturnType<typeof getElementCorners>,
@@ -100,6 +101,35 @@ export function drawSelectionOverlay(
     context.stroke();
   }
 
+  // Resize handles are currently shown for one selected element. The group
+  // selection box will be added with multi-element transforms.
+  if (selectedElements?.length === 1) {
+    const element = selectedElements[0];
+
+    if (element) {
+      const handleSize = 8 / viewport.zoom;
+      context.setLineDash([]);
+      context.lineWidth = 1 / viewport.zoom;
+      context.fillStyle = "#ffffff";
+      context.strokeStyle = "#4c7dff";
+
+      for (const { point } of getResizeHandles(element, viewport.zoom)) {
+        context.fillRect(
+          point.x - handleSize / 2,
+          point.y - handleSize / 2,
+          handleSize,
+          handleSize,
+        );
+        context.strokeRect(
+          point.x - handleSize / 2,
+          point.y - handleSize / 2,
+          handleSize,
+          handleSize,
+        );
+      }
+    }
+  }
+
   // Show a temporary rectangle while dragging on empty canvas.
   if (marquee) {
     const x = Math.min(marquee.start.x, marquee.current.x);
@@ -111,6 +141,7 @@ export function drawSelectionOverlay(
     context.fillRect(x, y, width, height);
 
     context.strokeStyle = "#4c7dff";
+    context.setLineDash([5 / viewport.zoom, 4 / viewport.zoom]);
     context.strokeRect(x, y, width, height);
   }
 
