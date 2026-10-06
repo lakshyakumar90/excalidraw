@@ -60,6 +60,13 @@ function selectClassName() {
   return "h-8 min-w-28 rounded-md border border-neutral-200 bg-white px-2 text-sm text-neutral-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 }
 
+const Z_ORDER_ACTIONS = [
+  { action: "back" as const, label: "Send to back" },
+  { action: "backward" as const, label: "Send backward" },
+  { action: "forward" as const, label: "Bring forward" },
+  { action: "front" as const, label: "Bring to front" },
+];
+
 export function StylePanel() {
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
@@ -329,6 +336,28 @@ export function StylePanel() {
             </Field>
           </div>
         </Section>
+
+        {selectedCount > 0 && (
+          <Section title="Arrange">
+            <div
+              role="group"
+              aria-label="Layer order"
+              className="grid grid-cols-2 gap-2"
+            >
+              {Z_ORDER_ACTIONS.map(({ action, label }) => (
+                <button
+                  key={action}
+                  type="button"
+                  aria-label={label}
+                  onClick={() => scene.reorderElements(selectedIds, action)}
+                  className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-xs font-medium text-neutral-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
       </div>
     </aside>
   );
