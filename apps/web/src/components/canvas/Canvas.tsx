@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
+  createTextElement,
   RenderLoop,
   renderInteractive,
   renderStatic,
   viewportToScene,
   zoomAtPoint,
+  measureText,
 } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
@@ -82,10 +84,12 @@ export function Canvas() {
     null,
   );
   const [textEditorPosition, setTextEditorPosition] = useState<{
+    elementId: string;
     left: number;
     top: number;
     sceneX: number;
     sceneY: number;
+    value: string;
   } | null>(null);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -424,11 +428,22 @@ export function Canvas() {
 
       if (toolManager.getActiveTool() === "text") {
         event.preventDefault();
+        const textElement = createTextElement({
+          text: "",
+          x: scenePoint.x,
+          y: scenePoint.y,
+        });
+        scene.addElement({
+          ...textElement,
+          ...styleStore.getElementStyle(),
+        });
         setTextEditorPosition({
+          elementId: textElement.id,
           left: viewportPoint.x,
           top: viewportPoint.y,
           sceneX: scenePoint.x,
           sceneY: scenePoint.y,
+          value: "",
         });
         return;
       }
@@ -891,6 +906,19 @@ export function Canvas() {
         <textarea
           aria-label="Text input"
           autoFocus
+          value={textEditorPosition.value}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            const measured = measureText(value);
+            scene.mutateElement(textEditorPosition.elementId, {
+              text: value,
+              width: Math.max(20, measured.width),
+              height: measured.height,
+            });
+            setTextEditorPosition((editor) =>
+              editor ? { ...editor, value } : editor,
+            );
+          }}
           spellCheck={false}
           className="absolute z-20 resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent outline-none"
           style={{

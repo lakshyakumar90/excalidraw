@@ -1,6 +1,8 @@
 import type { Element } from "@repo/common";
 
-type ElementMutation = Partial<Omit<Element, "id" | "type">>;
+type ElementMutation<T = Element> = T extends Element
+  ? Partial<Omit<T, "id" | "type">>
+  : never;
 
 export type ZOrderAction = "backward" | "forward" | "back" | "front";
 
