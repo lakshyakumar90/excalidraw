@@ -7,6 +7,7 @@ export interface TextMeasurement {
   width: number;
   height: number;
   lineHeight: number;
+  lines: string[];
 }
 
 type MeasureContext =
@@ -66,8 +67,15 @@ export function measureText(
   text: string,
   fontSize = DEFAULT_TEXT_FONT_SIZE,
   fontFamily = DEFAULT_TEXT_FONT_FAMILY,
+  maxWidth?: number,
 ): TextMeasurement {
-  const lines = text.split(/\r\n?|\n/);
+  const sourceLines = text.split(/\r\n?|\n/);
+  const lines =
+    maxWidth !== undefined && maxWidth > 0
+      ? sourceLines.flatMap((line) =>
+          wrapLine(line, maxWidth, fontSize, fontFamily),
+        )
+      : sourceLines;
   const lineHeight = fontSize * TEXT_LINE_HEIGHT;
 
   return {
@@ -77,5 +85,59 @@ export function measureText(
     ),
     height: Math.max(1, lines.length) * lineHeight,
     lineHeight,
+    lines,
   };
+}
+
+function wrapLine(
+  line: string,
+  maxWidth: number,
+  fontSize: number,
+  fontFamily: string,
+): string[] {
+  if (line.length === 0) return [""];
+
+  const words = line.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+
+  const wrapped: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (measureLineWidth(word, fontSize, fontFamily) > maxWidth) {
+      if (currentLine) {
+        wrapped.push(currentLine);
+        currentLine = "";
+      }
+      let fragment = "";
+      for (const character of Array.from(word)) {
+        const candidate = fragment + character;
+        if (
+          fragment &&
+          measureLineWidth(candidate, fontSize, fontFamily) > maxWidth
+        ) {
+          wrapped.push(fragment);
+          fragment = character;
+        } else {
+          fragment = candidate;
+        }
+      }
+      currentLine = fragment;
+      continue;
+    }
+
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (
+      currentLine &&
+      measureLineWidth(candidate, fontSize, fontFamily) > maxWidth
+    ) {
+      wrapped.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = candidate;
+    }
+  }
+
+  if (currentLine) wrapped.push(currentLine);
+  return wrapped.length > 0 ? wrapped : [""];
 }

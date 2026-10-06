@@ -612,17 +612,18 @@ function drawText(
       : textAlign === "right"
         ? (element.width ?? 0)
         : 0;
-  const lines = element.text.split(/\r\n?|\n/);
-  const { height: textHeight, lineHeight } = measureText(
+  const { lineHeight, lines } = measureText(
     element.text,
     fontSize,
     fontFamily,
+    element.containerId ? (element.width ?? 0) : undefined,
   );
+  const layoutHeight = lines.length * lineHeight;
   const y =
     element.verticalAlign === "middle"
-      ? ((element.height ?? textHeight) - textHeight) / 2
+      ? ((element.height ?? layoutHeight) - layoutHeight) / 2
       : element.verticalAlign === "bottom"
-        ? (element.height ?? textHeight) - textHeight
+        ? (element.height ?? layoutHeight) - layoutHeight
         : 0;
   lines.forEach((line, index) =>
     context.fillText(line, x, y + index * lineHeight),
