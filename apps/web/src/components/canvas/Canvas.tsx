@@ -181,7 +181,15 @@ export function Canvas() {
       const scenePoint = viewportToScene(point, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        selectionController.pointerMove(scenePoint);
+        interactiveCanvas.style.cursor = selectionController.getCursor(
+          scenePoint,
+          viewportRef.current.zoom,
+        );
+        selectionController.pointerMove(
+          scenePoint,
+          event.shiftKey,
+          event.altKey,
+        );
         renderLoop.invalidateInteractive();
         return;
       }
@@ -219,6 +227,10 @@ export function Canvas() {
           viewportRef.current.zoom,
         );
 
+        interactiveCanvas.style.cursor = selectionController.getCursor(
+          scenePoint,
+          viewportRef.current.zoom,
+        );
         renderLoop.invalidateInteractive();
         interactiveCanvas.setPointerCapture(event.pointerId);
         return;
@@ -253,7 +265,15 @@ export function Canvas() {
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        selectionController.pointerUp(scenePoint);
+        selectionController.pointerUp(
+          scenePoint,
+          event.shiftKey,
+          event.altKey,
+        );
+        interactiveCanvas.style.cursor = selectionController.getCursor(
+          scenePoint,
+          viewportRef.current.zoom,
+        );
         renderLoop.invalidateInteractive();
 
         if (interactiveCanvas.hasPointerCapture(event.pointerId)) {

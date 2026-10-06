@@ -3,6 +3,12 @@ import { getElementCorners } from "@repo/engine";
 
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
+export type ResizeCursor =
+  | "ew-resize"
+  | "nwse-resize"
+  | "ns-resize"
+  | "nesw-resize";
+
 export interface ResizeHandlePoint {
   handle: ResizeHandle;
   point: Point;
@@ -10,6 +16,52 @@ export interface ResizeHandlePoint {
 
 const HANDLE_HIT_RADIUS_PIXELS = 8;
 const MIN_EDGE_HANDLE_SPACING_PIXELS = 20;
+
+export function getResizeCursor(
+  handle: ResizeHandle,
+  elementAngle: number,
+): ResizeCursor {
+  let baseAngle: number;
+
+  switch (handle) {
+    case "e":
+    case "w":
+      baseAngle = 0;
+      break;
+    case "n":
+    case "s":
+      baseAngle = 90;
+      break;
+    case "nw":
+    case "se":
+      baseAngle = 45;
+      break;
+    case "ne":
+    case "sw":
+      baseAngle = 135;
+      break;
+    default:
+      baseAngle = 0;
+      break;
+  }
+
+  // CSS offers four resize cursor axes. Rotate the handle axis with its element,
+  // then use the nearest supported cursor.
+  const angle =
+    (((baseAngle + (elementAngle * 180) / Math.PI) % 180) + 180) % 180;
+  const nearestAxis = Math.round(angle / 45) % 4;
+
+  switch (nearestAxis) {
+    case 0:
+      return "ew-resize";
+    case 1:
+      return "nwse-resize";
+    case 2:
+      return "ns-resize";
+    default:
+      return "nesw-resize";
+  }
+}
 
 function midpoint(a: Point, b: Point): Point {
   return {

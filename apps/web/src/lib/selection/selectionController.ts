@@ -3,13 +3,18 @@ This controller has four pointer behaviors:
 - Click an element to select it.
 - Drag a selected element to move it. If several elements are selected, they move together.
 - Drag on empty canvas to select elements whose bounds overlap the marquee. Shift-drag adds those elements to the current selection.
-- Pressing a resize handle starts a resize gesture; the resize math is added in the next step.
+- Dragging a resize handle resizes one element, with rotation, Shift, and Alt support.
 */
 
-import type { Point } from "@repo/common";
+import type { Element, Point } from "@repo/common";
 import { elementIntersectsRect, getElementAtPosition } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
-import { getResizeHandleAtPosition, type ResizeHandle } from "./handles";
+import {
+  getResizeCursor,
+  getResizeHandleAtPosition,
+  type ResizeHandle,
+} from "./handles";
+import { resizeElement } from "./resize";
 import { selectionStore } from "./selectionStore";
 
 export interface MarqueePreview {
@@ -34,7 +39,7 @@ type Gesture =
     }
   | {
       kind: "resize";
-      elementId: string;
+      original: Element;
       handle: ResizeHandle;
     };
 
@@ -43,6 +48,28 @@ let gesture: Gesture = { kind: "idle" };
 const MIN_MARQUEE_PIXELS = 3;
 
 export const selectionController = {
+  getCursor(point: Point, zoom: number): string {
+    if (gesture.kind === "resize") {
+      return getResizeCursor(
+        gesture.handle,
+        gesture.original.angle ?? 0,
+      );
+    }
+
+    if (gesture.kind === "move") return "grabbing";
+
+    const selectedIds = [...selectionStore.getSnapshot()];
+    if (selectedIds.length !== 1) return "default";
+
+    const selectedElement = scene.getElement(selectedIds[0]!);
+    if (!selectedElement || selectedElement.isDeleted) return "default";
+
+    const handle = getResizeHandleAtPosition(selectedElement, point, zoom);
+    return handle
+      ? getResizeCursor(handle, selectedElement.angle ?? 0)
+      : "default";
+  },
+
   pointerDown(point: Point, shiftKey: boolean, zoom: number): void {
     // Check handles before checking for an element under the pointer. Otherwise
     // a handle sitting on the element edge would start a move instead.
@@ -61,7 +88,7 @@ export const selectionController = {
         if (handle) {
           gesture = {
             kind: "resize",
-            elementId: selectedElement.id,
+            original: cloneElement(selectedElement),
             handle,
           };
           return;
@@ -123,12 +150,28 @@ export const selectionController = {
     };
   },
 
-  pointerMove(point: Point): void {
+  pointerMove(point: Point, shiftKey: boolean, altKey: boolean): void {
     if (gesture.kind === "marquee") {
       gesture = {
         ...gesture,
         current: point,
       };
+      return;
+    }
+
+    if (gesture.kind === "resize") {
+      const resized = resizeElement(
+        gesture.original,
+        gesture.handle,
+        point,
+        shiftKey,
+        altKey,
+      );
+
+      scene.mutateElement(
+        gesture.original.id,
+        resized as Partial<Omit<Element, "id" | "type">>,
+      );
       return;
     }
 
@@ -147,7 +190,11 @@ export const selectionController = {
     }
   },
 
-  pointerUp(point: Point): void {
+  pointerUp(point: Point, shiftKey: boolean, altKey: boolean): void {
+    if (gesture.kind === "move" || gesture.kind === "resize") {
+      this.pointerMove(point, shiftKey, altKey);
+    }
+
     if (gesture.kind === "marquee") {
       const dragDistance = Math.hypot(
         point.x - gesture.start.x,
@@ -189,3 +236,14 @@ export const selectionController = {
     };
   },
 };
+
+function cloneElement(element: Element): Element {
+  if ("points" in element) {
+    return {
+      ...element,
+      points: element.points.map((point) => ({ ...point })),
+    } as Element;
+  }
+
+  return { ...element };
+}
