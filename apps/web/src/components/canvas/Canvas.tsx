@@ -36,6 +36,21 @@ const INITIAL_VIEWPORT: Viewport = {
   zoom: 1,
 };
 
+interface TextEditorState {
+  elementId: string;
+  sceneX: number;
+  sceneY: number;
+  value: string;
+  inputWidth: number;
+  inputHeight: number;
+}
+
+function commitTextElement(editor: TextEditorState | null): void {
+  if (editor && editor.value.length === 0) {
+    scene.removeElement(editor.elementId);
+  }
+}
+
 function sampleCanvasColor(
   canvas: HTMLCanvasElement,
   context: CanvasRenderingContext2D,
@@ -84,16 +99,11 @@ export function Canvas() {
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
     null,
   );
-  const [textEditorPosition, setTextEditorPosition] = useState<{
-    elementId: string;
-    sceneX: number;
-    sceneY: number;
-    value: string;
-    inputWidth: number;
-    inputHeight: number;
-  } | null>(null);
+  const [textEditorPosition, setTextEditorPosition] =
+    useState<TextEditorState | null>(null);
   const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
+  const textEditorRef = useRef<TextEditorState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const interactiveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<Viewport>(INITIAL_VIEWPORT);
@@ -244,9 +254,6 @@ export function Canvas() {
     };
 
     const unsubscribeToolManager = toolManager.subscribe(() => {
-      if (toolManager.getActiveTool() !== "text") {
-        setTextEditorPosition(null);
-      }
       updateCanvasCursor();
       renderLoop.invalidateInteractive();
     });
@@ -431,6 +438,7 @@ export function Canvas() {
 
       if (toolManager.getActiveTool() === "text") {
         event.preventDefault();
+        commitTextElement(textEditorRef.current);
         const textElement = createTextElement({
           text: "",
           x: scenePoint.x,
@@ -440,14 +448,16 @@ export function Canvas() {
           ...textElement,
           ...styleStore.getElementStyle(),
         });
-        setTextEditorPosition({
+        const editor: TextEditorState = {
           elementId: textElement.id,
           sceneX: scenePoint.x,
           sceneY: scenePoint.y,
           value: "",
           inputWidth: 20,
           inputHeight: 24,
-        });
+        };
+        textEditorRef.current = editor;
+        setTextEditorPosition(editor);
         return;
       }
 
@@ -856,7 +866,7 @@ export function Canvas() {
       const zoomFactor = Math.exp(-event.deltaY * 0.001);
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
-        setViewport(viewportRef.current);
+      setViewport(viewportRef.current);
       scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
       renderLoop.invalidateStatic();
     };
@@ -937,9 +947,35 @@ export function Canvas() {
               width: inputWidth,
               height: measured.height,
             });
-            setTextEditorPosition((editor) =>
-              editor ? { ...editor, value, inputWidth, inputHeight } : editor,
-            );
+            const editor = {
+              ...textEditorPosition,
+              value,
+              inputWidth,
+              inputHeight,
+            };
+            textEditorRef.current = editor;
+            setTextEditorPosition(editor);
+          }}
+          onKeyDown={(event) => {
+            const isEscape = event.key === "Escape";
+            const isCommitShortcut =
+              event.key === "Enter" && (event.ctrlKey || event.metaKey);
+            if (!isEscape && !isCommitShortcut) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            commitTextElement(textEditorRef.current);
+            textEditorRef.current = null;
+            setTextEditorPosition(null);
+          }}
+          onBlur={() => {
+            commitTextElement(textEditorPosition);
+            if (
+              textEditorRef.current?.elementId === textEditorPosition.elementId
+            ) {
+              textEditorRef.current = null;
+              setTextEditorPosition(null);
+            }
           }}
           spellCheck={false}
           className="absolute z-20 resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent outline-none"
