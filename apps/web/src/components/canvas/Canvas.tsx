@@ -90,6 +90,8 @@ export function Canvas() {
     sceneX: number;
     sceneY: number;
     value: string;
+    inputWidth: number;
+    inputHeight: number;
   } | null>(null);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -444,6 +446,8 @@ export function Canvas() {
           sceneX: scenePoint.x,
           sceneY: scenePoint.y,
           value: "",
+          inputWidth: 20,
+          inputHeight: 24,
         });
         return;
       }
@@ -910,13 +914,20 @@ export function Canvas() {
           onChange={(event) => {
             const value = event.currentTarget.value;
             const measured = measureText(value);
+            const inputWidth = Math.max(20, measured.width);
+            event.currentTarget.style.width = `${inputWidth}px`;
+            event.currentTarget.style.height = "auto";
+            const inputHeight = Math.max(
+              event.currentTarget.scrollHeight,
+              measured.height,
+            );
             scene.mutateElement(textEditorPosition.elementId, {
               text: value,
-              width: Math.max(20, measured.width),
+              width: inputWidth,
               height: measured.height,
             });
             setTextEditorPosition((editor) =>
-              editor ? { ...editor, value } : editor,
+              editor ? { ...editor, value, inputWidth, inputHeight } : editor,
             );
           }}
           spellCheck={false}
@@ -924,8 +935,8 @@ export function Canvas() {
           style={{
             left: textEditorPosition.left,
             top: textEditorPosition.top,
-            width: 1,
-            height: 1,
+            width: textEditorPosition.inputWidth,
+            height: textEditorPosition.inputHeight,
             fontSize: 20,
             lineHeight: "24px",
           }}
