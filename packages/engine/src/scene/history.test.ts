@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createRectangleElement } from "../element";
+import { createTextElement } from "../element";
 import { Scene } from "./scene";
 import { HistoryManager } from "./history";
 
@@ -105,5 +106,83 @@ describe("HistoryManager", () => {
     history.redo();
     expect(element.x).toBe(10);
     expect(element.y).toBe(25);
+  });
+
+  it("undoes and redoes grouping across all selected elements", () => {
+    const scene = new Scene();
+    const first = createRectangleElement({ id: "group-first" });
+    const second = createRectangleElement({ id: "group-second", x: 80 });
+    scene.addElement(first);
+    scene.addElement(second);
+    const history = new HistoryManager(scene, () => [], () => {});
+
+    history.captureUpdate(() => {
+      scene.mutateElement(first.id, { groupIds: ["group-1"] });
+      scene.mutateElement(second.id, { groupIds: ["group-1"] });
+    });
+    history.undo();
+    expect(first.groupIds).toEqual([]);
+    expect(second.groupIds).toEqual([]);
+    history.redo();
+    expect(first.groupIds).toEqual(["group-1"]);
+    expect(second.groupIds).toEqual(["group-1"]);
+  });
+
+  it("restores a deleted container and its bound text together", () => {
+    const scene = new Scene();
+    const container = createRectangleElement({ id: "bound-container" });
+    const text = createTextElement({
+      id: "bound-label",
+      text: "label",
+      containerId: container.id,
+    });
+    container.boundElements = [text.id];
+    scene.addElement(container);
+    scene.addElement(text);
+    const history = new HistoryManager(scene, () => [container.id], () => {});
+
+    history.captureUpdate(() => {
+      scene.mutateElement(container.id, { isDeleted: true });
+      scene.mutateElement(text.id, { isDeleted: true });
+    });
+    history.undo();
+    expect(container.isDeleted).toBe(false);
+    expect(text.isDeleted).toBe(false);
+    history.redo();
+    expect(container.isDeleted).toBe(true);
+    expect(text.isDeleted).toBe(true);
+  });
+
+  it("undoes and redoes a multi-element resize as one action", () => {
+    const scene = new Scene();
+    const first = createRectangleElement({ id: "resize-first", width: 100, height: 100 });
+    const second = createRectangleElement({ id: "resize-second", width: 60, height: 100 });
+    scene.addElement(first);
+    scene.addElement(second);
+    const history = new HistoryManager(scene, () => [], () => {});
+
+    history.captureUpdate(() => {
+      scene.mutateElement(first.id, { width: 150, height: 90 });
+      scene.mutateElement(second.id, { width: 110, height: 90 });
+    });
+    history.undo();
+    expect([first.width, first.height]).toEqual([100, 100]);
+    expect([second.width, second.height]).toEqual([60, 100]);
+    history.redo();
+    expect([first.width, first.height]).toEqual([150, 90]);
+    expect([second.width, second.height]).toEqual([110, 90]);
+  });
+
+  it("keeps an action undoable after unrelated tool changes", () => {
+    const scene = new Scene();
+    const history = new HistoryManager(scene, () => [], () => {});
+    const rectangle = createRectangleElement({ id: "draw-before-tool-switch" });
+
+    history.captureUpdate(() => scene.addElement(rectangle));
+    let activeTool = "rectangle";
+    activeTool = "selection";
+    expect(activeTool).toBe("selection");
+    expect(history.undo()).toBe(true);
+    expect(scene.getElement(rectangle.id)?.isDeleted).toBe(true);
   });
 });

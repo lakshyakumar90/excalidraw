@@ -913,8 +913,29 @@ export const selectionController = {
 
   deleteSelection(): void {
     historyStore.captureUpdate(() => {
-      for (const id of selectionStore.getSnapshot())
+      const selectedIds = new Set(selectionStore.getSnapshot());
+      const elementsToDelete = new Set(selectedIds);
+      for (const id of selectedIds) {
+        const element = scene.getElement(id);
+        if (!element || element.isDeleted) continue;
+        for (const boundId of element.boundElements ?? []) {
+          const boundElement = scene.getElement(boundId);
+          if (boundElement?.type === "text") elementsToDelete.add(boundId);
+        }
+        if (element.type === "text" && element.containerId) {
+          const container = scene.getElement(element.containerId);
+          if (container) {
+            scene.mutateElement(container.id, {
+              boundElements: (container.boundElements ?? []).filter(
+                (boundId) => boundId !== element.id,
+              ),
+            });
+          }
+        }
+      }
+      for (const id of elementsToDelete) {
         scene.mutateElement(id, { isDeleted: true });
+      }
       selectionStore.clear();
     });
   },

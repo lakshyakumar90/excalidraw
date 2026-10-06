@@ -118,7 +118,8 @@ export class HistoryManager {
     if (current) {
       this.scene.mutateElement(id, {
         ...next,
-        isDeleted: false,
+        isDeleted:
+          typeof next.isDeleted === "boolean" ? next.isDeleted : current.isDeleted,
       } as Partial<Omit<Element, "id" | "type">>);
       return;
     }
