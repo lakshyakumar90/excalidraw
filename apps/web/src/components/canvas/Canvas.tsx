@@ -1032,13 +1032,20 @@ export function Canvas() {
               event.currentTarget.scrollHeight / zoom,
               measured.height,
             );
+            const containerHeight =
+              container?.type === "rectangle"
+                ? Math.max(container.height ?? 0, measured.height)
+                : measured.height;
+            if (
+              container?.type === "rectangle" &&
+              containerHeight > (container.height ?? 0)
+            ) {
+              scene.mutateElement(container.id, { height: containerHeight });
+            }
             scene.mutateElement(textEditorPosition.elementId, {
               text: value,
               width: maxWidth ?? inputWidth,
-              height:
-                container?.type === "rectangle"
-                  ? (container.height ?? measured.height)
-                  : measured.height,
+              height: containerHeight,
             });
             const editor = {
               ...textEditorPosition,
@@ -1046,7 +1053,7 @@ export function Canvas() {
               inputWidth,
               inputHeight:
                 container?.type === "rectangle"
-                  ? (container.height ?? inputHeight)
+                  ? Math.max(containerHeight, inputHeight)
                   : inputHeight,
             };
             textEditorRef.current = editor;

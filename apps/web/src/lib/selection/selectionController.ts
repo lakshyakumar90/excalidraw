@@ -12,6 +12,7 @@ import {
   getElementAtPosition,
   getElementsAtPosition,
   getElementBounds,
+  measureText,
 } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import {
@@ -88,21 +89,38 @@ function translateSnapshots(
 function syncBoundTextToContainer(container: Element): void {
   if (container.type !== "rectangle") return;
 
-  for (const id of container.boundElements ?? []) {
-    const text = scene.getElement(id);
-    if (
-      text?.type !== "text" ||
-      text.containerId !== container.id ||
-      text.isDeleted
-    ) {
-      continue;
-    }
+  const boundTexts = (container.boundElements ?? [])
+    .map((id) => scene.getElement(id))
+    .filter(
+      (element): element is Extract<Element, { type: "text" }> =>
+        element?.type === "text" &&
+        element.containerId === container.id &&
+        !element.isDeleted,
+    );
+  const wrappedHeight = Math.max(
+    0,
+    ...boundTexts.map(
+      (text) =>
+        measureText(
+          text.text,
+          text.fontSize,
+          text.fontFamily,
+          container.width ?? 0,
+        ).height,
+    ),
+  );
+  const height = Math.max(container.height ?? 0, wrappedHeight);
 
+  if (height > (container.height ?? 0)) {
+    scene.mutateElement(container.id, { height });
+  }
+
+  for (const text of boundTexts) {
     scene.mutateElement(text.id, {
       x: container.x,
       y: container.y,
       width: container.width,
-      height: container.height,
+      height,
       angle: container.angle,
     });
   }
