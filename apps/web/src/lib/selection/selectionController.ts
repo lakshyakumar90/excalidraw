@@ -13,12 +13,19 @@ import {
   getElementAtPosition,
   getElementsAtPosition,
   getElementBounds,
+  getBoundsCenter,
+  getElementLocalBounds,
   measureText,
 } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import {
   getResizeCursor,
   getResizeHandleAtPosition,
+  getLinearPointHandleAtPosition,
+  getLinearPointLocalPosition,
+  getLinearPointWorldPosition,
+  getLinearBendHandlePoint,
+  isNearLinearBendHandle,
   type ResizeHandle,
 } from "./handles";
 import { resizeElement } from "./resize";
@@ -214,6 +221,20 @@ export const selectionController = {
     if (gesture.kind === "move") return "grabbing";
     if (gesture.kind === "point") return "grabbing";
 
+    if (pointEditingElementId) {
+      const editingElement = scene.getElement(pointEditingElementId);
+      if (editingElement && "points" in editingElement) {
+        const nearPoint = editingElement.points.some((item) => {
+          const world =
+            editingElement.type === "line" || editingElement.type === "arrow"
+              ? getLinearPointWorldPosition(editingElement, item)
+              : { x: editingElement.x + item.x, y: editingElement.y + item.y };
+          return Math.hypot(point.x - world.x, point.y - world.y) <= 10 / zoom;
+        });
+        if (nearPoint) return "move";
+      }
+    }
+
     const selectedIds = [...selectionStore.getSnapshot()];
     if (selectedIds.length > 1) {
       const bounds = getSelectionBounds(selectedIds);
@@ -224,6 +245,15 @@ export const selectionController = {
 
     const selectedElement = scene.getElement(selectedIds[0]!);
     if (!selectedElement || selectedElement.isDeleted) return "default";
+
+    if (selectedElement.type === "line" || selectedElement.type === "arrow") {
+      if (
+        getLinearPointHandleAtPosition(selectedElement, point, zoom) !== null ||
+        isNearLinearBendHandle(selectedElement, point, zoom)
+      ) {
+        return "move";
+      }
+    }
 
     const handle = getResizeHandleAtPosition(selectedElement, point, zoom);
     return handle
@@ -241,9 +271,13 @@ export const selectionController = {
       const element = scene.getElement(pointEditingElementId);
       if (element && "points" in element) {
         const nearest = element.points.findIndex(
-          (p) =>
-            Math.hypot(point.x - element.x - p.x, point.y - element.y - p.y) <=
-            10 / zoom,
+          (p) => {
+            const world =
+              element.type === "line" || element.type === "arrow"
+                ? getLinearPointWorldPosition(element, p)
+                : { x: element.x + p.x, y: element.y + p.y };
+            return Math.hypot(point.x - world.x, point.y - world.y) <= 10 / zoom;
+          },
         );
         if (nearest >= 0) {
           gesture = {
@@ -280,6 +314,50 @@ export const selectionController = {
       const selectedElement = scene.getElement(selectedIds[0]!);
 
       if (selectedElement && !selectedElement.isDeleted) {
+        if (
+          selectedElement.type === "line" ||
+          selectedElement.type === "arrow"
+        ) {
+          if (isNearLinearBendHandle(selectedElement, point, zoom)) {
+            const bendPoint = getLinearBendHandlePoint(selectedElement);
+            const start = selectedElement.points[0];
+            const end = selectedElement.points[1];
+            if (bendPoint && start && end) {
+              const middle = getLinearPointLocalPosition(
+                selectedElement,
+                bendPoint,
+              );
+              const points = [{ ...start }, middle, { ...end }];
+              if (selectedElement.type === "line") {
+                scene.mutateElement(selectedElement.id, {
+                  points,
+                  lineType: "curved",
+                });
+              } else {
+                scene.mutateElement(selectedElement.id, { points });
+              }
+              gesture = {
+                kind: "point",
+                elementId: selectedElement.id,
+                pointIndex: 1,
+              };
+              return;
+            }
+          }
+          const pointIndex = getLinearPointHandleAtPosition(
+            selectedElement,
+            point,
+            zoom,
+          );
+          if (pointIndex !== null) {
+            gesture = {
+              kind: "point",
+              elementId: selectedElement.id,
+              pointIndex,
+            };
+            return;
+          }
+        }
         const handle = getResizeHandleAtPosition(selectedElement, point, zoom);
 
         if (handle) {
@@ -564,12 +642,36 @@ export const selectionController = {
       if (element && "points" in element) {
         const points = element.points.map((p) => ({ ...p }));
         const p = points[gesture.pointIndex];
-        if (p)
+        if (p) {
+          const isLinear = element.type === "line" || element.type === "arrow";
+          const localPoint = isLinear
+            ? getLinearPointLocalPosition(element, point)
+            : { x: point.x - element.x, y: point.y - element.y };
           points[gesture.pointIndex] = {
             ...p,
-            x: point.x - element.x,
-            y: point.y - element.y,
+            ...localPoint,
           };
+          if (isLinear) {
+            const oldCenter = getBoundsCenter(getElementLocalBounds(element));
+            const updatedElement = { ...element, points };
+            const newCenter = getBoundsCenter(
+              getElementLocalBounds(updatedElement),
+            );
+            const dx = oldCenter.x - newCenter.x;
+            const dy = oldCenter.y - newCenter.y;
+            const angle = element.angle ?? 0;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const originOffsetX = dx - (dx * cos - dy * sin);
+            const originOffsetY = dy - (dx * sin + dy * cos);
+            scene.mutateElement(element.id, {
+              points,
+              x: element.x + originOffsetX,
+              y: element.y + originOffsetY,
+            } as Partial<Omit<Element, "id" | "type">>);
+            return;
+          }
+        }
         scene.mutateElement(element.id, { points } as Partial<
           Omit<Element, "id" | "type">
         >);
@@ -709,7 +811,9 @@ export const selectionController = {
     // Text editing is deferred until the canvas text tool is implemented.
     pointEditingElementId = null;
     selectionStore.set([element.id]);
-    if (element.type === "line") pointEditingElementId = element.id;
+    if (element.type === "line" || element.type === "arrow") {
+      pointEditingElementId = element.id;
+    }
   },
 
   exitPointEditing(): boolean {

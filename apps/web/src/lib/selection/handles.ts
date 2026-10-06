@@ -1,5 +1,11 @@
 import type { Element, Point } from "@repo/common";
-import { getElementCorners } from "@repo/engine";
+import {
+  getBoundsCenter,
+  getElementCorners,
+  getElementLocalBounds,
+  rotatePoint,
+  sampleCatmullRom,
+} from "@repo/engine";
 
 export type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
@@ -11,6 +17,11 @@ export type ResizeCursor =
 
 export interface ResizeHandlePoint {
   handle: ResizeHandle;
+  point: Point;
+}
+
+export interface LinearPointHandle {
+  pointIndex: number;
   point: Point;
 }
 
@@ -74,6 +85,8 @@ export function getResizeHandles(
   element: Element,
   zoom: number,
 ): ResizeHandlePoint[] {
+  if (element.type === "line" || element.type === "arrow") return [];
+
   const corners = getElementCorners(element);
 
   const topLeft = corners[0];
@@ -113,6 +126,100 @@ export function getResizeHandles(
   }
 
   return handles;
+}
+
+export function getLinearPointWorldPosition(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+  point: Point,
+): Point {
+  const center = getBoundsCenter(getElementLocalBounds(element));
+  const worldCenter = { x: element.x + center.x, y: element.y + center.y };
+  return rotatePoint(
+    { x: element.x + point.x, y: element.y + point.y },
+    element.angle ?? 0,
+    worldCenter,
+  );
+}
+
+export function getLinearPointLocalPosition(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+  point: Point,
+): Point {
+  const center = getBoundsCenter(getElementLocalBounds(element));
+  const worldCenter = { x: element.x + center.x, y: element.y + center.y };
+  const local = rotatePoint(point, -(element.angle ?? 0), worldCenter);
+  return { x: local.x - element.x, y: local.y - element.y };
+}
+
+export function getLinearPathWorldPoints(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+): Point[] {
+  const points =
+    element.type === "line" && element.lineType === "curved"
+      ? sampleCatmullRom(element.points, 12)
+      : element.points;
+  return points.map((point) => getLinearPointWorldPosition(element, point));
+}
+
+export function getLinearEndpointHandles(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+): LinearPointHandle[] {
+  const points = element.points;
+  if (points.length < 2) return [];
+  const start = points[0];
+  const end = points[points.length - 1];
+  if (!start || !end) return [];
+
+  const worldStart = getLinearPointWorldPosition(element, start);
+  const worldEnd = getLinearPointWorldPosition(element, end);
+  return [
+    { pointIndex: 0, point: worldStart },
+    { pointIndex: points.length - 1, point: worldEnd },
+  ];
+}
+
+export function getLinearBendHandlePoint(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+): Point | null {
+  if (element.points.length !== 2) return null;
+  const start = element.points[0];
+  const end = element.points[1];
+  if (!start || !end) return null;
+  const worldStart = getLinearPointWorldPosition(element, start);
+  const worldEnd = getLinearPointWorldPosition(element, end);
+  return {
+    x: (worldStart.x + worldEnd.x) / 2,
+    y: (worldStart.y + worldEnd.y) / 2,
+  };
+}
+
+export function isNearLinearBendHandle(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+  point: Point,
+  zoom: number,
+): boolean {
+  const handle = getLinearBendHandlePoint(element);
+  return (
+    handle !== null &&
+    Math.hypot(point.x - handle.x, point.y - handle.y) * zoom <=
+      HANDLE_HIT_RADIUS_PIXELS
+  );
+}
+
+export function getLinearPointHandleAtPosition(
+  element: Extract<Element, { type: "line" | "arrow" }>,
+  point: Point,
+  zoom: number,
+): number | null {
+  for (const handle of getLinearEndpointHandles(element)) {
+    if (
+      Math.hypot(point.x - handle.point.x, point.y - handle.point.y) * zoom <=
+      HANDLE_HIT_RADIUS_PIXELS
+    ) {
+      return handle.pointIndex;
+    }
+  }
+  return null;
 }
 
 export function getResizeHandleAtPosition(

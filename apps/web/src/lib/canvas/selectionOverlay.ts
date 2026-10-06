@@ -1,7 +1,64 @@
 import type { Element, Viewport } from "@repo/common";
 import { getElementCorners } from "@repo/engine";
 import type { MarqueePreview } from "@/lib/selection/selectionController";
-import { getResizeHandles } from "@/lib/selection/handles";
+import {
+  getLinearEndpointHandles,
+  getLinearBendHandlePoint,
+  getLinearPointWorldPosition,
+  getLinearPathWorldPoints,
+  getResizeHandles,
+} from "@/lib/selection/handles";
+
+function getPathBoundary(points: readonly { x: number; y: number }[], padding: number) {
+  if (points.length < 2) return [];
+
+  const offsetSide = (direction: 1 | -1) =>
+    points.map((point, index) => {
+      const previous = points[Math.max(0, index - 1)] ?? point;
+      const next = points[Math.min(points.length - 1, index + 1)] ?? point;
+      const dx = next.x - previous.x;
+      const dy = next.y - previous.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const normalX = (-dy / length) * padding * direction;
+      const normalY = (dx / length) * padding * direction;
+      return { x: point.x + normalX, y: point.y + normalY };
+    });
+
+  return [...offsetSide(1), ...offsetSide(-1).reverse()];
+}
+
+function drawElementSelectionOutline(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  zoom: number,
+): void {
+  if (element.type === "line" || element.type === "arrow") {
+    const boundary = getPathBoundary(getLinearPathWorldPoints(element), 4 / zoom);
+    const first = boundary[0];
+    if (!first) return;
+    context.beginPath();
+    context.moveTo(first.x, first.y);
+    for (let index = 1; index < boundary.length; index += 1) {
+      const point = boundary[index];
+      if (point) context.lineTo(point.x, point.y);
+    }
+    context.closePath();
+    context.stroke();
+    return;
+  }
+
+  const corners = expandCorners(getElementCorners(element), 4 / zoom);
+  const first = corners[0];
+  if (!first) return;
+  context.beginPath();
+  context.moveTo(first.x, first.y);
+  for (let index = 1; index < corners.length; index += 1) {
+    const point = corners[index];
+    if (point) context.lineTo(point.x, point.y);
+  }
+  context.closePath();
+  context.stroke();
+}
 
 function expandCorners(
   corners: ReturnType<typeof getElementCorners>,
@@ -97,20 +154,7 @@ export function drawSelectionOverlay(
     if (!isCompleteGroupSelection) {
       context.setLineDash([]);
       for (const element of activeElements) {
-        const elementCorners = expandCorners(
-          getElementCorners(element),
-          4 / viewport.zoom,
-        );
-        const first = elementCorners[0];
-        if (!first) continue;
-        context.beginPath();
-        context.moveTo(first.x, first.y);
-        for (let index = 1; index < elementCorners.length; index += 1) {
-          const corner = elementCorners[index];
-          if (corner) context.lineTo(corner.x, corner.y);
-        }
-        context.closePath();
-        context.stroke();
+        drawElementSelectionOutline(context, element, viewport.zoom);
       }
       context.setLineDash([5 / viewport.zoom, 4 / viewport.zoom]);
     }
@@ -142,25 +186,8 @@ export function drawSelectionOverlay(
 
   for (const element of activeElements.length > 1 ? [] : activeElements) {
     if (element.isDeleted) continue;
-
-    const corners = expandCorners(
-      getElementCorners(element),
-      4 / viewport.zoom,
-    );
-    const first = corners[0];
-
-    if (!first) continue;
-
-    context.beginPath();
-    context.moveTo(first.x, first.y);
-
-    for (let i = 1; i < corners.length; i += 1) {
-      const corner = corners[i];
-      if (corner) context.lineTo(corner.x, corner.y);
-    }
-
-    context.closePath();
-    context.stroke();
+    context.setLineDash([]);
+    drawElementSelectionOutline(context, element, viewport.zoom);
   }
 
   // Show rotated handles for one element; multi-selection uses the shared box above.
@@ -173,8 +200,12 @@ export function drawSelectionOverlay(
       context.lineWidth = 1 / viewport.zoom;
       context.fillStyle = "#ffffff";
       context.strokeStyle = "#4c7dff";
+      const handles =
+        element.type === "line" || element.type === "arrow"
+          ? getLinearEndpointHandles(element)
+          : getResizeHandles(element, viewport.zoom);
 
-      for (const { point } of getResizeHandles(element, viewport.zoom)) {
+      for (const { point } of handles) {
         context.fillRect(
           point.x - handleSize / 2,
           point.y - handleSize / 2,
@@ -188,6 +219,16 @@ export function drawSelectionOverlay(
           handleSize,
         );
       }
+
+      if (element.type === "line" || element.type === "arrow") {
+        const bendHandle = getLinearBendHandlePoint(element);
+        if (bendHandle) {
+          context.beginPath();
+          context.arc(bendHandle.x, bendHandle.y, handleSize / 2, 0, Math.PI * 2);
+          context.fill();
+          context.stroke();
+        }
+      }
     }
   }
 
@@ -196,9 +237,13 @@ export function drawSelectionOverlay(
     context.fillStyle = "#ffffff";
     context.strokeStyle = "#4c7dff";
     for (const p of pointEditingElement.points) {
-      const x = pointEditingElement.x + p.x,
-        y = pointEditingElement.y + p.y,
-        size = 8 / viewport.zoom;
+      const worldPoint =
+        pointEditingElement.type === "line" ||
+        pointEditingElement.type === "arrow"
+          ? getLinearPointWorldPosition(pointEditingElement, p)
+          : { x: pointEditingElement.x + p.x, y: pointEditingElement.y + p.y };
+      const { x, y } = worldPoint;
+      const size = 8 / viewport.zoom;
       context.beginPath();
       context.arc(x, y, size / 2, 0, Math.PI * 2);
       context.fill();
