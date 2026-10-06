@@ -251,6 +251,8 @@ export function Canvas() {
         interactiveCanvas.style.cursor = "grabbing";
       } else if (activeTool === "hand") {
         interactiveCanvas.style.cursor = "grab";
+      } else if (activeTool === "text") {
+        interactiveCanvas.style.cursor = "text";
       } else if (activeTool === "selection") {
         interactiveCanvas.style.cursor = selectionController.getCursor(
           scenePointerRef.current,
@@ -648,6 +650,30 @@ export function Canvas() {
             textElement.height ??
             (container.type === "rectangle" ? container.height : undefined) ??
             24,
+        };
+        textEditorRef.current = editor;
+        setTextEditorPosition(editor);
+        return;
+      }
+
+      if (hitElement?.type === "text") {
+        commitTextElement(textEditorRef.current);
+        const editor: TextEditorState = {
+          elementId: hitElement.id,
+          angle: hitElement.angle ?? 0,
+          fontSize: hitElement.fontSize,
+          fontFamily: hitElement.fontFamily,
+          textAlign: hitElement.textAlign,
+          verticalAlign: hitElement.verticalAlign,
+          sceneX: hitElement.x,
+          sceneY: hitElement.y,
+          value: hitElement.text,
+          inputWidth: hitElement.width ?? measureText(
+            hitElement.text,
+            hitElement.fontSize,
+            hitElement.fontFamily,
+          ).width,
+          inputHeight: hitElement.height ?? 24,
         };
         textEditorRef.current = editor;
         setTextEditorPosition(editor);
@@ -1118,7 +1144,7 @@ export function Canvas() {
             }
           }}
           spellCheck={false}
-          className="absolute z-20 resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent outline-none"
+          className="absolute z-20 resize-none cursor-text overflow-hidden border-0 bg-transparent p-0 text-transparent outline-none"
           style={{
             left: textEditorScreenPosition?.x ?? 0,
             top: textEditorScreenPosition?.y ?? 0,
@@ -1127,6 +1153,7 @@ export function Canvas() {
             fontSize: 20 * viewport.zoom,
             lineHeight: `${24 * viewport.zoom}px`,
             textAlign: textEditorPosition.textAlign,
+            caretColor: "#1e1e1e",
             transform: `rotate(${textEditorPosition.angle}rad)`,
             transformOrigin: "center center",
           }}
