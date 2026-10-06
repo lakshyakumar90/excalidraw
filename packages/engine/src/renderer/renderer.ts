@@ -7,7 +7,12 @@ import type {
 } from "@repo/common";
 import { viewportToSceneBounds } from "./viewport";
 import { getVisibleElements } from "./culling";
-import { getArrowHeadPoints, sampleCatmullRom } from "../geometry";
+import {
+  getArrowHeadPoints,
+  getBoundsCenter,
+  getElementLocalBounds,
+  sampleCatmullRom,
+} from "../geometry";
 import { buildClosedStrokePath } from "../geometry/strokeOutline";
 
 export interface RenderContext {
@@ -15,6 +20,20 @@ export interface RenderContext {
   width: number;
   height: number;
   viewport: Viewport;
+}
+
+//This moves the drawing context to the element’s center, rotates it, and moves back. The resulting transform matches the center-based rotation already used by getElementCorners.
+
+function applyElementTransform(
+  context: CanvasRenderingContext2D,
+  element: Element,
+): void {
+  const localBounds = getElementLocalBounds(element);
+  const center = getBoundsCenter(localBounds);
+
+  context.translate(element.x + center.x, element.y + center.y);
+  context.rotate(element.angle ?? 0);
+  context.translate(-center.x, -center.y);
 }
 
 function clearCanvas(
@@ -117,19 +136,15 @@ function drawRectangle(
   context: CanvasRenderingContext2D,
   element: Extract<Element, { type: "rectangle" }>,
 ): void {
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
   const width = element.width ?? 0;
   const height = element.height ?? 0;
-  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
   const backgroundColor = element.backgroundColor ?? "transparent";
   const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
 
   context.save();
-  context.translate(x, y);
-  context.rotate(angle);
+  applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
 
   if (backgroundColor !== "transparent") {
@@ -192,9 +207,9 @@ function drawDiamond(
   const y = element.y ?? 0;
   const width = element.width ?? 0;
   const height = element.height ?? 0;
-  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
-  const backgroundColor = element.backgroundColor ?? "transparent";
+  const backgr  const angle = element.angle ?? 0;
+oundColor = element.backgroundColor ?? "transparent";
   const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
 
@@ -228,9 +243,6 @@ function drawLine(
   context: CanvasRenderingContext2D,
   element: Extract<Element, { type: "line" }>,
 ): void {
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
   const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
@@ -241,8 +253,7 @@ function drawLine(
   }
 
   context.save();
-  context.translate(x, y);
-  context.rotate(angle);
+  applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.strokeStyle = strokeColor;
   context.lineWidth = strokeWidth;
@@ -287,16 +298,12 @@ export function drawArrow(
     return;
   }
 
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
   const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
 
   context.save();
-  context.translate(x, y);
-  context.rotate(angle);
+  applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.strokeStyle = strokeColor;
   context.lineWidth = strokeWidth;
@@ -363,16 +370,12 @@ export function drawCurvedLine(
     return;
   }
 
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
   const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
 
   context.save();
-  context.translate(x, y);
-  context.rotate(angle);
+  applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.strokeStyle = strokeColor;
   context.lineWidth = strokeWidth;
@@ -402,10 +405,7 @@ function drawFreedraw(
     return;
   }
 
-  const path = buildClosedStrokePath(
-    element.points,
-    element.strokeWidth ?? 1,
-  );
+  const path = buildClosedStrokePath(element.points, element.strokeWidth ?? 1);
 
   if (path.length < 3) {
     return;
@@ -417,15 +417,11 @@ function drawFreedraw(
     return;
   }
 
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
   const strokeColor = element.strokeColor ?? "#000000";
 
   context.save();
-  context.translate(x, y);
-  context.rotate(angle);
+  applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.fillStyle = strokeColor;
   context.beginPath();
