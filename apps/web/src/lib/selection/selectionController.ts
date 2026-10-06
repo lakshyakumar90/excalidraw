@@ -471,10 +471,7 @@ export const selectionController = {
             : horizontal
               ? scaleX
               : scaleY;
-        const fontSize = Math.min(
-          72,
-          Math.max(8, gesture.original.fontSize * rawFontScale),
-        );
+        const fontSize = Math.max(1, gesture.original.fontSize * rawFontScale);
         const width = Math.max(1, resized.width ?? 0);
         const textHeight = measureText(
           gesture.original.text,
