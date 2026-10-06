@@ -525,6 +525,28 @@ export function Canvas() {
 
       if (
         toolManager.getActiveTool() === "selection" &&
+        (event.ctrlKey || event.metaKey) &&
+        event.code === "KeyC"
+      ) {
+        event.preventDefault();
+        void selectionController.copySelectionToClipboard();
+        return;
+      }
+
+      if (
+        toolManager.getActiveTool() === "selection" &&
+        (event.ctrlKey || event.metaKey) &&
+        event.code === "KeyV"
+      ) {
+        event.preventDefault();
+        void selectionController
+          .pasteFromClipboard(scenePointerRef.current)
+          .then(() => renderLoop.invalidateInteractive());
+        return;
+      }
+
+      if (
+        toolManager.getActiveTool() === "selection" &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
         event.preventDefault();

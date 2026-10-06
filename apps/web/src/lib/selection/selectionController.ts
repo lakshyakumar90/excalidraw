@@ -27,6 +27,9 @@ export interface MarqueePreview {
   current: Point;
 }
 
+const ELEMENTS_CLIPBOARD_MARKER = "excalidraw-elements";
+const ELEMENTS_CLIPBOARD_VERSION = 1;
+
 type Gesture =
   | { kind: "idle" }
   | {
@@ -674,6 +677,54 @@ export const selectionController = {
     return true;
   },
 
+  async copySelectionToClipboard(): Promise<boolean> {
+    const selectedIds = new Set(selectionStore.getSnapshot());
+    const elements = scene
+      .getElements()
+      .filter((element) => selectedIds.has(element.id) && !element.isDeleted)
+      .map(cloneElement);
+    if (elements.length === 0 || !navigator.clipboard?.writeText) return false;
+
+    const clipboardData = {
+      type: ELEMENTS_CLIPBOARD_MARKER,
+      version: ELEMENTS_CLIPBOARD_VERSION,
+      elements,
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(clipboardData));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async pasteFromClipboard(cursor: Point): Promise<boolean> {
+    if (!navigator.clipboard?.readText) return false;
+
+    let elements: Element[] | null = null;
+    try {
+      const text = await navigator.clipboard.readText();
+      elements = parseCopiedElements(text);
+    } catch {
+      return false;
+    }
+    if (!elements?.length) return false;
+
+    const bounds = elements.map(getElementBounds);
+    const minX = Math.min(...bounds.map((bound) => bound.minX));
+    const minY = Math.min(...bounds.map((bound) => bound.minY));
+    const maxX = Math.max(...bounds.map((bound) => bound.maxX));
+    const maxY = Math.max(...bounds.map((bound) => bound.maxY));
+    const offsetX = cursor.x - (minX + maxX) / 2;
+    const offsetY = cursor.y - (minY + maxY) / 2;
+
+    const pastedElements = duplicateElements(elements, offsetX, offsetY);
+    for (const element of pastedElements) scene.addElement(element);
+    selectionStore.set(pastedElements.map((element) => element.id));
+    groupDrillPath = [];
+    return true;
+  },
+
   selectAll(): void {
     selectionStore.set(
       scene
@@ -755,6 +806,139 @@ function duplicateElements(
 
     return duplicate;
   });
+}
+
+function parseCopiedElements(text: string): Element[] | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(data)) return null;
+  if (
+    data.type !== ELEMENTS_CLIPBOARD_MARKER ||
+    data.version !== ELEMENTS_CLIPBOARD_VERSION ||
+    !Array.isArray(data.elements)
+  ) {
+    return null;
+  }
+
+  const elements = data.elements;
+  if (!elements.every(isClipboardElement)) return null;
+  const ids = elements.map((element) => element.id);
+  if (new Set(ids).size !== ids.length) return null;
+  return elements;
+}
+
+function isClipboardElement(value: unknown): value is Element {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.id !== "string" ||
+    typeof value.type !== "string" ||
+    ![
+      "rectangle",
+      "ellipse",
+      "diamond",
+      "line",
+      "arrow",
+      "freedraw",
+      "text",
+    ].includes(value.type) ||
+    !isFiniteNumber(value.x) ||
+    !isFiniteNumber(value.y)
+  ) {
+    return false;
+  }
+
+  for (const key of [
+    "width",
+    "height",
+    "angle",
+    "strokeWidth",
+    "roughness",
+    "opacity",
+    "seed",
+    "version",
+    "versionNonce",
+    "updated",
+  ]) {
+    if (value[key] !== undefined && !isFiniteNumber(value[key])) return false;
+  }
+  if (
+    value.groupIds !== undefined &&
+    (!Array.isArray(value.groupIds) || !value.groupIds.every(isString))
+  ) {
+    return false;
+  }
+  if (
+    value.boundElements !== undefined &&
+    (!Array.isArray(value.boundElements) ||
+      !value.boundElements.every(isString))
+  ) {
+    return false;
+  }
+  if (
+    value.frameId !== undefined &&
+    value.frameId !== null &&
+    typeof value.frameId !== "string"
+  ) {
+    return false;
+  }
+
+  if (
+    value.type === "line" ||
+    value.type === "arrow" ||
+    value.type === "freedraw"
+  ) {
+    if (
+      !Array.isArray(value.points) ||
+      !value.points.every((point: unknown) => {
+        if (
+          !isRecord(point) ||
+          !isFiniteNumber(point.x) ||
+          !isFiniteNumber(point.y)
+        ) {
+          return false;
+        }
+        return value.type !== "freedraw" || isFiniteNumber(point.pressure);
+      })
+    ) {
+      return false;
+    }
+    if (
+      value.type === "line" &&
+      value.lineType !== "straight" &&
+      value.lineType !== "curved"
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    value.type === "text" &&
+    (typeof value.text !== "string" ||
+      !isFiniteNumber(value.fontSize) ||
+      typeof value.fontFamily !== "string" ||
+      !["left", "center", "right"].includes(String(value.textAlign)) ||
+      !["top", "middle", "bottom"].includes(String(value.verticalAlign)))
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
 
 function getGroupMemberIds(groupId: string): string[] {
