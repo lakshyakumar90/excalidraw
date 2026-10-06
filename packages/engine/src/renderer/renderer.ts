@@ -61,7 +61,7 @@ function drawBackground(
   width: number,
   height: number,
 ): void {
-  context.fillStyle = "#ffffff";
+  context.fillStyle = "#faf9f6";
   context.fillRect(0, 0, width, height);
 }
 

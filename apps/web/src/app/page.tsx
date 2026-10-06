@@ -6,7 +6,7 @@ import { StylePanel } from "@/components/styles/StylePanel";
 
 export default function Home() {
   return (
-    <main className="fixed inset-0 overflow-hidden bg-white">
+    <main className="fixed inset-0 overflow-hidden bg-[#faf9f6]">
       <Canvas />
       <CanvasControls />
       <Toolbar />

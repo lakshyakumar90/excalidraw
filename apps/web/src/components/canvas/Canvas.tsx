@@ -10,6 +10,7 @@ import {
 import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
+  clampZoom,
   createTextElement,
   getArrowMidpoint,
   getElementAtPosition,
@@ -193,8 +194,11 @@ export function Canvas() {
             Number.isFinite(restoredViewport.zoom) &&
             restoredViewport.zoom > 0
           ) {
-            viewportRef.current = restoredViewport;
-            setCurrentViewport(restoredViewport);
+            viewportRef.current = {
+              ...restoredViewport,
+              zoom: clampZoom(restoredViewport.zoom),
+            };
+            setCurrentViewport(viewportRef.current);
           }
         }
         autosave = startAutosave(scene, () => viewportRef.current);
@@ -293,7 +297,7 @@ export function Canvas() {
               viewport: viewportRef.current,
             },
             scene.getElements(),
-            {},
+            { grid: false, origin: false },
             imageAssets,
           );
         },

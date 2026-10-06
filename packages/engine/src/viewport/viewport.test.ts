@@ -8,7 +8,7 @@ import { viewportToScene } from "../geometry";
 
 describe("clampZoom", () => {
   it("clamps zoom below minimum", () => {
-    expect(clampZoom(0.01)).toBe(0.1);
+    expect(clampZoom(0.01)).toBe(0.25);
   });
 
   it("clamps zoom above maximum", () => {
