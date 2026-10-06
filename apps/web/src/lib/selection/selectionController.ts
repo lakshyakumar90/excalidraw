@@ -23,6 +23,7 @@ import {
 } from "./handles";
 import { resizeElement } from "./resize";
 import { selectionStore } from "./selectionStore";
+import { historyStore } from "@/lib/history/historyStore";
 
 export interface MarqueePreview {
   start: Point;
@@ -774,6 +775,10 @@ export const selectionController = {
   },
 
   groupSelection(): boolean {
+    return historyStore.captureUpdate(() => this.groupSelectionWithoutCapture());
+  },
+
+  groupSelectionWithoutCapture(): boolean {
     const elements = [...selectionStore.getSnapshot()]
       .map((id) => scene.getElement(id))
       .filter((element): element is Element => !!element && !element.isDeleted);
@@ -795,6 +800,10 @@ export const selectionController = {
   },
 
   ungroupSelection(): boolean {
+    return historyStore.captureUpdate(() => this.ungroupSelectionWithoutCapture());
+  },
+
+  ungroupSelectionWithoutCapture(): boolean {
     const selectedElements = [...selectionStore.getSnapshot()]
       .map((id) => scene.getElement(id))
       .filter((element): element is Element => !!element && !element.isDeleted);
@@ -826,6 +835,10 @@ export const selectionController = {
   },
 
   duplicateSelection(offset = 10): boolean {
+    return historyStore.captureUpdate(() => this.duplicateSelectionWithoutCapture(offset));
+  },
+
+  duplicateSelectionWithoutCapture(offset = 10): boolean {
     const elements = [...selectionStore.getSnapshot()]
       .map((id) => scene.getElement(id))
       .filter((element): element is Element => !!element && !element.isDeleted)
@@ -880,11 +893,13 @@ export const selectionController = {
     const offsetX = cursor.x - (minX + maxX) / 2;
     const offsetY = cursor.y - (minY + maxY) / 2;
 
-    const pastedElements = duplicateElements(elements, offsetX, offsetY);
-    for (const element of pastedElements) scene.addElement(element);
-    selectionStore.set(pastedElements.map((element) => element.id));
-    groupDrillPath = [];
-    return true;
+    return historyStore.captureUpdate(() => {
+      const pastedElements = duplicateElements(elements!, offsetX, offsetY);
+      for (const element of pastedElements) scene.addElement(element);
+      selectionStore.set(pastedElements.map((element) => element.id));
+      groupDrillPath = [];
+      return true;
+    });
   },
 
   selectAll(): void {
@@ -897,16 +912,20 @@ export const selectionController = {
   },
 
   deleteSelection(): void {
-    for (const id of selectionStore.getSnapshot())
-      scene.mutateElement(id, { isDeleted: true });
-    selectionStore.clear();
+    historyStore.captureUpdate(() => {
+      for (const id of selectionStore.getSnapshot())
+        scene.mutateElement(id, { isDeleted: true });
+      selectionStore.clear();
+    });
   },
 
   nudgeSelection(dx: number, dy: number): void {
-    const selectedElements = [...selectionStore.getSnapshot()]
-      .map((id) => scene.getElement(id))
-      .filter((element): element is Element => !!element && !element.isDeleted);
-    translateSnapshots(getMovementSnapshots(selectedElements), dx, dy);
+    historyStore.captureUpdate(() => {
+      const selectedElements = [...selectionStore.getSnapshot()]
+        .map((id) => scene.getElement(id))
+        .filter((element): element is Element => !!element && !element.isDeleted);
+      translateSnapshots(getMovementSnapshots(selectedElements), dx, dy);
+    });
   },
 };
 

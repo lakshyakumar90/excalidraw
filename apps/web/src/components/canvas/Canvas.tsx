@@ -23,6 +23,7 @@ import { selectionStore } from "@/lib/selection/selectionStore";
 import { styleStore } from "@/lib/styles/styleStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
+import { historyStore } from "@/lib/history/historyStore";
 import { EyedropperOverlay } from "@/components/styles/EyedropperOverlay";
 import {
   CanvasContextMenu,
@@ -58,6 +59,7 @@ function commitTextElement(editor: TextEditorState | null): void {
   if (editor && editor.value.length === 0) {
     scene.removeElement(editor.elementId);
   }
+  historyStore.endCapture();
 }
 
 function sampleCanvasColor(
@@ -406,14 +408,16 @@ export function Canvas() {
                     : {}),
                 };
 
-          styleStore.update(changes);
-          colorHistoryStore.add(color);
-          for (const id of selectionStore.getSnapshot()) {
-            const element = scene.getElement(id);
-            if (element && !element.isDeleted) {
-              scene.mutateElement(element.id, changes);
+          historyStore.captureUpdate(() => {
+            styleStore.update(changes);
+            colorHistoryStore.add(color);
+            for (const id of selectionStore.getSnapshot()) {
+              const element = scene.getElement(id);
+              if (element && !element.isDeleted) {
+                scene.mutateElement(element.id, changes);
+              }
             }
-          }
+          });
           eyedropperStore.cancel();
           updateCanvasCursor();
         }
@@ -450,6 +454,7 @@ export function Canvas() {
       if (toolManager.getActiveTool() === "text") {
         event.preventDefault();
         commitTextElement(textEditorRef.current);
+        historyStore.startCapture();
         const textElement = createTextElement({
           text: "",
           x: scenePoint.x,
@@ -478,6 +483,7 @@ export function Canvas() {
       }
 
       if (toolManager.getActiveTool() === "selection") {
+        historyStore.startCapture();
         selectionController.pointerDown(
           scenePoint,
           event.shiftKey,
@@ -494,6 +500,7 @@ export function Canvas() {
         return;
       }
 
+      historyStore.startCapture();
       toolManager.onPointerDown(scenePoint, {
         shiftKey: event.shiftKey,
         button: event.button,
@@ -535,6 +542,7 @@ export function Canvas() {
 
       if (toolManager.getActiveTool() === "selection") {
         selectionController.pointerUp(scenePoint, event.shiftKey, event.altKey);
+        historyStore.endCapture();
         interactiveCanvas.style.cursor = selectionController.getCursor(
           scenePoint,
           viewportRef.current.zoom,
@@ -554,6 +562,7 @@ export function Canvas() {
         pointerId: event.pointerId,
         pressure: event.pressure,
       });
+      historyStore.endCapture();
 
       if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
         interactiveCanvas.releasePointerCapture(event.pointerId);
@@ -563,7 +572,7 @@ export function Canvas() {
     const handleDoubleClick = (event: MouseEvent) => {
       if (toolManager.getActiveTool() === "multiPointLine") {
         event.preventDefault();
-        toolManager.commit();
+        historyStore.captureUpdate(() => toolManager.commit());
         renderLoop.invalidateInteractive();
         return;
       }
@@ -584,6 +593,8 @@ export function Canvas() {
             : undefined;
 
       if (container?.type === "rectangle" || container?.type === "arrow") {
+        commitTextElement(textEditorRef.current);
+        let createdText = false;
         let textElement = scene
           .getElements()
           .find(
@@ -594,6 +605,8 @@ export function Canvas() {
           );
 
         if (!textElement) {
+          createdText = true;
+          historyStore.startCapture();
           if (container.type === "rectangle") {
             textElement = createTextElement({
               text: "",
@@ -631,7 +644,9 @@ export function Canvas() {
           });
         }
 
-        commitTextElement(textEditorRef.current);
+        if (!createdText) {
+          historyStore.startCapture();
+        }
         const editor: TextEditorState = {
           elementId: textElement.id,
           containerId: container.id,
@@ -660,6 +675,7 @@ export function Canvas() {
 
       if (hitElement?.type === "text") {
         commitTextElement(textEditorRef.current);
+        historyStore.startCapture();
         const editor: TextEditorState = {
           elementId: hitElement.id,
           wrapText: hitElement.wrapText,
@@ -693,6 +709,7 @@ export function Canvas() {
       }
 
       commitTextElement(textEditorRef.current);
+      historyStore.startCapture();
       const textElement = createTextElement({
         text: "",
         x: scenePoint.x,
@@ -801,6 +818,7 @@ export function Canvas() {
           return;
         }
         toolManager.cancel();
+        historyStore.endCapture();
         selectionStore.clear();
         renderLoop.invalidateInteractive();
         return;
@@ -898,7 +916,7 @@ export function Canvas() {
       }
 
       if (event.key === "Enter") {
-        toolManager.commit();
+        historyStore.captureUpdate(() => toolManager.commit());
         renderLoop.invalidateInteractive();
         return;
       }

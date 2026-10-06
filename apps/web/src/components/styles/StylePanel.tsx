@@ -9,6 +9,7 @@ import { selectionStore } from "@/lib/selection/selectionStore";
 import { styleStore, type CurrentItemStyle } from "@/lib/styles/styleStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
+import { historyStore } from "@/lib/history/historyStore";
 
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 const EMPTY_RECENT_COLORS: readonly string[] = [];
@@ -165,10 +166,12 @@ export function StylePanel() {
       changes.backgroundColor = "transparent";
     }
 
-    styleStore.update(changes);
-    for (const element of selectedElements) {
-      scene.mutateElement(element.id, changes);
-    }
+    historyStore.captureUpdate(() => {
+      styleStore.update(changes);
+      for (const element of selectedElements) {
+        scene.mutateElement(element.id, changes);
+      }
+    });
   };
 
   return (
@@ -396,7 +399,7 @@ export function StylePanel() {
                   key={action}
                   type="button"
                   aria-label={label}
-                  onClick={() => scene.reorderElements(selectedIds, action)}
+                  onClick={() => historyStore.captureUpdate(() => scene.reorderElements(selectedIds, action))}
                   className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-xs font-medium text-neutral-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   {label}
