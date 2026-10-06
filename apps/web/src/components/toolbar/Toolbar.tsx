@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 
@@ -11,7 +12,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
   ellipse: "Ellipse",
   diamond: "Diamond",
   line: "Line",
-  multiPointLine: "MultiPointLine",
+  multiPointLine: "Multi-point line",
   arrow: "Arrow",
   "curved-line": "Curve",
   freedraw: "Pencil",
@@ -30,34 +31,92 @@ const TOOL_SHORTCUTS: Record<ToolType, string> = {
   freedraw: "F",
 };
 
+function ToolIcon({ type }: { type: ToolType }) {
+  let shape: ReactNode;
+
+  switch (type) {
+    case "selection":
+      shape = <path d="M5 3v17l4.5-4.5 3 6 2.5-1.2-3-6H19L5 3Z" fill="currentColor" stroke="none" />;
+      break;
+    case "hand":
+      shape = <path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10 4.5a1.5 1.5 0 0 1 3 0V10 5.5a1.5 1.5 0 0 1 3 0V12l.7-1.1a1.6 1.6 0 0 1 2.8 1.4l-2 5A4 4 0 0 1 14.8 20h-2.1a4 4 0 0 1-3.1-1.5L6.2 14a1.7 1.7 0 0 1 2.5-2.2L10 13" />;
+      break;
+    case "rectangle":
+      shape = <rect x="4" y="5" width="16" height="14" rx="1" />;
+      break;
+    case "ellipse":
+      shape = <ellipse cx="12" cy="12" rx="8" ry="6.5" />;
+      break;
+    case "diamond":
+      shape = <path d="m12 3 9 9-9 9-9-9 9-9Z" />;
+      break;
+    case "line":
+      shape = <path d="m5 19 14-14" />;
+      break;
+    case "multiPointLine":
+      shape = <><path d="m4 18 6-11 4 8 6-9" /><circle cx="4" cy="18" r="1.2" fill="currentColor" /><circle cx="10" cy="7" r="1.2" fill="currentColor" /><circle cx="14" cy="15" r="1.2" fill="currentColor" /><circle cx="20" cy="6" r="1.2" fill="currentColor" /></>;
+      break;
+    case "arrow":
+      shape = <path d="M4 12h15m-6-6 6 6-6 6" />;
+      break;
+    case "curved-line":
+      shape = <path d="M4 17c4-12 12-12 16-2" />;
+      break;
+    case "freedraw":
+      shape = <path d="M4 17c2-8 4 5 7-2s4-8 5-3 3 5 4-3" />;
+      break;
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {shape}
+    </svg>
+  );
+}
+
 function ToolButton({
   type,
-  label,
   active,
   onClick,
 }: {
   type: ToolType;
-  label: string;
   active: boolean;
   onClick: () => void;
 }) {
+  const label = TOOL_LABELS[type];
+  const tooltip = type === "selection"
+    ? `${label} · ${TOOL_SHORTCUTS[type]} · Alt-click cycles overlaps`
+    : `${label} · ${TOOL_SHORTCUTS[type]}`;
+
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
+      aria-keyshortcuts={TOOL_SHORTCUTS[type]}
       aria-pressed={active}
-      title={type === "selection" ? "Select (V); Alt-click cycles overlapping objects" : `${label} (${TOOL_SHORTCUTS[type]})`}
       className={[
-        "rounded-md px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        "group relative grid h-10 w-10 shrink-0 place-items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
         active
           ? "bg-neutral-900 text-white"
           : "text-neutral-700 hover:bg-neutral-100",
       ].join(" ")}
     >
-      <span>{label}</span>
-      <span className="ml-2 text-[10px] opacity-50">
-        {TOOL_SHORTCUTS[type]}
+      <ToolIcon type={type} />
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[60] hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-visible:block"
+      >
+        {tooltip}
       </span>
     </button>
   );
@@ -70,19 +129,18 @@ export function Toolbar() {
     () => "selection" as ToolType,
   );
 
-  const selectTool = (type: ToolType) => {
-    toolManager.setActiveTool(type);
-  };
-
   return (
-    <div role="toolbar" aria-label="Drawing tools" className="fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur">
+    <div
+      role="toolbar"
+      aria-label="Drawing tools"
+      className="fixed left-1/2 top-4 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur"
+    >
       {(Object.keys(TOOL_LABELS) as ToolType[]).map((type) => (
         <ToolButton
           key={type}
           type={type}
-          label={TOOL_LABELS[type]}
           active={activeTool === type}
-          onClick={() => selectTool(type)}
+          onClick={() => toolManager.setActiveTool(type)}
         />
       ))}
     </div>
