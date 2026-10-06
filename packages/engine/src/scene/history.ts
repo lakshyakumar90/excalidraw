@@ -58,7 +58,7 @@ export class HistoryManager {
     const origin = this.captureOrigin;
     this.captureOrigin = null;
     const changes = this.scene.endCapture();
-    if (changes.length === 0) return false;
+    if (changes.length === 0 || origin === "remote") return false;
 
     this.undoStack.push({
       changes,

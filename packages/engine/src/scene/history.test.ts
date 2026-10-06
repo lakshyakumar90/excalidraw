@@ -84,4 +84,26 @@ describe("HistoryManager", () => {
     history.undo();
     expect([...selectedIds]).toEqual([element.id]);
   });
+
+  it("filters remote changes without clearing the local redo stack", () => {
+    const scene = new Scene();
+    const element = createRectangleElement({ id: "remote-history" });
+    scene.addElement(element);
+    const history = new HistoryManager(scene, () => [], () => {});
+
+    history.captureUpdate(() => scene.mutateElement(element.id, { x: 10 }));
+    history.undo();
+    expect(history.canRedo).toBe(true);
+
+    history.captureUpdate(
+      () => scene.mutateElement(element.id, { y: 25 }),
+      "remote",
+    );
+    expect(history.undoDepth).toBe(0);
+    expect(history.canRedo).toBe(true);
+
+    history.redo();
+    expect(element.x).toBe(10);
+    expect(element.y).toBe(25);
+  });
 });
