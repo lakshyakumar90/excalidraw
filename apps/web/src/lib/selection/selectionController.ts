@@ -40,6 +40,13 @@ type Gesture =
       elements: Array<{ id: string; x: number; y: number }>;
     }
   | {
+      kind: "group-press";
+      start: Point;
+      zoom: number;
+      selectedId: string;
+      elements: Array<{ id: string; x: number; y: number }>;
+    }
+  | {
       kind: "resize";
       original: Element;
       handle: ResizeHandle;
@@ -158,6 +165,21 @@ export const selectionController = {
 
     const wasSelected = selectionStore.getSnapshot().has(hit.id);
 
+    if (!shiftKey && wasSelected && selectedIds.length > 1) {
+      const elements = selectedIds
+        .map((id) => scene.getElement(id))
+        .filter((element): element is Element => !!element && !element.isDeleted)
+        .map((element) => ({ id: element.id, x: element.x, y: element.y }));
+      gesture = {
+        kind: "group-press",
+        start: point,
+        zoom,
+        selectedId: hit.id,
+        elements,
+      };
+      return;
+    }
+
     if (shiftKey && wasSelected) {
       // Shift-click on a selected element removes it from the selection.
       selectionStore.toggle(hit.id);
@@ -190,6 +212,15 @@ export const selectionController = {
   },
 
   pointerMove(point: Point, shiftKey: boolean, altKey: boolean): void {
+    if (gesture.kind === "group-press") {
+      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < MIN_MARQUEE_PIXELS / gesture.zoom) return;
+      gesture = {
+        kind: "move",
+        start: gesture.start,
+        elements: gesture.elements,
+      };
+    }
+
     if (gesture.kind === "marquee") {
       gesture = {
         ...gesture,
@@ -269,6 +300,16 @@ export const selectionController = {
   },
 
   pointerUp(point: Point, shiftKey: boolean, altKey: boolean): void {
+    if (gesture.kind === "group-press") {
+      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < MIN_MARQUEE_PIXELS / gesture.zoom) {
+        selectionStore.set([gesture.selectedId]);
+      } else {
+        this.pointerMove(point, shiftKey, altKey);
+      }
+      gesture = { kind: "idle" };
+      return;
+    }
+
     if (gesture.kind === "move" || gesture.kind === "resize" || gesture.kind === "point" || gesture.kind === "group-resize") {
       this.pointerMove(point, shiftKey, altKey);
     }
