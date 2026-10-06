@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
+import { FileMenu } from "./FileMenu";
 
 const TOOL_LABELS: Record<ToolType, string> = {
   selection: "Select",
@@ -161,6 +162,8 @@ export function Toolbar() {
       aria-label="Drawing tools"
       className="fixed left-1/2 top-4 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur"
     >
+      <FileMenu />
+      <span aria-hidden="true" className="my-1 w-px shrink-0 bg-neutral-200" />
       {(Object.keys(TOOL_LABELS) as ToolType[]).map((type) => (
         <ToolButton
           key={type}

@@ -26,6 +26,7 @@ import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 import { historyStore } from "@/lib/history/historyStore";
 import { startAutosave, type AutosaveHandle } from "@/lib/persistence/autosave";
 import { loadScene } from "@/lib/persistence/indexedDb";
+import { setCurrentViewport } from "@/lib/persistence/viewportStore";
 import { EyedropperOverlay } from "@/components/styles/EyedropperOverlay";
 import {
   CanvasContextMenu,
@@ -152,6 +153,7 @@ export function Canvas() {
             restoredViewport.zoom > 0
           ) {
             viewportRef.current = restoredViewport;
+            setCurrentViewport(restoredViewport);
             setViewport(restoredViewport);
           }
         }
@@ -395,6 +397,7 @@ export function Canvas() {
           scrollY: viewport.scrollY + dy,
         };
         setViewport(viewportRef.current);
+        setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
         lastPointerRef.current = point;
@@ -1070,6 +1073,7 @@ export function Canvas() {
           viewport.zoom * 1.2,
         );
         setViewport(viewportRef.current);
+        setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
         renderLoop.invalidateStatic();
@@ -1084,6 +1088,7 @@ export function Canvas() {
           viewport.zoom / 1.2,
         );
         setViewport(viewportRef.current);
+        setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
         renderLoop.invalidateStatic();
@@ -1094,6 +1099,7 @@ export function Canvas() {
 
         viewportRef.current = zoomAtPoint(viewport, center, 1);
         setViewport(viewportRef.current);
+        setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
         renderLoop.invalidateStatic();
@@ -1121,6 +1127,7 @@ export function Canvas() {
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
       setViewport(viewportRef.current);
+      setCurrentViewport(viewportRef.current);
       autosaveRef.current?.schedule();
       scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
       renderLoop.invalidateStatic();
