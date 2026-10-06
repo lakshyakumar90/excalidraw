@@ -27,14 +27,92 @@ const DEFAULT_STYLE: CurrentItemStyle = {
   opacity: 100,
 };
 
+const STORAGE_KEY = "excalidraw:current-item-style:v1";
+const STORAGE_VERSION = 1;
+
 let currentItemStyle = DEFAULT_STYLE;
+let hasHydrated = false;
 const listeners = new Set<Listener>();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[\da-f]{6}$/i.test(value);
+}
+
+function isBackgroundColor(value: unknown): value is string {
+  return value === "transparent" || isHexColor(value);
+}
+
+function isCurrentItemStyle(value: unknown): value is CurrentItemStyle {
+  if (!isRecord(value)) return false;
+
+  return (
+    isHexColor(value.strokeColor) &&
+    isBackgroundColor(value.backgroundColor) &&
+    (value.fillStyle === "none" ||
+      value.fillStyle === "solid" ||
+      value.fillStyle === "hachure" ||
+      value.fillStyle === "cross-hatch") &&
+    (value.strokeWidth === 1 ||
+      value.strokeWidth === 2 ||
+      value.strokeWidth === 4) &&
+    (value.strokeStyle === "solid" ||
+      value.strokeStyle === "dashed" ||
+      value.strokeStyle === "dotted") &&
+    (value.roughness === 0 || value.roughness === 1 || value.roughness === 2) &&
+    (value.edgeStyle === "sharp" || value.edgeStyle === "rounded") &&
+    typeof value.opacity === "number" &&
+    Number.isFinite(value.opacity) &&
+    value.opacity >= 0 &&
+    value.opacity <= 100
+  );
+}
+
+function persistCurrentItemStyle(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ version: STORAGE_VERSION, style: currentItemStyle }),
+    );
+  } catch {
+    // Storage can be unavailable in private browsing or when the browser quota is full.
+  }
+}
 
 function notify() {
   for (const listener of listeners) listener();
 }
 
 export const styleStore = {
+  hydrate(): void {
+    if (hasHydrated || typeof window === "undefined") return;
+    hasHydrated = true;
+
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      const saved: unknown = JSON.parse(raw);
+      if (
+        !isRecord(saved) ||
+        saved.version !== STORAGE_VERSION ||
+        !isCurrentItemStyle(saved.style)
+      ) {
+        return;
+      }
+
+      currentItemStyle = { ...saved.style };
+      notify();
+    } catch {
+      // Ignore malformed saved data and continue with the in-memory defaults.
+    }
+  },
+
   subscribe(listener: Listener): () => void {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -89,6 +167,7 @@ export const styleStore = {
   set<K extends keyof CurrentItemStyle>(key: K, value: CurrentItemStyle[K]) {
     if (Object.is(currentItemStyle[key], value)) return;
     currentItemStyle = { ...currentItemStyle, [key]: value };
+    persistCurrentItemStyle();
     notify();
   },
 
@@ -103,6 +182,7 @@ export const styleStore = {
       return;
 
     currentItemStyle = nextStyle;
+    persistCurrentItemStyle();
     notify();
   },
 };

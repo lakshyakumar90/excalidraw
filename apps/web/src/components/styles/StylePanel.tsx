@@ -93,6 +93,10 @@ export function StylePanel() {
   const isDrawingTool = Object.hasOwn(TOOL_NAMES, activeTool);
 
   useEffect(() => {
+    styleStore.hydrate();
+  }, []);
+
+  useEffect(() => {
     const selectedElement = [...selectedIds]
       .map((id) => scene.getElement(id))
       .find(
