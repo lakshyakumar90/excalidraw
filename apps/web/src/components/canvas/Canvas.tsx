@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Point, Viewport } from "@repo/common";
+import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
   RenderLoop,
@@ -16,6 +16,7 @@ import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
 import { selectionStore } from "@/lib/selection/selectionStore";
+import { TextEditDialog } from "./TextEditDialog";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -94,6 +95,7 @@ export function Canvas() {
             viewportRef.current,
             selectedElements,
             selectionController.getMarquee(),
+            selectionController.getPointEditingElement(),
           );
         },
       },
@@ -296,11 +298,19 @@ export function Canvas() {
     };
 
     const handleDoubleClick = (event: MouseEvent) => {
-      if (toolManager.getActiveTool() !== "multiPointLine") {
+      if (toolManager.getActiveTool() === "multiPointLine") {
+        event.preventDefault();
+        toolManager.commit();
+        renderLoop.invalidateInteractive();
         return;
       }
+      if (toolManager.getActiveTool() !== "selection") return;
       event.preventDefault();
-      toolManager.commit();
+      const point = getPointerPosition(event);
+      selectionController.handleDoubleClick(
+        viewportToScene(point, viewportRef.current),
+        viewportRef.current.zoom,
+      );
       renderLoop.invalidateInteractive();
     };
 
@@ -312,8 +322,35 @@ export function Canvas() {
       }
 
       if (event.key === "Escape") {
+        if (selectionController.exitPointEditing()) {
+          renderLoop.invalidateInteractive();
+          return;
+        }
         toolManager.cancel();
+        selectionStore.clear();
         renderLoop.invalidateInteractive();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        selectionController.selectAll();
+        return;
+      }
+
+      if (toolManager.getActiveTool() === "selection" && (event.key === "Delete" || event.key === "Backspace")) {
+        event.preventDefault();
+        selectionController.deleteSelection();
+        return;
+      }
+
+      if (toolManager.getActiveTool() === "selection" && event.key.startsWith("Arrow")) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        selectionController.nudgeSelection(
+          event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0,
+          event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0,
+        );
         return;
       }
 
@@ -483,6 +520,7 @@ export function Canvas() {
         ref={interactiveCanvasRef}
         className="absolute inset-0 block h-full w-full touch-none select-none"
       />
+      <TextEditDialog />
     </div>
   );
 }

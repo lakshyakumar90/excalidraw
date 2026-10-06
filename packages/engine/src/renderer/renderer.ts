@@ -441,6 +441,23 @@ function drawFreedraw(
   context.restore();
 }
 
+function drawText(context: CanvasRenderingContext2D, element: Extract<Element, { type: "text" }>): void {
+  context.save();
+  applyElementTransform(context, element);
+  context.globalAlpha = (element.opacity ?? 100) / 100;
+  context.fillStyle = element.strokeColor ?? "#1e1e1e";
+  context.font = (element.fontSize || 20) + "px " + (element.fontFamily || "sans-serif");
+  context.textAlign = element.textAlign ?? "left";
+  context.textBaseline = "top";
+  const x = element.textAlign === "center" ? (element.width ?? 0) / 2 : element.textAlign === "right" ? (element.width ?? 0) : 0;
+  const lines = element.text.split("\n");
+  const lineHeight = element.fontSize || 20;
+  const textHeight = lines.length * lineHeight;
+  const y = element.verticalAlign === "middle" ? ((element.height ?? textHeight) - textHeight) / 2 : element.verticalAlign === "bottom" ? (element.height ?? textHeight) - textHeight : 0;
+  lines.forEach((line, index) => context.fillText(line, x, y + index * lineHeight));
+  context.restore();
+}
+
 function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
@@ -472,6 +489,10 @@ function drawElement(
 
     case "freedraw":
       drawFreedraw(context, element);
+      break;
+
+    case "text":
+      drawText(context, element);
       break;
 
     default:

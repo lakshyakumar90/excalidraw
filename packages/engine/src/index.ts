@@ -4,4 +4,5 @@ export * from "./element";
 export * from "./scene";
 export * from "./renderer";
 export * from "./tools";
+export * from "./element";
 

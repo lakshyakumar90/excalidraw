@@ -8,6 +8,7 @@ import type {
   ArrowElement,
   FreedrawElement,
   FreedrawPoint,
+  TextElement,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
 
@@ -53,6 +54,20 @@ export function createRectangleElement(
     versionNonce: options.versionNonce ?? generateSeed(),
     isDeleted: options.isDeleted ?? false,
     updated: options.updated ?? Date.now(),
+  };
+}
+
+export function createTextElement(options: ElementOptions & { text: string; fontSize?: number; textAlign?: TextElement["textAlign"]; verticalAlign?: TextElement["verticalAlign"] }): TextElement {
+  const fontSize = options.fontSize ?? 20;
+  const lines = options.text.split("\n");
+  const width = Math.max(20, ...lines.map((line) => line.length * fontSize * 0.6));
+  const height = Math.max(1, lines.length) * fontSize * 1.2;
+  return {
+    id: options.id ?? generateElementId(), type: "text", x: options.x ?? 0, y: options.y ?? 0,
+    width: options.width ?? width, height: options.height ?? height, angle: options.angle ?? 0,
+    strokeColor: options.strokeColor ?? "#1e1e1e", opacity: options.opacity ?? 100,
+    text: options.text, fontSize, fontFamily: "sans-serif", textAlign: options.textAlign ?? "left", verticalAlign: options.verticalAlign ?? "top",
+    version: 1, versionNonce: generateSeed(), isDeleted: false, updated: Date.now(),
   };
 }
 
