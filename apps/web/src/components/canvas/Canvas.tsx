@@ -791,6 +791,26 @@ export function Canvas() {
         if (!isZoomShortcut) return;
       }
 
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) historyStore.redo();
+        else historyStore.undo();
+        renderLoop.invalidateStatic();
+        renderLoop.invalidateInteractive();
+        return;
+      }
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "y"
+      ) {
+        event.preventDefault();
+        historyStore.redo();
+        renderLoop.invalidateStatic();
+        renderLoop.invalidateInteractive();
+        return;
+      }
+
       if (event.code === "Space") {
         spacePressRef.current = true;
         event.preventDefault();
