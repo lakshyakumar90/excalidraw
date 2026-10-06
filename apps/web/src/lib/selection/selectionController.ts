@@ -9,6 +9,7 @@ This controller owns canvas selection, transforms, and point editing:
 import type { Element, Point } from "@repo/common";
 import {
   elementIntersectsRect,
+  getArrowMidpoint,
   getElementAtPosition,
   getElementsAtPosition,
   getElementBounds,
@@ -87,7 +88,7 @@ function translateSnapshots(
 }
 
 function syncBoundTextToContainer(container: Element): void {
-  if (container.type !== "rectangle") return;
+  if (container.type !== "rectangle" && container.type !== "arrow") return;
 
   const boundTexts = (container.boundElements ?? [])
     .map((id) => scene.getElement(id))
@@ -97,32 +98,48 @@ function syncBoundTextToContainer(container: Element): void {
         element.containerId === container.id &&
         !element.isDeleted,
     );
-  const wrappedHeight = Math.max(
-    0,
-    ...boundTexts.map(
-      (text) =>
-        measureText(
-          text.text,
-          text.fontSize,
-          text.fontFamily,
-          container.width ?? 0,
-        ).height,
-    ),
-  );
-  const height = Math.max(container.height ?? 0, wrappedHeight);
+  let height = container.height ?? 0;
+  if (container.type === "rectangle") {
+    const wrappedHeight = Math.max(
+      0,
+      ...boundTexts.map(
+        (text) =>
+          measureText(
+            text.text,
+            text.fontSize,
+            text.fontFamily,
+            container.width ?? 0,
+          ).height,
+      ),
+    );
+    height = Math.max(height, wrappedHeight);
 
-  if (height > (container.height ?? 0)) {
-    scene.mutateElement(container.id, { height });
+    if (height > (container.height ?? 0)) {
+      scene.mutateElement(container.id, { height });
+    }
   }
 
   for (const text of boundTexts) {
-    scene.mutateElement(text.id, {
-      x: container.x,
-      y: container.y,
-      width: container.width,
-      height,
-      angle: container.angle,
-    });
+    if (container.type === "rectangle") {
+      scene.mutateElement(text.id, {
+        x: container.x,
+        y: container.y,
+        width: container.width,
+        height,
+        angle: container.angle,
+      });
+    } else {
+      const midpoint = getArrowMidpoint(container);
+      const metrics = measureText(text.text, text.fontSize, text.fontFamily);
+      const width = Math.max(20, metrics.width);
+      scene.mutateElement(text.id, {
+        x: midpoint.x - width / 2,
+        y: midpoint.y - metrics.height / 2,
+        width,
+        height: metrics.height,
+        angle: 0,
+      });
+    }
   }
 }
 

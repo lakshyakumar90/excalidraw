@@ -487,6 +487,7 @@ function drawLine(
 export function drawArrow(
   context: CanvasRenderingContext2D,
   element: ArrowElement,
+  label?: Extract<Element, { type: "text" }>,
 ): void {
   const points = element.points ?? [];
 
@@ -509,8 +510,37 @@ export function drawArrow(
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
 
-  // Body
-  strokePoints(context, element, points);
+  // Leave a small label-sized opening in the shaft so the arrow does not run
+  // through its text. Measure the opening along the path at its midpoint.
+  if (label && label.text.length > 0) {
+    const pathLength = getPolylineLength(points);
+    const midpointDistance = pathLength / 2;
+    const before = getPolylinePointAt(
+      points,
+      Math.max(0, midpointDistance - 1),
+    );
+    const after = getPolylinePointAt(
+      points,
+      Math.min(pathLength, midpointDistance + 1),
+    );
+    const direction =
+      Math.atan2(after.y - before.y, after.x - before.x) + (element.angle ?? 0);
+    const labelWidth = label.width ?? 0;
+    const labelHeight = label.height ?? 0;
+    const projectedLabelWidth =
+      Math.abs(Math.cos(direction)) * labelWidth +
+      Math.abs(Math.sin(direction)) * labelHeight;
+    const halfGap = projectedLabelWidth / 2 + 6;
+    const gapStart = Math.max(0, midpointDistance - halfGap);
+    const gapEnd = Math.min(pathLength, midpointDistance + halfGap);
+    const beforeLabel = extractPolylineRange(points, 0, gapStart);
+    const afterLabel = extractPolylineRange(points, gapEnd, pathLength);
+
+    if (beforeLabel.length > 1) strokePoints(context, element, beforeLabel);
+    if (afterLabel.length > 1) strokePoints(context, element, afterLabel);
+  } else {
+    strokePoints(context, element, points);
+  }
 
   // Arrowhead
   const arrowHead = getArrowHeadPoints(
@@ -525,6 +555,78 @@ export function drawArrow(
   }
 
   context.restore();
+}
+
+function getPolylineLength(points: readonly Point[]): number {
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1]!;
+    const current = points[index]!;
+    length += Math.hypot(current.x - previous.x, current.y - previous.y);
+  }
+  return length;
+}
+
+function getPolylinePointAt(points: readonly Point[], distance: number): Point {
+  let travelled = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1]!;
+    const end = points[index]!;
+    const segmentLength = Math.hypot(end.x - start.x, end.y - start.y);
+    if (distance <= travelled + segmentLength || index === points.length - 1) {
+      const ratio =
+        segmentLength === 0
+          ? 0
+          : Math.max(0, Math.min(1, (distance - travelled) / segmentLength));
+      return {
+        x: start.x + (end.x - start.x) * ratio,
+        y: start.y + (end.y - start.y) * ratio,
+      };
+    }
+    travelled += segmentLength;
+  }
+  return points[0] ?? { x: 0, y: 0 };
+}
+
+function extractPolylineRange(
+  points: readonly Point[],
+  fromDistance: number,
+  toDistance: number,
+): Point[] {
+  if (toDistance <= fromDistance) return [];
+  const result: Point[] = [];
+  let travelled = 0;
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1]!;
+    const end = points[index]!;
+    const segmentLength = Math.hypot(end.x - start.x, end.y - start.y);
+    const overlapStart = Math.max(fromDistance, travelled);
+    const overlapEnd = Math.min(toDistance, travelled + segmentLength);
+    if (overlapEnd > overlapStart && segmentLength > 0) {
+      const startRatio = (overlapStart - travelled) / segmentLength;
+      const endRatio = (overlapEnd - travelled) / segmentLength;
+      const first = {
+        x: start.x + (end.x - start.x) * startRatio,
+        y: start.y + (end.y - start.y) * startRatio,
+      };
+      const last = {
+        x: start.x + (end.x - start.x) * endRatio,
+        y: start.y + (end.y - start.y) * endRatio,
+      };
+      if (result.length === 0) result.push(first);
+      else {
+        const previous = result[result.length - 1]!;
+        if (Math.hypot(previous.x - first.x, previous.y - first.y) > 1e-6) {
+          result.push(first);
+        }
+      }
+      result.push(last);
+    }
+    travelled += segmentLength;
+  }
+
+  return result;
 }
 
 export function drawCurvedLine(
@@ -634,6 +736,7 @@ function drawText(
 function drawElement(
   context: CanvasRenderingContext2D,
   element: Element,
+  elements: readonly Element[] = [element],
 ): void {
   switch (element.type) {
     case "rectangle":
@@ -657,7 +760,16 @@ function drawElement(
       break;
 
     case "arrow":
-      drawArrow(context, element);
+      drawArrow(
+        context,
+        element,
+        elements.find(
+          (candidate): candidate is Extract<Element, { type: "text" }> =>
+            candidate.type === "text" &&
+            candidate.containerId === element.id &&
+            !candidate.isDeleted,
+        ),
+      );
       break;
 
     case "freedraw":
@@ -698,7 +810,7 @@ export function renderStatic(
   applyViewportTransform(context, viewport);
 
   for (const element of visibleElements) {
-    drawElement(context, element);
+    drawElement(context, element, elements);
   }
   context.restore();
   return visibleElements.length;

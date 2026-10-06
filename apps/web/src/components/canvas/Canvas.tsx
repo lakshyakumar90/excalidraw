@@ -5,6 +5,7 @@ import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
   createTextElement,
+  getArrowMidpoint,
   getElementAtPosition,
   RenderLoop,
   renderInteractive,
@@ -573,13 +574,13 @@ export function Canvas() {
         viewportRef.current.zoom,
       );
       const container =
-        hitElement?.type === "rectangle"
+        hitElement?.type === "rectangle" || hitElement?.type === "arrow"
           ? hitElement
           : hitElement?.type === "text" && hitElement.containerId
             ? scene.getElement(hitElement.containerId)
             : undefined;
 
-      if (container?.type === "rectangle") {
+      if (container?.type === "rectangle" || container?.type === "arrow") {
         let textElement = scene
           .getElements()
           .find(
@@ -590,17 +591,32 @@ export function Canvas() {
           );
 
         if (!textElement) {
-          textElement = createTextElement({
-            text: "",
-            x: container.x,
-            y: container.y,
-            width: container.width,
-            height: container.height,
-            angle: container.angle,
-            textAlign: "center",
-            verticalAlign: "middle",
-            containerId: container.id,
-          });
+          if (container.type === "rectangle") {
+            textElement = createTextElement({
+              text: "",
+              x: container.x,
+              y: container.y,
+              width: container.width,
+              height: container.height,
+              angle: container.angle,
+              textAlign: "center",
+              verticalAlign: "middle",
+              containerId: container.id,
+            });
+          } else {
+            const midpoint = getArrowMidpoint(container);
+            const emptyTextMetrics = measureText("");
+            textElement = createTextElement({
+              text: "",
+              x: midpoint.x - 10,
+              y: midpoint.y - emptyTextMetrics.height / 2,
+              width: 20,
+              height: emptyTextMetrics.height,
+              textAlign: "center",
+              verticalAlign: "middle",
+              containerId: container.id,
+            });
+          }
           scene.addElement({
             ...textElement,
             ...styleStore.getElementStyle(),
@@ -624,8 +640,14 @@ export function Canvas() {
           sceneX: textElement.x,
           sceneY: textElement.y,
           value: textElement.text,
-          inputWidth: textElement.width ?? container.width ?? 20,
-          inputHeight: textElement.height ?? container.height ?? 24,
+          inputWidth:
+            textElement.width ??
+            (container.type === "rectangle" ? container.width : undefined) ??
+            20,
+          inputHeight:
+            textElement.height ??
+            (container.type === "rectangle" ? container.height : undefined) ??
+            24,
         };
         textEditorRef.current = editor;
         setTextEditorPosition(editor);
@@ -1025,6 +1047,14 @@ export function Canvas() {
               maxWidth,
             );
             const inputWidth = Math.max(20, maxWidth ?? measured.width);
+            const arrowMidpoint =
+              container?.type === "arrow" ? getArrowMidpoint(container) : null;
+            const sceneX = arrowMidpoint
+              ? arrowMidpoint.x - inputWidth / 2
+              : textEditorPosition.sceneX;
+            const sceneY = arrowMidpoint
+              ? arrowMidpoint.y - measured.height / 2
+              : textEditorPosition.sceneY;
             const zoom = viewportRef.current.zoom;
             event.currentTarget.style.width = `${inputWidth * zoom}px`;
             event.currentTarget.style.height = "auto";
@@ -1045,10 +1075,14 @@ export function Canvas() {
             scene.mutateElement(textEditorPosition.elementId, {
               text: value,
               width: maxWidth ?? inputWidth,
+              x: sceneX,
+              y: sceneY,
               height: containerHeight,
             });
             const editor = {
               ...textEditorPosition,
+              sceneX,
+              sceneY,
               value,
               inputWidth,
               inputHeight:
