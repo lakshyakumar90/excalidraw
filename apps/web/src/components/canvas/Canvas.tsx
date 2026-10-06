@@ -1129,7 +1129,12 @@ export function Canvas() {
             const containerHeight =
               container?.type === "rectangle"
                 ? Math.max(container.height ?? 0, measured.height)
-                : measured.height;
+                : textEditorPosition.wrapText
+                  ? Math.max(
+                      scene.getElement(textEditorPosition.elementId)?.height ?? 0,
+                      measured.height,
+                    )
+                  : measured.height;
             if (
               container?.type === "rectangle" &&
               containerHeight > (container.height ?? 0)
@@ -1150,7 +1155,8 @@ export function Canvas() {
               value,
               inputWidth,
               inputHeight:
-                container?.type === "rectangle"
+                container?.type === "rectangle" ||
+                textEditorPosition.wrapText
                   ? Math.max(containerHeight, inputHeight)
                   : inputHeight,
             };
