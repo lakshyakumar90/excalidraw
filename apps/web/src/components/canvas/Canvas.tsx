@@ -710,7 +710,10 @@ export function Canvas() {
           target instanceof HTMLTextAreaElement ||
           target.isContentEditable)
       ) {
-        return;
+        const isZoomShortcut =
+          (event.ctrlKey || event.metaKey) &&
+          ["+", "=", "-", "0"].includes(event.key);
+        if (!isZoomShortcut) return;
       }
 
       if (event.code === "Space") {
