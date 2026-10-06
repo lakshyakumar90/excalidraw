@@ -4,10 +4,15 @@ import { saveScene } from "./indexedDb";
 
 const SAVE_DELAY_MS = 300;
 
+export interface AutosaveHandle {
+  schedule: () => void;
+  stop: () => void;
+}
+
 export function startAutosave(
   scene: Scene,
   getViewport: () => Viewport,
-): () => void {
+): AutosaveHandle {
   let timer: number | null = null;
   let dirty = false;
   let saving = false;
@@ -54,11 +59,14 @@ export function startAutosave(
   document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("beforeunload", onBeforeUnload);
 
-  return () => {
+  return {
+    schedule,
+    stop: () => {
     unsubscribe();
     document.removeEventListener("visibilitychange", onVisibilityChange);
     window.removeEventListener("beforeunload", onBeforeUnload);
     if (timer !== null) window.clearTimeout(timer);
     void persist();
+    },
   };
 }

@@ -24,6 +24,8 @@ import { styleStore } from "@/lib/styles/styleStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 import { historyStore } from "@/lib/history/historyStore";
+import { startAutosave, type AutosaveHandle } from "@/lib/persistence/autosave";
+import { loadScene } from "@/lib/persistence/indexedDb";
 import { EyedropperOverlay } from "@/components/styles/EyedropperOverlay";
 import {
   CanvasContextMenu,
@@ -113,6 +115,7 @@ export function Canvas() {
   const [textEditorPosition, setTextEditorPosition] =
     useState<TextEditorState | null>(null);
   const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
+  const [persistenceReady, setPersistenceReady] = useState(false);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const textEditorRef = useRef<TextEditorState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -125,10 +128,51 @@ export function Canvas() {
   const spacePressRef = useRef(false);
   const visibleElementCountRef = useRef(0);
   const eyedropperPointerIdRef = useRef<number | null>(null);
+  const autosaveRef = useRef<AutosaveHandle | null>(null);
 
   const closeContextMenu = useCallback(() => {
     contextMenuRef.current = null;
     setContextMenu(null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let autosave: AutosaveHandle | null = null;
+
+    void loadScene()
+      .then((saved) => {
+        if (cancelled) return;
+        if (saved) {
+          scene.replaceAll(saved.elements);
+          const restoredViewport = saved.viewport;
+          if (
+            Number.isFinite(restoredViewport.scrollX) &&
+            Number.isFinite(restoredViewport.scrollY) &&
+            Number.isFinite(restoredViewport.zoom) &&
+            restoredViewport.zoom > 0
+          ) {
+            viewportRef.current = restoredViewport;
+            setViewport(restoredViewport);
+          }
+        }
+        autosave = startAutosave(scene, () => viewportRef.current);
+        autosaveRef.current = autosave;
+        setPersistenceReady(true);
+      })
+      .catch((error: unknown) => {
+        console.error("Could not restore the local drawing", error);
+        if (!cancelled) {
+          autosave = startAutosave(scene, () => viewportRef.current);
+          autosaveRef.current = autosave;
+          setPersistenceReady(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      autosave?.stop();
+      autosaveRef.current = null;
+    };
   }, []);
 
   const performContextMenuAction = useCallback(
@@ -173,6 +217,7 @@ export function Canvas() {
   );
 
   useEffect(() => {
+    if (!persistenceReady) return;
     const staticCanvas = staticCanvasRef.current;
     const interactiveCanvas = interactiveCanvasRef.current;
 
@@ -350,6 +395,7 @@ export function Canvas() {
           scrollY: viewport.scrollY + dy,
         };
         setViewport(viewportRef.current);
+        autosaveRef.current?.schedule();
 
         lastPointerRef.current = point;
         scenePointerRef.current = viewportToScene(point, viewportRef.current);
@@ -1024,6 +1070,7 @@ export function Canvas() {
           viewport.zoom * 1.2,
         );
         setViewport(viewportRef.current);
+        autosaveRef.current?.schedule();
 
         renderLoop.invalidateStatic();
       }
@@ -1037,6 +1084,7 @@ export function Canvas() {
           viewport.zoom / 1.2,
         );
         setViewport(viewportRef.current);
+        autosaveRef.current?.schedule();
 
         renderLoop.invalidateStatic();
       }
@@ -1046,6 +1094,7 @@ export function Canvas() {
 
         viewportRef.current = zoomAtPoint(viewport, center, 1);
         setViewport(viewportRef.current);
+        autosaveRef.current?.schedule();
 
         renderLoop.invalidateStatic();
       }
@@ -1072,6 +1121,7 @@ export function Canvas() {
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
       setViewport(viewportRef.current);
+      autosaveRef.current?.schedule();
       scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
       renderLoop.invalidateStatic();
     };
@@ -1112,7 +1162,7 @@ export function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [closeContextMenu]);
+  }, [closeContextMenu, persistenceReady]);
 
   const textEditorScreenPosition = textEditorPosition
     ? sceneToViewport(
@@ -1122,7 +1172,11 @@ export function Canvas() {
     : null;
 
   return (
-    <div className="fixed inset-0 overflow-hidden">
+    <div
+      className="fixed inset-0 overflow-hidden"
+      style={{ visibility: persistenceReady ? "visible" : "hidden" }}
+      aria-busy={!persistenceReady}
+    >
       <canvas
         ref={staticCanvasRef}
         className="absolute inset-0 block h-full w-full"

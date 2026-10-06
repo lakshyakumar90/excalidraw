@@ -146,6 +146,19 @@ export class Scene {
     return this.elements;
   }
 
+  replaceAll(elements: readonly Element[]): void {
+    const replacement = structuredClone([...elements]);
+    const elementMap = new Map(replacement.map((element) => [element.id, element]));
+    if (elementMap.size !== replacement.length) {
+      throw new Error("Scene elements must have unique ids");
+    }
+    this.elements = replacement;
+    this.elementMap = elementMap;
+    this.sceneVersion += 1;
+    this.dirty = true;
+    this.notify();
+  }
+
   /** Reorders selected elements while keeping their relative order intact. */
   reorderElements(ids: Iterable<string>, action: ZOrderAction): boolean {
     const selectedIds = new Set(
