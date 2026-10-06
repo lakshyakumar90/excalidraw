@@ -1,1 +1,1 @@
-export { Scene } from "./scene";
+export { Scene, type SceneElementChange } from "./scene";

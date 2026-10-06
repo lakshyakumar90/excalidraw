@@ -225,4 +225,66 @@ describe("Scene", () => {
 
     expect(scene.getSnapshot()).toBe(3);
   });
+
+  it("captures only changed fields for each touched element", () => {
+    const scene = new Scene();
+    const rectangle = createRectangleElement({
+      id: "history-rect",
+      x: 10,
+      y: 20,
+      width: 80,
+      height: 40,
+    });
+    const untouched = createRectangleElement({ id: "untouched" });
+    scene.addElement(rectangle);
+    scene.addElement(untouched);
+
+    scene.beginCapture();
+    scene.mutateElement(rectangle.id, { x: 30 });
+    scene.mutateElement(rectangle.id, { x: 50, width: 100 });
+    const changes = scene.endCapture();
+
+    expect(changes).toEqual([
+      {
+        id: rectangle.id,
+        before: { type: "rectangle", x: 10, width: 80 },
+        after: { type: "rectangle", x: 50, width: 100 },
+      },
+    ]);
+  });
+
+  it("captures element creation and removal as per-element deltas", () => {
+    const scene = new Scene();
+    const created = createRectangleElement({ id: "created" });
+
+    scene.beginCapture();
+    scene.addElement(created);
+    const creation = scene.endCapture();
+    expect(creation).toHaveLength(1);
+    expect(creation[0]).toMatchObject({ id: created.id, before: null });
+    expect(creation[0]?.after).toMatchObject({
+      type: "rectangle",
+      x: created.x,
+      y: created.y,
+    });
+
+    scene.beginCapture();
+    scene.removeElement(created.id);
+    const removal = scene.endCapture();
+    expect(removal).toHaveLength(1);
+    expect(removal[0]).toMatchObject({ id: created.id, after: null });
+    expect(removal[0]?.before).toMatchObject({ type: "rectangle" });
+  });
+
+  it("drops mutations that return to their original value", () => {
+    const scene = new Scene();
+    const rectangle = createRectangleElement({ id: "no-op", x: 10 });
+    scene.addElement(rectangle);
+
+    scene.beginCapture();
+    scene.mutateElement(rectangle.id, { x: 20 });
+    scene.mutateElement(rectangle.id, { x: 10 });
+
+    expect(scene.endCapture()).toEqual([]);
+  });
 });
