@@ -137,13 +137,14 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
               <ShortcutRow action="Text" shortcut="T" />
               <ShortcutRow action="Hand tool" shortcut="H" />
               <ShortcutRow action="Rectangle" shortcut="R" />
-              <ShortcutRow action="Ellipse" shortcut="E" />
+              <ShortcutRow action="Ellipse" shortcut="O" />
               <ShortcutRow action="Diamond" shortcut="D" />
               <ShortcutRow action="Line" shortcut="L" />
               <ShortcutRow action="Multi-point line" shortcut="P" />
               <ShortcutRow action="Arrow" shortcut="A" />
               <ShortcutRow action="Curve" shortcut="C" />
               <ShortcutRow action="Pencil" shortcut="F" />
+              <ShortcutRow action="Eraser" shortcut="E" />
             </section>
 
             <div className="space-y-8">

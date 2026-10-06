@@ -18,6 +18,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
   arrow: "Arrow",
   "curved-line": "Curve",
   freedraw: "Pencil",
+  eraser: "Eraser",
 };
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
@@ -25,13 +26,14 @@ const TOOL_SHORTCUTS: Record<ToolType, string> = {
   text: "T",
   hand: "H",
   rectangle: "R",
-  ellipse: "E",
+  ellipse: "O",
   diamond: "D",
   line: "L",
   multiPointLine: "P",
   arrow: "A",
   "curved-line": "C",
   freedraw: "F",
+  eraser: "E",
 };
 
 function ToolIcon({ type }: { type: ToolType }) {
@@ -57,6 +59,11 @@ function ToolIcon({ type }: { type: ToolType }) {
     case "hand":
       shape = (
         <path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10 4.5a1.5 1.5 0 0 1 3 0V10 5.5a1.5 1.5 0 0 1 3 0V12l.7-1.1a1.6 1.6 0 0 1 2.8 1.4l-2 5A4 4 0 0 1 14.8 20h-2.1a4 4 0 0 1-3.1-1.5L6.2 14a1.7 1.7 0 0 1 2.5-2.2L10 13" />
+      );
+      break;
+    case "eraser":
+      shape = (
+        <path d="m7.2 20-4.3-4.3a2 2 0 0 1 0-2.8l9.9-9.9a2 2 0 0 1 2.8 0l5.5 5.5a2 2 0 0 1 0 2.8L12 20H7.2Zm4.8 0 4-4" />
       );
       break;
     case "rectangle":
@@ -157,6 +164,7 @@ export function Toolbar() {
   );
 
   return (
+    <>
     <div
       role="toolbar"
       aria-label="Drawing tools"
@@ -173,5 +181,11 @@ export function Toolbar() {
       <span aria-hidden="true" className="my-1 w-px shrink-0 bg-neutral-200" />
       <FileMenu />
     </div>
+    {activeTool === "eraser" && (
+      <div className="fixed left-1/2 top-[4.5rem] z-50 -translate-x-1/2 rounded-md bg-neutral-900/75 px-3 py-1.5 text-xs text-white shadow-sm">
+        Hold <kbd className="mx-1 rounded border border-white/30 px-1.5 py-0.5 font-mono">Alt</kbd> to restore elements marked for deletion
+      </div>
+    )}
+    </>
   );
 }

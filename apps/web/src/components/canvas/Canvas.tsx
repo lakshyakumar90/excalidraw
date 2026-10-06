@@ -14,6 +14,7 @@ import {
   createTextElement,
   getArrowMidpoint,
   getElementAtPosition,
+  getElementsAtPosition,
   RenderLoop,
   renderInteractive,
   renderStatic,
@@ -128,6 +129,69 @@ function sampleCanvasColor(
   } catch {
     return null;
   }
+}
+
+interface EraserTrailPoint extends Point {
+  time: number;
+}
+
+function drawEraserTrail(
+  context: CanvasRenderingContext2D,
+  points: readonly EraserTrailPoint[],
+  cursor: Point | null,
+  now: number,
+  active: boolean,
+): void {
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (first && last && points.length > 1) {
+    const trailAlpha = Math.max(0, 1 - (now - last.time) / 320);
+    if (trailAlpha > 0) {
+      context.beginPath();
+      context.moveTo(first.x, first.y);
+      for (let index = 1; index < points.length - 1; index += 1) {
+        const current = points[index];
+        const next = points[index + 1];
+        if (!current || !next) continue;
+        context.quadraticCurveTo(
+          current.x,
+          current.y,
+          (current.x + next.x) / 2,
+          (current.y + next.y) / 2,
+        );
+      }
+      context.lineTo(last.x, last.y);
+      context.strokeStyle = "#8275ff";
+      context.shadowColor = "rgba(130, 117, 255, 0.18)";
+      context.shadowBlur = 5;
+      context.lineWidth = 7;
+      context.globalAlpha = trailAlpha * 0.16;
+      context.stroke();
+      context.shadowBlur = 0;
+      context.lineWidth = 3.5;
+      context.globalAlpha = trailAlpha * 0.38;
+      context.stroke();
+    }
+  }
+
+  if (active && cursor) {
+    context.globalAlpha = 1;
+    context.shadowColor = "rgba(91, 77, 220, 0.28)";
+    context.shadowBlur = 9;
+    context.fillStyle = "rgba(130, 117, 255, 0.12)";
+    context.strokeStyle = "#7567ed";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.arc(cursor.x, cursor.y, 14, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
+
+  context.restore();
 }
 
 export function Canvas() {
@@ -282,6 +346,12 @@ export function Canvas() {
 
     let width = 0;
     let height = 0;
+    const eraserMarkedIds = new Set<string>();
+    const eraserTrailPoints: EraserTrailPoint[] = [];
+    let eraserCursor: Point | null = null;
+    let eraserPointerId: number | null = null;
+    let lastEraserScenePoint: Point | null = null;
+    let eraserTrailFrame = 0;
 
     const renderState = createRenderState();
 
@@ -289,6 +359,7 @@ export function Canvas() {
       renderState,
       {
         renderStatic: () => {
+          const elements = scene.getElements();
           visibleElementCountRef.current = renderStatic(
             {
               context: staticContext,
@@ -296,7 +367,16 @@ export function Canvas() {
               height,
               viewport: viewportRef.current,
             },
-            scene.getElements(),
+            eraserMarkedIds.size === 0
+              ? elements
+              : elements.map((element) =>
+                  eraserMarkedIds.has(element.id)
+                    ? {
+                        ...element,
+                        opacity: (element.opacity ?? 100) * 0.22,
+                      }
+                    : element,
+                ),
             { grid: false, origin: false },
             imageAssets,
           );
@@ -333,6 +413,13 @@ export function Canvas() {
             selectionController.getPointEditingElement(),
             selectionController.isCompleteGroupSelection(),
           );
+          drawEraserTrail(
+            interactiveContext,
+            eraserTrailPoints,
+            toolManager.getActiveTool() === "eraser" ? eraserCursor : null,
+            performance.now(),
+            toolManager.getActiveTool() === "eraser",
+          );
         },
       },
       {
@@ -340,6 +427,71 @@ export function Canvas() {
         cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       },
     );
+
+    const animateEraserTrail = () => {
+      eraserTrailFrame = 0;
+      const now = performance.now();
+      while (eraserTrailPoints[0] && now - eraserTrailPoints[0].time > 320) {
+        eraserTrailPoints.shift();
+      }
+      renderLoop.invalidateInteractive();
+      if (eraserTrailPoints.length > 0) {
+        eraserTrailFrame = window.requestAnimationFrame(animateEraserTrail);
+      }
+    };
+
+    const addEraserTrailPoint = (point: Point) => {
+      const now = performance.now();
+      while (eraserTrailPoints[0] && now - eraserTrailPoints[0].time > 320) {
+        eraserTrailPoints.shift();
+      }
+      eraserTrailPoints.push({ ...point, time: now });
+      if (eraserTrailPoints.length > 48) eraserTrailPoints.shift();
+      if (eraserTrailFrame === 0) {
+        eraserTrailFrame = window.requestAnimationFrame(animateEraserTrail);
+      }
+      renderLoop.invalidateInteractive();
+    };
+
+    const eraseAtPoint = (point: Point, restore: boolean): boolean => {
+      let changed = false;
+      const hits = getElementsAtPosition(
+        scene.getElements().filter((element) => !element.isDeleted),
+        point,
+        viewportRef.current.zoom,
+      );
+      for (const element of hits) {
+        if (restore) changed = eraserMarkedIds.delete(element.id) || changed;
+        else if (!eraserMarkedIds.has(element.id)) {
+          eraserMarkedIds.add(element.id);
+          changed = true;
+        }
+      }
+      return changed;
+    };
+
+    const eraseAlongSegment = (
+      start: Point | null,
+      end: Point,
+      restore: boolean,
+    ): boolean => {
+      if (!start) return eraseAtPoint(end, restore);
+      const distanceInPixels =
+        Math.hypot(end.x - start.x, end.y - start.y) * viewportRef.current.zoom;
+      const steps = Math.max(1, Math.ceil(distanceInPixels / 6));
+      let changed = false;
+      for (let index = 1; index <= steps; index += 1) {
+        const progress = index / steps;
+        changed = eraseAtPoint(
+          {
+            x: start.x + (end.x - start.x) * progress,
+            y: start.y + (end.y - start.y) * progress,
+          },
+          restore,
+        ) || changed;
+      }
+      return changed;
+    };
 
     let disposed = false;
     const loadingImageIds = new Set<string>();
@@ -397,6 +549,8 @@ export function Canvas() {
         interactiveCanvas.style.cursor = "grabbing";
       } else if (activeTool === "hand") {
         interactiveCanvas.style.cursor = "grab";
+      } else if (activeTool === "eraser") {
+        interactiveCanvas.style.cursor = "none";
       } else if (activeTool === "text") {
         interactiveCanvas.style.cursor = "text";
       } else if (activeTool === "selection") {
@@ -410,6 +564,21 @@ export function Canvas() {
     };
 
     const unsubscribeToolManager = toolManager.subscribe(() => {
+      if (toolManager.getActiveTool() !== "eraser") {
+        eraserCursor = null;
+        if (eraserMarkedIds.size > 0) {
+          eraserMarkedIds.clear();
+          renderLoop.invalidateStatic();
+        }
+        if (eraserPointerId !== null) {
+          const pointerId = eraserPointerId;
+          eraserPointerId = null;
+          lastEraserScenePoint = null;
+          if (interactiveCanvas.hasPointerCapture(pointerId)) {
+            interactiveCanvas.releasePointerCapture(pointerId);
+          }
+        }
+      }
       updateCanvasCursor();
       renderLoop.invalidateInteractive();
     });
@@ -504,6 +673,20 @@ export function Canvas() {
       }
 
       const scenePoint = viewportToScene(point, viewportRef.current);
+
+      if (toolManager.getActiveTool() === "eraser") {
+        eraserCursor = point;
+        addEraserTrailPoint(point);
+        if (eraserPointerId === event.pointerId) {
+          if (eraseAlongSegment(lastEraserScenePoint, scenePoint, event.altKey)) {
+            renderLoop.invalidateStatic();
+          }
+          lastEraserScenePoint = scenePoint;
+        }
+        interactiveCanvas.style.cursor = "none";
+        renderLoop.invalidateInteractive();
+        return;
+      }
 
       if (toolManager.getActiveTool() === "hand") {
         interactiveCanvas.style.cursor = "grab";
@@ -602,6 +785,22 @@ export function Canvas() {
       const viewportPoint = getPointerPosition(event);
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
+      if (toolManager.getActiveTool() === "eraser") {
+        event.preventDefault();
+        eraserMarkedIds.clear();
+        eraserPointerId = event.pointerId;
+        lastEraserScenePoint = scenePoint;
+        eraserCursor = viewportPoint;
+        addEraserTrailPoint(viewportPoint);
+        if (eraseAlongSegment(null, scenePoint, event.altKey)) {
+          renderLoop.invalidateStatic();
+        }
+        interactiveCanvas.style.cursor = "none";
+        interactiveCanvas.setPointerCapture(event.pointerId);
+        renderLoop.invalidateInteractive();
+        return;
+      }
+
       if (toolManager.getActiveTool() === "text") {
         event.preventDefault();
         commitTextElement(textEditorRef.current);
@@ -684,6 +883,35 @@ export function Canvas() {
         return;
       }
 
+      if (eraserPointerId === event.pointerId) {
+        eraserPointerId = null;
+        lastEraserScenePoint = null;
+        const erasedIds = [...eraserMarkedIds];
+        if (erasedIds.length > 0) {
+          historyStore.captureUpdate(() => {
+            for (const id of erasedIds) {
+              const element = scene.getElement(id);
+              if (element && !element.isDeleted) {
+                scene.mutateElement(id, { isDeleted: true });
+              }
+            }
+            selectionStore.set(
+              [...selectionStore.getSnapshot()].filter(
+                (id) => !eraserMarkedIds.has(id),
+              ),
+            );
+          });
+        }
+        eraserMarkedIds.clear();
+        renderLoop.invalidateStatic();
+        renderLoop.invalidateInteractive();
+        updateCanvasCursor();
+        if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
+          interactiveCanvas.releasePointerCapture(event.pointerId);
+        }
+        return;
+      }
+
       if (event.button !== 0) {
         return;
       }
@@ -718,6 +946,22 @@ export function Canvas() {
       if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
         interactiveCanvas.releasePointerCapture(event.pointerId);
       }
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (eraserPointerId !== event.pointerId) return;
+      eraserPointerId = null;
+      lastEraserScenePoint = null;
+      eraserMarkedIds.clear();
+      renderLoop.invalidateStatic();
+      renderLoop.invalidateInteractive();
+      updateCanvasCursor();
+    };
+
+    const handlePointerLeave = () => {
+      if (eraserPointerId !== null) return;
+      eraserCursor = null;
+      renderLoop.invalidateInteractive();
     };
 
     const handleDoubleClick = (event: MouseEvent) => {
@@ -980,6 +1224,19 @@ export function Canvas() {
           renderLoop.invalidateInteractive();
           return;
         }
+        if (eraserPointerId !== null) {
+          const pointerId = eraserPointerId;
+          eraserPointerId = null;
+          lastEraserScenePoint = null;
+          eraserMarkedIds.clear();
+          if (interactiveCanvas.hasPointerCapture(pointerId)) {
+            interactiveCanvas.releasePointerCapture(pointerId);
+          }
+          updateCanvasCursor();
+          renderLoop.invalidateStatic();
+          renderLoop.invalidateInteractive();
+          return;
+        }
         if (selectionController.exitPointEditing()) {
           renderLoop.invalidateInteractive();
           return;
@@ -1138,6 +1395,11 @@ export function Canvas() {
       }
 
       if (key === "e") {
+        toolManager.setActiveTool("eraser");
+        return;
+      }
+
+      if (key === "o") {
         toolManager.setActiveTool("ellipse");
         return;
       }
@@ -1272,6 +1534,8 @@ export function Canvas() {
     interactiveCanvas.addEventListener("dblclick", handleDoubleClick);
     interactiveCanvas.addEventListener("pointermove", handlePointerMove);
     interactiveCanvas.addEventListener("pointerup", handlePointerUp);
+    interactiveCanvas.addEventListener("pointercancel", handlePointerCancel);
+    interactiveCanvas.addEventListener("pointerleave", handlePointerLeave);
     interactiveCanvas.addEventListener("wheel", handleWheel, {
       passive: false,
     });
@@ -1296,6 +1560,11 @@ export function Canvas() {
       interactiveCanvas.removeEventListener("dblclick", handleDoubleClick);
       interactiveCanvas.removeEventListener("pointermove", handlePointerMove);
       interactiveCanvas.removeEventListener("pointerup", handlePointerUp);
+      interactiveCanvas.removeEventListener("pointercancel", handlePointerCancel);
+      interactiveCanvas.removeEventListener("pointerleave", handlePointerLeave);
+      if (eraserTrailFrame !== 0) {
+        window.cancelAnimationFrame(eraserTrailFrame);
+      }
       interactiveCanvas.removeEventListener("wheel", handleWheel);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);

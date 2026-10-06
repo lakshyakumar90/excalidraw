@@ -20,7 +20,8 @@ export type ToolType =
   | "freedraw"
   | "selection"
   | "text"
-  | "hand";
+  | "hand"
+  | "eraser";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
