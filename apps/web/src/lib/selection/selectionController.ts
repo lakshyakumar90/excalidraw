@@ -43,6 +43,13 @@ type Gesture =
       elements: Array<{ id: string; x: number; y: number }>;
     }
   | {
+      kind: "duplicate-press";
+      start: Point;
+      zoom: number;
+      sourceElements: Element[];
+      clickSelection: string[];
+    }
+  | {
       kind: "group-press";
       start: Point;
       zoom: number;
@@ -216,7 +223,28 @@ export const selectionController = {
       selectedAtStart.has(id),
     );
 
-    if (!shiftKey && !altKey && wasSelected && selectedIds.length > 1) {
+    if (altKey) {
+      const sourceIds = selectedAtStart.has(hit.id)
+        ? selectedIds
+        : clickSelection;
+      const sourceElements = sourceIds
+        .map((id) => scene.getElement(id))
+        .filter(
+          (element): element is Element => !!element && !element.isDeleted,
+        )
+        .map(cloneElement);
+      selectionStore.set(clickSelection);
+      gesture = {
+        kind: "duplicate-press",
+        start: point,
+        zoom,
+        sourceElements,
+        clickSelection,
+      };
+      return;
+    }
+
+    if (!shiftKey && wasSelected && selectedIds.length > 1) {
       const elements = selectedIds
         .map((id) => scene.getElement(id))
         .filter(
@@ -234,9 +262,7 @@ export const selectionController = {
       return;
     }
 
-    if (altKey) {
-      selectionStore.set(clickSelection);
-    } else if (shiftKey) {
+    if (shiftKey) {
       const next = new Set(selectionStore.getSnapshot());
       for (const id of clickSelection) {
         if (unitIsSelected) next.delete(id);
@@ -272,6 +298,28 @@ export const selectionController = {
   },
 
   pointerMove(point: Point, shiftKey: boolean, altKey: boolean): void {
+    if (gesture.kind === "duplicate-press") {
+      if (
+        Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) <
+        CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom
+      ) {
+        return;
+      }
+
+      const duplicates = duplicateElements(gesture.sourceElements, 0, 0);
+      for (const duplicate of duplicates) scene.addElement(duplicate);
+      selectionStore.set(duplicates.map((element) => element.id));
+      gesture = {
+        kind: "move",
+        start: gesture.start,
+        elements: duplicates.map((element) => ({
+          id: element.id,
+          x: element.x,
+          y: element.y,
+        })),
+      };
+    }
+
     if (gesture.kind === "group-press") {
       if (
         Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) <
@@ -399,6 +447,18 @@ export const selectionController = {
   },
 
   pointerUp(point: Point, shiftKey: boolean, altKey: boolean): void {
+    if (gesture.kind === "duplicate-press") {
+      const movedFarEnough =
+        Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) >=
+        CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom;
+      if (movedFarEnough) this.pointerMove(point, shiftKey, altKey);
+      if (gesture.kind === "duplicate-press") {
+        selectionStore.set(gesture.clickSelection);
+        gesture = { kind: "idle" };
+        return;
+      }
+    }
+
     if (gesture.kind === "group-press") {
       if (
         Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) <
@@ -600,6 +660,20 @@ export const selectionController = {
     return true;
   },
 
+  duplicateSelection(offset = 10): boolean {
+    const elements = [...selectionStore.getSnapshot()]
+      .map((id) => scene.getElement(id))
+      .filter((element): element is Element => !!element && !element.isDeleted)
+      .map(cloneElement);
+    if (elements.length === 0) return false;
+
+    const duplicates = duplicateElements(elements, offset, offset);
+    for (const duplicate of duplicates) scene.addElement(duplicate);
+    selectionStore.set(duplicates.map((element) => element.id));
+    groupDrillPath = [];
+    return true;
+  },
+
   selectAll(): void {
     selectionStore.set(
       scene
@@ -633,6 +707,54 @@ function cloneElement(element: Element): Element {
   }
 
   return { ...element };
+}
+
+function duplicateElements(
+  elements: readonly Element[],
+  offsetX: number,
+  offsetY: number,
+): Element[] {
+  const elementIdMap = new Map(
+    elements.map((element) => [element.id, crypto.randomUUID()]),
+  );
+  const groupIdMap = new Map<string, string>();
+  for (const element of elements) {
+    for (const groupId of element.groupIds ?? []) {
+      if (!groupIdMap.has(groupId)) {
+        groupIdMap.set(groupId, crypto.randomUUID());
+      }
+    }
+  }
+
+  const now = Date.now();
+  return elements.map((element) => {
+    const duplicate = {
+      ...cloneElement(element),
+      id: elementIdMap.get(element.id)!,
+      x: element.x + offsetX,
+      y: element.y + offsetY,
+      version: 1,
+      versionNonce: Math.floor(Math.random() * 2_147_483_647),
+      updated: now,
+    } as Element;
+
+    if (element.groupIds) {
+      duplicate.groupIds = element.groupIds.map((groupId) =>
+        groupIdMap.get(groupId)!,
+      );
+    }
+    if (element.boundElements) {
+      duplicate.boundElements = element.boundElements.flatMap((id) => {
+        const mappedId = elementIdMap.get(id);
+        return mappedId ? [mappedId] : [];
+      });
+    }
+    if (element.frameId) {
+      duplicate.frameId = elementIdMap.get(element.frameId) ?? null;
+    }
+
+    return duplicate;
+  });
 }
 
 function getGroupMemberIds(groupId: string): string[] {

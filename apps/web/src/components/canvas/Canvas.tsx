@@ -515,6 +515,16 @@ export function Canvas() {
 
       if (
         toolManager.getActiveTool() === "selection" &&
+        (event.ctrlKey || event.metaKey) &&
+        event.code === "KeyD"
+      ) {
+        event.preventDefault();
+        selectionController.duplicateSelection();
+        return;
+      }
+
+      if (
+        toolManager.getActiveTool() === "selection" &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
         event.preventDefault();
