@@ -68,6 +68,7 @@ export function createTextElement(
     fontSize?: number;
     textAlign?: TextElement["textAlign"];
     verticalAlign?: TextElement["verticalAlign"];
+    containerId?: string;
   },
 ): TextElement {
   const fontSize = options.fontSize ?? DEFAULT_TEXT_FONT_SIZE;
@@ -89,6 +90,7 @@ export function createTextElement(
     strokeColor: options.strokeColor ?? "#1e1e1e",
     opacity: options.opacity ?? 100,
     text: options.text,
+    containerId: options.containerId,
     fontSize,
     fontFamily,
     textAlign: options.textAlign ?? "left",

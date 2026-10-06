@@ -5,6 +5,7 @@ import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
   createTextElement,
+  getElementAtPosition,
   RenderLoop,
   renderInteractive,
   renderStatic,
@@ -38,6 +39,12 @@ const INITIAL_VIEWPORT: Viewport = {
 
 interface TextEditorState {
   elementId: string;
+  containerId?: string;
+  angle: number;
+  fontSize: number;
+  fontFamily: string;
+  textAlign: "left" | "center" | "right";
+  verticalAlign: "top" | "middle" | "bottom";
   sceneX: number;
   sceneY: number;
   value: string;
@@ -450,6 +457,11 @@ export function Canvas() {
         });
         const editor: TextEditorState = {
           elementId: textElement.id,
+          angle: textElement.angle ?? 0,
+          fontSize: textElement.fontSize,
+          fontFamily: textElement.fontFamily,
+          textAlign: textElement.textAlign,
+          verticalAlign: textElement.verticalAlign,
           sceneX: scenePoint.x,
           sceneY: scenePoint.y,
           value: "",
@@ -554,8 +566,74 @@ export function Canvas() {
       if (toolManager.getActiveTool() !== "selection") return;
       event.preventDefault();
       const point = getPointerPosition(event);
+      const scenePoint = viewportToScene(point, viewportRef.current);
+      const hitElement = getElementAtPosition(
+        scene.getElements(),
+        scenePoint,
+        viewportRef.current.zoom,
+      );
+      const container =
+        hitElement?.type === "rectangle"
+          ? hitElement
+          : hitElement?.type === "text" && hitElement.containerId
+            ? scene.getElement(hitElement.containerId)
+            : undefined;
+
+      if (container?.type === "rectangle") {
+        let textElement = scene
+          .getElements()
+          .find(
+            (element): element is Extract<Element, { type: "text" }> =>
+              element.type === "text" &&
+              element.containerId === container.id &&
+              !element.isDeleted,
+          );
+
+        if (!textElement) {
+          textElement = createTextElement({
+            text: "",
+            x: container.x,
+            y: container.y,
+            width: container.width,
+            height: container.height,
+            angle: container.angle,
+            textAlign: "center",
+            verticalAlign: "middle",
+            containerId: container.id,
+          });
+          scene.addElement({
+            ...textElement,
+            ...styleStore.getElementStyle(),
+          });
+          scene.mutateElement(container.id, {
+            boundElements: [
+              ...new Set([...(container.boundElements ?? []), textElement.id]),
+            ],
+          });
+        }
+
+        commitTextElement(textEditorRef.current);
+        const editor: TextEditorState = {
+          elementId: textElement.id,
+          containerId: container.id,
+          angle: textElement.angle ?? 0,
+          fontSize: textElement.fontSize,
+          fontFamily: textElement.fontFamily,
+          textAlign: textElement.textAlign,
+          verticalAlign: textElement.verticalAlign,
+          sceneX: textElement.x,
+          sceneY: textElement.y,
+          value: textElement.text,
+          inputWidth: textElement.width ?? container.width ?? 20,
+          inputHeight: textElement.height ?? container.height ?? 24,
+        };
+        textEditorRef.current = editor;
+        setTextEditorPosition(editor);
+        return;
+      }
+
       selectionController.handleDoubleClick(
-        viewportToScene(point, viewportRef.current),
+        scenePoint,
         viewportRef.current.zoom,
       );
       renderLoop.invalidateInteractive();
@@ -933,8 +1011,20 @@ export function Canvas() {
           value={textEditorPosition.value}
           onChange={(event) => {
             const value = event.currentTarget.value;
-            const measured = measureText(value);
-            const inputWidth = Math.max(20, measured.width);
+            const container = textEditorPosition.containerId
+              ? scene.getElement(textEditorPosition.containerId)
+              : undefined;
+            const maxWidth =
+              container?.type === "rectangle"
+                ? (container.width ?? 0)
+                : undefined;
+            const measured = measureText(
+              value,
+              textEditorPosition.fontSize,
+              textEditorPosition.fontFamily,
+              maxWidth,
+            );
+            const inputWidth = Math.max(20, maxWidth ?? measured.width);
             const zoom = viewportRef.current.zoom;
             event.currentTarget.style.width = `${inputWidth * zoom}px`;
             event.currentTarget.style.height = "auto";
@@ -944,14 +1034,20 @@ export function Canvas() {
             );
             scene.mutateElement(textEditorPosition.elementId, {
               text: value,
-              width: inputWidth,
-              height: measured.height,
+              width: maxWidth ?? inputWidth,
+              height:
+                container?.type === "rectangle"
+                  ? (container.height ?? measured.height)
+                  : measured.height,
             });
             const editor = {
               ...textEditorPosition,
               value,
               inputWidth,
-              inputHeight,
+              inputHeight:
+                container?.type === "rectangle"
+                  ? (container.height ?? inputHeight)
+                  : inputHeight,
             };
             textEditorRef.current = editor;
             setTextEditorPosition(editor);
@@ -986,6 +1082,9 @@ export function Canvas() {
             height: textEditorPosition.inputHeight * viewport.zoom,
             fontSize: 20 * viewport.zoom,
             lineHeight: `${24 * viewport.zoom}px`,
+            textAlign: textEditorPosition.textAlign,
+            transform: `rotate(${textEditorPosition.angle}rad)`,
+            transformOrigin: "center center",
           }}
         />
       )}

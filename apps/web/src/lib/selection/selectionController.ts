@@ -30,6 +30,84 @@ export interface MarqueePreview {
 const ELEMENTS_CLIPBOARD_MARKER = "excalidraw-elements";
 const ELEMENTS_CLIPBOARD_VERSION = 1;
 
+function getBoundMovementElements(element: Element): Element[] {
+  const related = new Map<string, Element>();
+
+  if (element.type === "text" && element.containerId) {
+    const container = scene.getElement(element.containerId);
+    if (container && !container.isDeleted) related.set(container.id, container);
+  }
+
+  for (const id of element.boundElements ?? []) {
+    const bound = scene.getElement(id);
+    if (
+      bound?.type === "text" &&
+      bound.containerId === element.id &&
+      !bound.isDeleted
+    ) {
+      related.set(bound.id, bound);
+    }
+  }
+
+  return [...related.values()];
+}
+
+function getMovementSnapshots(
+  elements: readonly Element[],
+): Array<{ id: string; x: number; y: number }> {
+  const snapshots = new Map<string, { id: string; x: number; y: number }>();
+  const pending = [...elements];
+
+  while (pending.length > 0) {
+    const element = pending.pop();
+    if (!element || snapshots.has(element.id)) continue;
+    snapshots.set(element.id, {
+      id: element.id,
+      x: element.x,
+      y: element.y,
+    });
+    pending.push(...getBoundMovementElements(element));
+  }
+
+  return [...snapshots.values()];
+}
+
+function translateSnapshots(
+  elements: readonly { id: string; x: number; y: number }[],
+  dx: number,
+  dy: number,
+): void {
+  for (const element of elements) {
+    scene.mutateElement(element.id, {
+      x: element.x + dx,
+      y: element.y + dy,
+    });
+  }
+}
+
+function syncBoundTextToContainer(container: Element): void {
+  if (container.type !== "rectangle") return;
+
+  for (const id of container.boundElements ?? []) {
+    const text = scene.getElement(id);
+    if (
+      text?.type !== "text" ||
+      text.containerId !== container.id ||
+      text.isDeleted
+    ) {
+      continue;
+    }
+
+    scene.mutateElement(text.id, {
+      x: container.x,
+      y: container.y,
+      width: container.width,
+      height: container.height,
+      angle: container.angle,
+    });
+  }
+}
+
 type Gesture =
   | { kind: "idle" }
   | {
@@ -252,15 +330,14 @@ export const selectionController = {
         .map((id) => scene.getElement(id))
         .filter(
           (element): element is Element => !!element && !element.isDeleted,
-        )
-        .map((element) => ({ id: element.id, x: element.x, y: element.y }));
+        );
       gesture = {
         kind: "group-press",
         start: point,
         zoom,
         selectedId: hit.id,
         clickSelection,
-        elements,
+        elements: getMovementSnapshots(elements),
       };
       return;
     }
@@ -286,17 +363,12 @@ export const selectionController = {
       .filter(
         (element): element is Element =>
           element !== undefined && !element.isDeleted,
-      )
-      .map((element) => ({
-        id: element.id,
-        x: element.x,
-        y: element.y,
-      }));
+      );
 
     gesture = {
       kind: "move",
       start: point,
-      elements,
+      elements: getMovementSnapshots(elements),
     };
   },
 
@@ -315,11 +387,7 @@ export const selectionController = {
       gesture = {
         kind: "move",
         start: gesture.start,
-        elements: duplicates.map((element) => ({
-          id: element.id,
-          x: element.x,
-          y: element.y,
-        })),
+        elements: getMovementSnapshots(duplicates),
       };
     }
 
@@ -357,6 +425,8 @@ export const selectionController = {
         gesture.original.id,
         resized as Partial<Omit<Element, "id" | "type">>,
       );
+      const resizedElement = scene.getElement(gesture.original.id);
+      if (resizedElement) syncBoundTextToContainer(resizedElement);
       return;
     }
 
@@ -441,12 +511,7 @@ export const selectionController = {
 
     if (dx === 0 && dy === 0) return;
 
-    for (const element of gesture.elements) {
-      scene.mutateElement(element.id, {
-        x: element.x + dx,
-        y: element.y + dy,
-      });
-    }
+    translateSnapshots(gesture.elements, dx, dy);
   },
 
   pointerUp(point: Point, shiftKey: boolean, altKey: boolean): void {
@@ -766,11 +831,10 @@ export const selectionController = {
   },
 
   nudgeSelection(dx: number, dy: number): void {
-    for (const id of selectionStore.getSnapshot()) {
-      const element = scene.getElement(id);
-      if (element && !element.isDeleted)
-        scene.mutateElement(id, { x: element.x + dx, y: element.y + dy });
-    }
+    const selectedElements = [...selectionStore.getSnapshot()]
+      .map((id) => scene.getElement(id))
+      .filter((element): element is Element => !!element && !element.isDeleted);
+    translateSnapshots(getMovementSnapshots(selectedElements), dx, dy);
   },
 };
 
@@ -827,6 +891,13 @@ function duplicateElements(
     }
     if (element.frameId) {
       duplicate.frameId = elementIdMap.get(element.frameId) ?? null;
+    }
+    if (
+      element.type === "text" &&
+      duplicate.type === "text" &&
+      element.containerId
+    ) {
+      duplicate.containerId = elementIdMap.get(element.containerId);
     }
 
     return duplicate;
@@ -901,6 +972,9 @@ function isClipboardElement(value: unknown): value is Element {
     (!Array.isArray(value.boundElements) ||
       !value.boundElements.every(isString))
   ) {
+    return false;
+  }
+  if (value.containerId !== undefined && !isString(value.containerId)) {
     return false;
   }
   if (
