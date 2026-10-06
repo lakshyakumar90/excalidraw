@@ -162,8 +162,6 @@ export function Toolbar() {
       aria-label="Drawing tools"
       className="fixed left-1/2 top-4 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur"
     >
-      <FileMenu />
-      <span aria-hidden="true" className="my-1 w-px shrink-0 bg-neutral-200" />
       {(Object.keys(TOOL_LABELS) as ToolType[]).map((type) => (
         <ToolButton
           key={type}
@@ -172,6 +170,8 @@ export function Toolbar() {
           onClick={() => toolManager.setActiveTool(type)}
         />
       ))}
+      <span aria-hidden="true" className="my-1 w-px shrink-0 bg-neutral-200" />
+      <FileMenu />
     </div>
   );
 }

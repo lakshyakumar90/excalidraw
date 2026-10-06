@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import type { Element } from "@repo/common";
 import { scene } from "@/lib/scene/scene";
 import { selectionStore } from "@/lib/selection/selectionStore";
@@ -19,7 +20,10 @@ export function FileMenu() {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [pngScale, setPngScale] = useState(2);
   const [transparentBackground, setTransparentBackground] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedIds = useSyncExternalStore(
     selectionStore.subscribe,
     selectionStore.getSnapshot,
@@ -32,12 +36,30 @@ export function FileMenu() {
     );
 
   useEffect(() => {
+    setPortalReady(true);
     const onStatus = (event: Event) => {
       const statusEvent = event as CustomEvent<string | null>;
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
       setImportStatus(statusEvent.detail);
+      if (statusEvent.detail) {
+        statusTimerRef.current = setTimeout(() => setImportStatus(null), 3000);
+      }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
     };
     window.addEventListener("excalidraw-import-status", onStatus);
-    return () => window.removeEventListener("excalidraw-import-status", onStatus);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("excalidraw-import-status", onStatus);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    };
   }, []);
 
   const importFile = async (file: File) => {
@@ -54,7 +76,7 @@ export function FileMenu() {
   };
 
   return (
-    <div className="relative shrink-0">
+    <div ref={wrapperRef} className="relative order-last ml-auto shrink-0">
       <input
         ref={fileInputRef}
         type="file"
@@ -72,15 +94,21 @@ export function FileMenu() {
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
-        className="h-10 rounded-md px-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        aria-label="More options"
+        title="More options"
+        className="grid h-10 w-10 place-items-center rounded-md text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
-        File
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+          <circle cx="5" cy="12" r="1.8" />
+          <circle cx="12" cy="12" r="1.8" />
+          <circle cx="19" cy="12" r="1.8" />
+        </svg>
       </button>
       {open && (
         <div
           role="menu"
           aria-label="File actions"
-          className="absolute left-0 top-[calc(100%+8px)] z-[60] min-w-48 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-xl"
+          className="absolute right-0 top-[calc(100%+8px)] z-[60] min-w-48 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-xl"
         >
           <button
             type="button"
@@ -241,13 +269,14 @@ export function FileMenu() {
           </button>
         </div>
       )}
-      {importStatus && (
+      {portalReady && importStatus && createPortal(
         <div
           role="status"
-          className="absolute left-0 top-[calc(100%+12px)] z-[70] min-w-48 rounded-md bg-neutral-900 px-3 py-2 text-xs text-white shadow-lg"
+          className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm text-white shadow-xl"
         >
           {importStatus}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
