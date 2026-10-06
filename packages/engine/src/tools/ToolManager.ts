@@ -9,7 +9,16 @@ import { MultiPointLineTool } from "./MultiPointLineTool";
 import { CurvedLineTool } from "./CurvedLineTool";
 import { FreedrawTool } from "./FreedrawTool";
 
-export type ToolType = "rectangle" | "diamond" | "ellipse" | "line" | "multiPointLine" | "arrow" | "curved-line" | "freedraw";
+export type ToolType =
+  | "rectangle"
+  | "diamond"
+  | "ellipse"
+  | "line"
+  | "multiPointLine"
+  | "arrow"
+  | "curved-line"
+  | "freedraw"
+  | "selection";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;
@@ -17,7 +26,7 @@ export interface ToolManagerOptions {
 
 export class ToolManager {
   private readonly tools: Map<ToolType, Tool>;
-  private activeToolType: ToolType = "rectangle";
+  private activeToolType: ToolType = "selection";
   private previewElement: Element | null = null;
   private readonly onCommit: (element: Element) => void;
   private readonly subscribers = new Set<() => void>();

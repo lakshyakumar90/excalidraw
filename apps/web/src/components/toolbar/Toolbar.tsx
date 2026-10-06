@@ -5,6 +5,7 @@ import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 
 const TOOL_LABELS: Record<ToolType, string> = {
+  selection: "Select",
   rectangle: "Rectangle",
   ellipse: "Ellipse",
   diamond: "Diamond",
@@ -16,6 +17,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
 };
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
+  selection: "V",
   rectangle: "R",
   ellipse: "E",
   diamond: "D",
@@ -62,7 +64,7 @@ export function Toolbar() {
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
-    () => "rectangle" as ToolType,
+    () => "selection" as ToolType,
   );
 
   const selectTool = (type: ToolType) => {

@@ -13,6 +13,7 @@ import {
 } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
+import { selectionController } from "@/lib/selection/selectionController";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -184,6 +185,18 @@ export function Canvas() {
       const viewportPoint = getPointerPosition(event);
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
+      if (toolManager.getActiveTool() === "selection") {
+        selectionController.selectAt(
+          scenePoint,
+          event.shiftKey,
+          viewportRef.current.zoom,
+        );
+
+        renderLoop.invalidateInteractive();
+        interactiveCanvas.setPointerCapture(event.pointerId);
+        return;
+      }
+
       toolManager.onPointerDown(scenePoint, {
         shiftKey: event.shiftKey,
         button: event.button,
@@ -253,6 +266,11 @@ export function Canvas() {
       }
 
       const key = event.key.toLowerCase();
+
+      if (key === "v") {
+        toolManager.setActiveTool("selection");
+        return;
+      }
 
       if (key === "r") {
         toolManager.setActiveTool("rectangle");
