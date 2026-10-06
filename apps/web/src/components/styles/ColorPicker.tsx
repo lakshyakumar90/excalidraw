@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 interface PaletteColor {
   name: string;
@@ -76,11 +76,6 @@ function ColorGrid({
     ),
   );
 
-  useEffect(() => {
-    const selectedIndex = colors.findIndex((color) => color.value === value);
-    if (selectedIndex >= 0) setFocusedIndex(selectedIndex);
-  }, [colors, value]);
-
   const handleKeyDown = (
     event: React.KeyboardEvent<HTMLButtonElement>,
     index: number,
@@ -115,7 +110,7 @@ function ColorGrid({
   };
 
   return (
-    <div role="group" aria-label={label} className="grid grid-cols-9 gap-1">
+    <div role="group" aria-label={label} className="grid grid-cols-6 gap-2">
       {colors.map((color, index) => (
         <button
           key={`${color.value}-${index}`}
@@ -130,10 +125,10 @@ function ColorGrid({
           onFocus={() => setFocusedIndex(index)}
           onKeyDown={(event) => handleKeyDown(event, index)}
           onClick={() => onSelect(color.value)}
-          className={`h-6 w-6 rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+          className={`h-7 w-7 rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
             value === color.value
-              ? "border-blue-600 ring-1 ring-blue-600"
-              : "border-black/10 hover:scale-110 hover:border-black/30"
+              ? "border-indigo-600 ring-1 ring-indigo-500"
+              : "border-black/10 hover:scale-105 hover:border-black/30"
           }`}
           style={{ backgroundColor: color.value }}
         />
@@ -151,21 +146,18 @@ export function ColorPicker({
   onCommit,
   onPickFromCanvas,
 }: ColorPickerProps) {
-  const [hexInput, setHexInput] = useState(value);
-
-  useEffect(() => {
-    setHexInput(value);
-  }, [value]);
+  const [hexDraft, setHexDraft] = useState<string | null>(null);
+  const hexInput = hexDraft ?? value;
 
   const commitHexInput = () => {
     const color = normalizeHexColor(hexInput);
     if (!color) {
-      setHexInput(value);
+      setHexDraft(null);
       return;
     }
     onChange(color);
     onCommit(color);
-    setHexInput(color);
+    setHexDraft(null);
   };
 
   const selectColor = (color: string) => {
@@ -181,8 +173,8 @@ export function ColorPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-neutral-600">{label}</span>
-        <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-neutral-700">{label}</span>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
           <input
             aria-label={`${label} hex color`}
             autoCapitalize="off"
@@ -193,7 +185,7 @@ export function ColorPicker({
             value={hexInput}
             onChange={(event) => {
               const nextValue = event.target.value;
-              setHexInput(nextValue);
+              setHexDraft(nextValue);
               const color = normalizeHexColor(nextValue);
               if (color) onChange(color);
             }}
@@ -205,11 +197,11 @@ export function ColorPicker({
                 event.currentTarget.blur();
               }
               if (event.key === "Escape") {
-                setHexInput(value);
+                setHexDraft(null);
                 event.currentTarget.blur();
               }
             }}
-            className="h-8 w-20 rounded-md border border-neutral-200 bg-white px-2 font-mono text-xs uppercase text-neutral-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-8 w-16 rounded-md border border-neutral-200 bg-white px-2 font-mono text-xs uppercase text-neutral-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
           />
           <input
             aria-label={`${label} color picker`}
@@ -217,7 +209,7 @@ export function ColorPicker({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onBlur={(event) => onCommit(event.currentTarget.value)}
-            className="h-8 w-10 cursor-pointer rounded-md border border-neutral-200 bg-white p-1"
+            className="h-8 w-9 cursor-pointer rounded-md border border-neutral-200 bg-white p-1"
           />
           <button
             type="button"
@@ -227,7 +219,7 @@ export function ColorPicker({
             onClick={onPickFromCanvas}
             className={`grid h-8 w-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
               eyedropperActive
-                ? "border-blue-500 bg-blue-50 text-blue-700"
+                ? "border-indigo-500 bg-indigo-50 text-indigo-700"
                 : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
             }`}
           >
@@ -257,7 +249,7 @@ export function ColorPicker({
 
       {recentPalette.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-neutral-500">Recent</p>
+            <p className="text-[11px] font-medium text-neutral-500">Recent</p>
           <ColorGrid
             label={`Recent ${label.toLowerCase()} colors`}
             colors={recentPalette}

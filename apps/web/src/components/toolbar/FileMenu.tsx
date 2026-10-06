@@ -20,7 +20,6 @@ export function FileMenu() {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [pngScale, setPngScale] = useState(2);
   const [transparentBackground, setTransparentBackground] = useState(false);
-  const [portalReady, setPortalReady] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,7 +35,6 @@ export function FileMenu() {
     );
 
   useEffect(() => {
-    setPortalReady(true);
     const onStatus = (event: Event) => {
       const statusEvent = event as CustomEvent<string | null>;
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
@@ -108,7 +106,7 @@ export function FileMenu() {
         <div
           role="menu"
           aria-label="File actions"
-          className="absolute right-0 top-[calc(100%+8px)] z-[60] min-w-48 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-xl"
+          className="absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-neutral-200 bg-white p-2 shadow-xl"
         >
           <button
             type="button"
@@ -269,7 +267,7 @@ export function FileMenu() {
           </button>
         </div>
       )}
-      {portalReady && importStatus && createPortal(
+      {importStatus && typeof document !== "undefined" && createPortal(
         <div
           role="status"
           className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm text-white shadow-xl"

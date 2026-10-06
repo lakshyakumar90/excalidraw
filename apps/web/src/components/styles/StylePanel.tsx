@@ -34,7 +34,7 @@ function Section({
 }) {
   return (
     <details open className="group border-t border-neutral-200 pt-3">
-      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between rounded-sm text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden">
+      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between rounded-sm text-xs font-medium text-neutral-700 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
         {title}
         <svg
           aria-hidden="true"
@@ -64,15 +64,45 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex min-h-9 items-center justify-between gap-3 text-sm text-neutral-700">
+    <label className="flex min-h-9 items-center justify-between gap-3 text-xs text-neutral-700">
       <span>{label}</span>
       {children}
     </label>
   );
 }
 
-function selectClassName() {
-  return "h-8 min-w-28 rounded-md border border-neutral-200 bg-white px-2 text-sm text-neutral-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+function ChoiceGroup<T extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string; mark?: React.ReactNode }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-2">
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          aria-label={option.label}
+          aria-pressed={value === option.value}
+          title={option.label}
+          onClick={() => onChange(option.value)}
+          className={`grid h-9 w-9 place-items-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+            value === option.value
+              ? "border-indigo-300 bg-indigo-100 text-indigo-950"
+              : "border-neutral-200 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-neutral-950"
+          }`}
+        >
+          {option.mark ?? <span className="text-[10px]">{option.label}</span>}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 const Z_ORDER_ACTIONS = [
@@ -177,19 +207,19 @@ export function StylePanel() {
   return (
     <aside
       aria-label="Style properties"
-      className={`fixed right-4 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.12)] ${
-        isCollapsed ? "w-auto" : "w-[min(18rem,calc(100vw-2rem))]"
+      className={`fixed right-0 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] -translate-y-1/2 flex-col overflow-hidden rounded-l-xl border border-r-0 border-neutral-200 bg-white text-neutral-900 shadow-[-8px_0_24px_rgba(15,23,42,0.12)] ${
+        isCollapsed ? "w-auto" : "w-[min(17rem,calc(100vw-0.5rem))]"
       }`}
     >
       <header
         className={`flex items-center justify-between gap-4 px-4 ${isCollapsed ? "py-3" : "pb-4 pt-5"}`}
       >
         <div className={isCollapsed ? "flex items-center gap-3" : ""}>
-          <h2 className="text-base font-semibold tracking-[-0.02em] text-neutral-900">
+          <h2 className="text-sm font-semibold tracking-[-0.02em] text-neutral-900">
             Style
           </h2>
           {!isCollapsed && (
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-[11px] text-neutral-500">
               {selectedCount > 0
                 ? `${selectedCount} element${selectedCount === 1 ? "" : "s"} selected`
                 : `Defaults for ${TOOL_NAMES[activeTool]}`}
@@ -205,7 +235,7 @@ export function StylePanel() {
           aria-controls="style-panel-content"
           title={isCollapsed ? "Expand style panel" : "Collapse style panel"}
           onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <svg
             aria-hidden="true"
@@ -227,7 +257,7 @@ export function StylePanel() {
       <div
         id="style-panel-content"
         hidden={isCollapsed}
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]"
+        className="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-3 pb-4 [scrollbar-color:#a1a1aa_transparent] [scrollbar-width:thin]"
       >
         <Section title="Stroke">
           <div className="space-y-2">
@@ -240,37 +270,6 @@ export function StylePanel() {
               onCommit={colorHistoryStore.add}
               onPickFromCanvas={() => eyedropperStore.activate("strokeColor")}
             />
-            <Field label="Width">
-              <select
-                aria-label="Stroke width"
-                className={selectClassName()}
-                value={style.strokeWidth}
-                onChange={(event) =>
-                  update("strokeWidth", Number(event.target.value))
-                }
-              >
-                <option value={1}>Thin</option>
-                <option value={2}>Medium</option>
-                <option value={4}>Bold</option>
-              </select>
-            </Field>
-            <Field label="Style">
-              <select
-                aria-label="Stroke style"
-                className={selectClassName()}
-                value={style.strokeStyle}
-                onChange={(event) =>
-                  update(
-                    "strokeStyle",
-                    event.target.value as CurrentItemStyle["strokeStyle"],
-                  )
-                }
-              >
-                <option value="solid">Solid</option>
-                <option value="dashed">Dashed</option>
-                <option value="dotted">Dotted</option>
-              </select>
-            </Field>
           </div>
         </Section>
 
@@ -304,7 +303,7 @@ export function StylePanel() {
                         : "transparent",
                     )
                   }
-                  className="rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   {style.backgroundColor === "transparent"
                     ? "Transparent"
@@ -312,59 +311,66 @@ export function StylePanel() {
                 </button>
               </div>
             </div>
-            <Field label="Fill style">
-              <select
-                aria-label="Fill style"
-                className={selectClassName()}
-                value={style.fillStyle}
-                onChange={(event) =>
-                  update(
-                    "fillStyle",
-                    event.target.value as CurrentItemStyle["fillStyle"],
-                  )
-                }
-              >
-                <option value="none">None</option>
-                <option value="solid">Solid</option>
-                <option value="hachure">Hachure</option>
-                <option value="cross-hatch">Cross-hatch</option>
-              </select>
-            </Field>
           </div>
         </Section>
 
         <Section title="Shape">
           <div className="space-y-2">
-            <Field label="Sloppiness">
-              <select
-                aria-label="Sloppiness"
-                className={selectClassName()}
-                value={style.roughness}
-                onChange={(event) =>
-                  update("roughness", Number(event.target.value))
-                }
-              >
-                <option value={0}>Architect</option>
-                <option value={1}>Artist</option>
-                <option value={2}>Cartoonist</option>
-              </select>
-            </Field>
-            <Field label="Edges">
-              <select
-                aria-label="Edges"
-                className={selectClassName()}
-                value={style.edgeStyle}
-                onChange={(event) =>
-                  update(
-                    "edgeStyle",
-                    event.target.value as CurrentItemStyle["edgeStyle"],
-                  )
-                }
-              >
-                <option value="sharp">Sharp</option>
-                <option value="rounded">Rounded</option>
-              </select>
-            </Field>
+            <p className="text-[11px] font-medium text-neutral-600">Fill</p>
+            <ChoiceGroup
+              label="Fill style"
+              value={style.fillStyle}
+              onChange={(value) => update("fillStyle", value)}
+              options={[
+                { value: "none", label: "No fill", mark: <span className="h-4 w-4 rounded border border-neutral-400" /> },
+                { value: "hachure", label: "Hachure fill", mark: <span className="text-sm">▨</span> },
+                { value: "cross-hatch", label: "Cross-hatch fill", mark: <span className="text-sm">▦</span> },
+                { value: "solid", label: "Solid fill", mark: <span className="h-3.5 w-3.5 rounded-sm bg-current" /> },
+              ]}
+            />
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">Stroke width</p>
+            <ChoiceGroup
+              label="Stroke width"
+              value={style.strokeWidth}
+              onChange={(value) => update("strokeWidth", value)}
+              options={[
+                { value: 1, label: "Thin", mark: <span className="h-px w-4 bg-current" /> },
+                { value: 2, label: "Medium", mark: <span className="h-0.5 w-4 bg-current" /> },
+                { value: 4, label: "Bold", mark: <span className="h-1 w-4 bg-current" /> },
+              ]}
+            />
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">Stroke style</p>
+            <ChoiceGroup
+              label="Stroke style"
+              value={style.strokeStyle}
+              onChange={(value) => update("strokeStyle", value)}
+              options={[
+                { value: "solid", label: "Solid line", mark: <span className="h-0.5 w-5 bg-current" /> },
+                { value: "dashed", label: "Dashed line", mark: <span className="w-5 border-t-2 border-dashed border-current" /> },
+                { value: "dotted", label: "Dotted line", mark: <span className="w-5 border-t-2 border-dotted border-current" /> },
+              ]}
+            />
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">Sloppiness</p>
+            <ChoiceGroup
+              label="Sloppiness"
+              value={style.roughness}
+              onChange={(value) => update("roughness", value)}
+              options={[
+                { value: 0, label: "Architect", mark: <span className="text-[10px]">Low</span> },
+                { value: 1, label: "Artist", mark: <span className="text-[10px]">Mid</span> },
+                { value: 2, label: "Cartoonist", mark: <span className="text-[10px]">High</span> },
+              ]}
+            />
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">Edges</p>
+            <ChoiceGroup
+              label="Edges"
+              value={style.edgeStyle}
+              onChange={(value) => update("edgeStyle", value)}
+              options={[
+                { value: "sharp", label: "Sharp edges", mark: <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none"><path d="M3 13V3h10" stroke="currentColor" strokeWidth="1.8" /></svg> },
+                { value: "rounded", label: "Rounded edges", mark: <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none"><path d="M3 13V7a4 4 0 0 1 4-4h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+              ]}
+            />
             <Field label="Opacity">
               <div className="flex w-32 items-center gap-2">
                 <input
@@ -377,9 +383,9 @@ export function StylePanel() {
                   onChange={(event) =>
                     update("opacity", Number(event.target.value))
                   }
-                  className="min-w-0 flex-1 accent-blue-600"
+                  className="min-w-0 flex-1 accent-indigo-400"
                 />
-                <span className="w-9 text-right text-xs tabular-nums text-neutral-500">
+                  <span className="w-9 text-right text-xs tabular-nums text-neutral-500">
                   {style.opacity}%
                 </span>
               </div>
@@ -400,7 +406,7 @@ export function StylePanel() {
                   type="button"
                   aria-label={label}
                   onClick={() => historyStore.captureUpdate(() => scene.reorderElements(selectedIds, action))}
-                  className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-white px-2 text-xs font-medium text-neutral-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 px-2 text-xs font-medium text-neutral-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   {label}
                 </button>
