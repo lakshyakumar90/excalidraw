@@ -15,7 +15,6 @@ import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
 import { selectionStore } from "@/lib/selection/selectionStore";
-import { TextEditDialog } from "./TextEditDialog";
 import { styleStore } from "@/lib/styles/styleStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
@@ -149,6 +148,7 @@ export function Canvas() {
             selectedElements,
             selectionController.getMarquee(),
             selectionController.getPointEditingElement(),
+            selectionController.isCompleteGroupSelection(),
           );
         },
       },
@@ -486,6 +486,10 @@ export function Canvas() {
           renderLoop.invalidateInteractive();
           return;
         }
+        if (selectionController.exitGroupEditing()) {
+          renderLoop.invalidateInteractive();
+          return;
+        }
         toolManager.cancel();
         selectionStore.clear();
         renderLoop.invalidateInteractive();
@@ -495,6 +499,17 @@ export function Canvas() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         selectionController.selectAll();
+        return;
+      }
+
+      if (
+        toolManager.getActiveTool() === "selection" &&
+        (event.ctrlKey || event.metaKey) &&
+        event.code === "KeyG"
+      ) {
+        event.preventDefault();
+        if (event.shiftKey) selectionController.ungroupSelection();
+        else selectionController.groupSelection();
         return;
       }
 
@@ -701,7 +716,6 @@ export function Canvas() {
         className="absolute inset-0 block h-full w-full touch-none select-none"
       />
       <EyedropperOverlay />
-      <TextEditDialog />
     </div>
   );
 }

@@ -67,6 +67,7 @@ export function drawSelectionOverlay(
   selectedElements: readonly Element[] | undefined,
   marquee: MarqueePreview | null,
   pointEditingElement: Element | null = null,
+  isCompleteGroupSelection = false,
 ): void {
   context.save();
 
@@ -79,18 +80,63 @@ export function drawSelectionOverlay(
   context.setLineDash([5 / viewport.zoom, 4 / viewport.zoom]);
 
   // Draw an outline around each selected element's rotated corners.
-  const activeElements = (selectedElements ?? []).filter((element) => !element.isDeleted);
+  const activeElements = (selectedElements ?? []).filter(
+    (element) => !element.isDeleted,
+  );
   if (activeElements.length > 1) {
     const corners = activeElements.flatMap(getElementCorners);
-    const xs = corners.map((p) => p.x), ys = corners.map((p) => p.y);
-    const minX = Math.min(...xs), minY = Math.min(...ys), maxX = Math.max(...xs), maxY = Math.max(...ys);
-    context.strokeRect(minX - 4 / viewport.zoom, minY - 4 / viewport.zoom, maxX - minX + 8 / viewport.zoom, maxY - minY + 8 / viewport.zoom);
+    const xs = corners.map((p) => p.x),
+      ys = corners.map((p) => p.y);
+    const minX = Math.min(...xs),
+      minY = Math.min(...ys),
+      maxX = Math.max(...xs),
+      maxY = Math.max(...ys);
+
+    // Independent multi-selection shows each element boundary as well as the
+    // shared transform box. A complete group keeps only its outer boundary.
+    if (!isCompleteGroupSelection) {
+      context.setLineDash([]);
+      for (const element of activeElements) {
+        const elementCorners = expandCorners(
+          getElementCorners(element),
+          4 / viewport.zoom,
+        );
+        const first = elementCorners[0];
+        if (!first) continue;
+        context.beginPath();
+        context.moveTo(first.x, first.y);
+        for (let index = 1; index < elementCorners.length; index += 1) {
+          const corner = elementCorners[index];
+          if (corner) context.lineTo(corner.x, corner.y);
+        }
+        context.closePath();
+        context.stroke();
+      }
+      context.setLineDash([5 / viewport.zoom, 4 / viewport.zoom]);
+    }
+
+    context.strokeRect(
+      minX - 4 / viewport.zoom,
+      minY - 4 / viewport.zoom,
+      maxX - minX + 8 / viewport.zoom,
+      maxY - minY + 8 / viewport.zoom,
+    );
     const size = 8 / viewport.zoom;
     context.setLineDash([]);
     context.fillStyle = "#fff";
     context.strokeStyle = "#4c7dff";
-    for (const p of [{x:minX,y:minY},{x:(minX+maxX)/2,y:minY},{x:maxX,y:minY},{x:maxX,y:(minY+maxY)/2},{x:maxX,y:maxY},{x:(minX+maxX)/2,y:maxY},{x:minX,y:maxY},{x:minX,y:(minY+maxY)/2}]) {
-      context.fillRect(p.x-size/2,p.y-size/2,size,size); context.strokeRect(p.x-size/2,p.y-size/2,size,size);
+    for (const p of [
+      { x: minX, y: minY },
+      { x: (minX + maxX) / 2, y: minY },
+      { x: maxX, y: minY },
+      { x: maxX, y: (minY + maxY) / 2 },
+      { x: maxX, y: maxY },
+      { x: (minX + maxX) / 2, y: maxY },
+      { x: minX, y: maxY },
+      { x: minX, y: (minY + maxY) / 2 },
+    ]) {
+      context.fillRect(p.x - size / 2, p.y - size / 2, size, size);
+      context.strokeRect(p.x - size / 2, p.y - size / 2, size, size);
     }
   }
 
@@ -146,10 +192,17 @@ export function drawSelectionOverlay(
   }
 
   if (pointEditingElement && "points" in pointEditingElement) {
-    context.setLineDash([]); context.fillStyle = "#ffffff"; context.strokeStyle = "#4c7dff";
+    context.setLineDash([]);
+    context.fillStyle = "#ffffff";
+    context.strokeStyle = "#4c7dff";
     for (const p of pointEditingElement.points) {
-      const x = pointEditingElement.x + p.x, y = pointEditingElement.y + p.y, size = 8 / viewport.zoom;
-      context.beginPath(); context.arc(x,y,size/2,0,Math.PI*2); context.fill(); context.stroke();
+      const x = pointEditingElement.x + p.x,
+        y = pointEditingElement.y + p.y,
+        size = 8 / viewport.zoom;
+      context.beginPath();
+      context.arc(x, y, size / 2, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
     }
   }
 

@@ -7,9 +7,12 @@ This controller owns canvas selection, transforms, and point editing:
 */
 
 import type { Element, Point } from "@repo/common";
-import { elementIntersectsRect, getElementAtPosition, getElementsAtPosition, getElementBounds } from "@repo/engine";
-import { createTextElement } from "@repo/engine";
-import { textEditStore } from "./textEditStore";
+import {
+  elementIntersectsRect,
+  getElementAtPosition,
+  getElementsAtPosition,
+  getElementBounds,
+} from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import {
   getResizeCursor,
@@ -44,6 +47,7 @@ type Gesture =
       start: Point;
       zoom: number;
       selectedId: string;
+      clickSelection: string[];
       elements: Array<{ id: string; x: number; y: number }>;
     }
   | {
@@ -52,25 +56,36 @@ type Gesture =
       handle: ResizeHandle;
     }
   | { kind: "point"; elementId: string; pointIndex: number }
-  | { kind: "group-resize"; originals: Element[]; bounds: Rect; handle: ResizeHandle };
+  | {
+      kind: "group-resize";
+      originals: Element[];
+      bounds: Rect;
+      handle: ResizeHandle;
+    };
 
 let gesture: Gesture = { kind: "idle" };
 let pointEditingElementId: string | null = null;
+// groupIds are stored inner-to-outer. This path tracks the outer-to-inner
+// groups entered by double-click.
+let groupDrillPath: string[] = [];
 
 const MIN_MARQUEE_PIXELS = 3;
 const CLICK_DRAG_THRESHOLD_PIXELS = 10;
-let previousOverlapClick: { x: number; y: number; ids: string[]; index: number } | null = null;
+let previousOverlapClick: {
+  x: number;
+  y: number;
+  ids: string[];
+  index: number;
+} | null = null;
 
 export const selectionController = {
   getCursor(point: Point, zoom: number): string {
     if (gesture.kind === "resize") {
-      return getResizeCursor(
-        gesture.handle,
-        gesture.original.angle ?? 0,
-      );
+      return getResizeCursor(gesture.handle, gesture.original.angle ?? 0);
     }
 
-    if (gesture.kind === "group-resize") return getResizeCursor(gesture.handle, 0);
+    if (gesture.kind === "group-resize")
+      return getResizeCursor(gesture.handle, 0);
 
     if (gesture.kind === "move") return "grabbing";
     if (gesture.kind === "point") return "grabbing";
@@ -92,15 +107,26 @@ export const selectionController = {
       : "default";
   },
 
-  pointerDown(point: Point, shiftKey: boolean, zoom: number, altKey = false): void {
+  pointerDown(
+    point: Point,
+    shiftKey: boolean,
+    zoom: number,
+    altKey = false,
+  ): void {
     if (pointEditingElementId) {
       const element = scene.getElement(pointEditingElementId);
       if (element && "points" in element) {
-        const nearest = element.points.findIndex((p) =>
-          Math.hypot(point.x - element.x - p.x, point.y - element.y - p.y) <= 10 / zoom,
+        const nearest = element.points.findIndex(
+          (p) =>
+            Math.hypot(point.x - element.x - p.x, point.y - element.y - p.y) <=
+            10 / zoom,
         );
         if (nearest >= 0) {
-          gesture = { kind: "point", elementId: element.id, pointIndex: nearest };
+          gesture = {
+            kind: "point",
+            elementId: element.id,
+            pointIndex: nearest,
+          };
           return;
         }
       }
@@ -115,7 +141,10 @@ export const selectionController = {
       if (bounds && handle) {
         gesture = {
           kind: "group-resize",
-          originals: selectedIds.map((id) => scene.getElement(id)).filter((e): e is Element => !!e && !e.isDeleted).map(cloneElement),
+          originals: selectedIds
+            .map((id) => scene.getElement(id))
+            .filter((e): e is Element => !!e && !e.isDeleted)
+            .map(cloneElement),
           bounds,
           handle,
         };
@@ -127,11 +156,7 @@ export const selectionController = {
       const selectedElement = scene.getElement(selectedIds[0]!);
 
       if (selectedElement && !selectedElement.isDeleted) {
-        const handle = getResizeHandleAtPosition(
-          selectedElement,
-          point,
-          zoom,
-        );
+        const handle = getResizeHandleAtPosition(selectedElement, point, zoom);
 
         if (handle) {
           gesture = {
@@ -165,6 +190,7 @@ export const selectionController = {
     }
 
     if (!hit) {
+      groupDrillPath = [];
       const selectionAtStart = [...selectionStore.getSnapshot()];
 
       if (!shiftKey) {
@@ -183,43 +209,55 @@ export const selectionController = {
       return;
     }
 
-    const wasSelected = selectionStore.getSnapshot().has(hit.id);
+    const clickSelection = getClickSelectionIds(hit);
+    const selectedAtStart = selectionStore.getSnapshot();
+    const wasSelected = selectedAtStart.has(hit.id);
+    const unitIsSelected = clickSelection.every((id) =>
+      selectedAtStart.has(id),
+    );
 
     if (!shiftKey && !altKey && wasSelected && selectedIds.length > 1) {
       const elements = selectedIds
         .map((id) => scene.getElement(id))
-        .filter((element): element is Element => !!element && !element.isDeleted)
+        .filter(
+          (element): element is Element => !!element && !element.isDeleted,
+        )
         .map((element) => ({ id: element.id, x: element.x, y: element.y }));
       gesture = {
         kind: "group-press",
         start: point,
         zoom,
         selectedId: hit.id,
+        clickSelection,
         elements,
       };
       return;
     }
 
     if (altKey) {
-      selectionStore.set([hit.id]);
-    } else if (shiftKey && wasSelected) {
-      // Shift-click on a selected element removes it from the selection.
-      selectionStore.toggle(hit.id);
-      gesture = { kind: "idle" };
-      return;
-    }
-
-    if (shiftKey) {
-      // Shift-click adds this element and keeps the existing selection.
-      selectionStore.toggle(hit.id);
-    } else if (!wasSelected) {
-      // Preserve a multi-selection when starting a drag on one of its members.
-      selectionStore.set([hit.id]);
+      selectionStore.set(clickSelection);
+    } else if (shiftKey) {
+      const next = new Set(selectionStore.getSnapshot());
+      for (const id of clickSelection) {
+        if (unitIsSelected) next.delete(id);
+        else next.add(id);
+      }
+      selectionStore.set(next);
+      if (unitIsSelected) {
+        gesture = { kind: "idle" };
+        return;
+      }
+    } else if (!unitIsSelected) {
+      // Clicking any member selects its current group unit.
+      selectionStore.set(clickSelection);
     }
 
     const elements = [...selectionStore.getSnapshot()]
       .map((id) => scene.getElement(id))
-      .filter((element): element is Element => element !== undefined && !element.isDeleted)
+      .filter(
+        (element): element is Element =>
+          element !== undefined && !element.isDeleted,
+      )
       .map((element) => ({
         id: element.id,
         x: element.x,
@@ -235,7 +273,11 @@ export const selectionController = {
 
   pointerMove(point: Point, shiftKey: boolean, altKey: boolean): void {
     if (gesture.kind === "group-press") {
-      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom) return;
+      if (
+        Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) <
+        CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom
+      )
+        return;
       gesture = {
         kind: "move",
         start: gesture.start,
@@ -269,28 +311,56 @@ export const selectionController = {
 
     if (gesture.kind === "group-resize") {
       const b = gesture.bounds;
-      const left = gesture.handle.includes("w"), top = gesture.handle.includes("n");
-      const horizontal = gesture.handle.includes("w") || gesture.handle.includes("e");
-      const vertical = gesture.handle.includes("n") || gesture.handle.includes("s");
-      const anchorX = horizontal ? (left ? b.maxX : b.minX) : (b.minX + b.maxX) / 2;
-      const anchorY = vertical ? (top ? b.maxY : b.minY) : (b.minY + b.maxY) / 2;
-      const scaleX = horizontal ? (point.x - anchorX) / ((left ? b.minX : b.maxX) - anchorX || 1) : null;
-      const scaleY = vertical ? (point.y - anchorY) / ((top ? b.minY : b.maxY) - anchorY || 1) : null;
-      const scale = scaleX !== null && scaleY !== null
-        ? Math.abs(scaleX) >= Math.abs(scaleY) ? scaleX : scaleY
-        : scaleX ?? scaleY ?? 1;
+      const left = gesture.handle.includes("w"),
+        top = gesture.handle.includes("n");
+      const horizontal =
+        gesture.handle.includes("w") || gesture.handle.includes("e");
+      const vertical =
+        gesture.handle.includes("n") || gesture.handle.includes("s");
+      const anchorX = horizontal
+        ? left
+          ? b.maxX
+          : b.minX
+        : (b.minX + b.maxX) / 2;
+      const anchorY = vertical
+        ? top
+          ? b.maxY
+          : b.minY
+        : (b.minY + b.maxY) / 2;
+      const scaleX = horizontal
+        ? (point.x - anchorX) / ((left ? b.minX : b.maxX) - anchorX || 1)
+        : null;
+      const scaleY = vertical
+        ? (point.y - anchorY) / ((top ? b.minY : b.maxY) - anchorY || 1)
+        : null;
+      const scale =
+        scaleX !== null && scaleY !== null
+          ? Math.abs(scaleX) >= Math.abs(scaleY)
+            ? scaleX
+            : scaleY
+          : (scaleX ?? scaleY ?? 1);
       for (const original of gesture.originals) {
         const nextX = anchorX + (original.x - anchorX) * scale;
         const nextY = anchorY + (original.y - anchorY) * scale;
         const changes: Record<string, unknown> = {
-          x: nextX, y: nextY,
+          x: nextX,
+          y: nextY,
           width: (original.width ?? 0) * Math.abs(scale),
           height: (original.height ?? 0) * Math.abs(scale),
           strokeWidth: (original.strokeWidth ?? 1) * Math.abs(scale),
         };
-        if (original.type === "text") changes.fontSize = original.fontSize * Math.abs(scale);
-        if ("points" in original) changes.points = original.points.map((p) => ({ ...p, x: p.x * scale, y: p.y * scale }));
-        scene.mutateElement(original.id, changes as Partial<Omit<Element, "id" | "type">>);
+        if (original.type === "text")
+          changes.fontSize = original.fontSize * Math.abs(scale);
+        if ("points" in original)
+          changes.points = original.points.map((p) => ({
+            ...p,
+            x: p.x * scale,
+            y: p.y * scale,
+          }));
+        scene.mutateElement(
+          original.id,
+          changes as Partial<Omit<Element, "id" | "type">>,
+        );
       }
       return;
     }
@@ -300,8 +370,15 @@ export const selectionController = {
       if (element && "points" in element) {
         const points = element.points.map((p) => ({ ...p }));
         const p = points[gesture.pointIndex];
-        if (p) points[gesture.pointIndex] = { ...p, x: point.x - element.x, y: point.y - element.y };
-        scene.mutateElement(element.id, { points } as Partial<Omit<Element, "id" | "type">>);
+        if (p)
+          points[gesture.pointIndex] = {
+            ...p,
+            x: point.x - element.x,
+            y: point.y - element.y,
+          };
+        scene.mutateElement(element.id, { points } as Partial<
+          Omit<Element, "id" | "type">
+        >);
       }
       return;
     }
@@ -323,8 +400,11 @@ export const selectionController = {
 
   pointerUp(point: Point, shiftKey: boolean, altKey: boolean): void {
     if (gesture.kind === "group-press") {
-      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom) {
-        selectionStore.set([gesture.selectedId]);
+      if (
+        Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) <
+        CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom
+      ) {
+        selectionStore.set(gesture.clickSelection);
       } else {
         this.pointerMove(point, shiftKey, altKey);
       }
@@ -332,7 +412,12 @@ export const selectionController = {
       return;
     }
 
-    if (gesture.kind === "move" || gesture.kind === "resize" || gesture.kind === "point" || gesture.kind === "group-resize") {
+    if (
+      gesture.kind === "move" ||
+      gesture.kind === "resize" ||
+      gesture.kind === "point" ||
+      gesture.kind === "group-resize"
+    ) {
       this.pointerMove(point, shiftKey, altKey);
     }
 
@@ -352,10 +437,13 @@ export const selectionController = {
           maxY: Math.max(gesture.start.y, point.y),
         };
 
-        const marqueeIds = scene
+        const intersectingElements = scene
           .getElements()
-          .filter((element) => elementIntersectsRect(element, rect))
-          .map((element) => element.id);
+          .filter((element) => elementIntersectsRect(element, rect));
+        const marqueeIds = new Set<string>();
+        for (const element of intersectingElements) {
+          for (const id of getClickSelectionIds(element)) marqueeIds.add(id);
+        }
 
         selectionStore.set(
           gesture.shiftKey
@@ -378,58 +466,49 @@ export const selectionController = {
   },
 
   getPointEditingElement(): Element | null {
-    const element = pointEditingElementId ? scene.getElement(pointEditingElementId) : undefined;
+    const element = pointEditingElementId
+      ? scene.getElement(pointEditingElementId)
+      : undefined;
     return element && !element.isDeleted ? element : null;
   },
 
   handleDoubleClick(point: Point, zoom: number): void {
-    pointEditingElementId = null;
     const element = getElementAtPosition(scene.getElements(), point, zoom);
     if (!element) return;
+
+    const stack = [...(element.groupIds ?? [])].reverse();
+    const activeGroup = groupDrillPath.at(-1);
+    if (activeGroup && !stack.includes(activeGroup)) groupDrillPath = [];
+
+    if (stack.length > 0) {
+      let drilled = false;
+      if (groupDrillPath.length === 0) {
+        groupDrillPath = [stack[0]!];
+        drilled = true;
+      } else {
+        const nextGroup = stack[groupDrillPath.length];
+        if (nextGroup) {
+          groupDrillPath = [...groupDrillPath, nextGroup];
+          drilled = true;
+        }
+      }
+
+      if (drilled) {
+        const enteredGroup = groupDrillPath.at(-1)!;
+        const enteredIndex = stack.indexOf(enteredGroup);
+        const childGroup = stack[enteredIndex + 1];
+        selectionStore.set(
+          childGroup ? getGroupMemberIds(childGroup) : [element.id],
+        );
+        pointEditingElementId = null;
+        return;
+      }
+    }
+
+    // Text editing is deferred until the canvas text tool is implemented.
+    pointEditingElementId = null;
     selectionStore.set([element.id]);
     if (element.type === "line") pointEditingElementId = element.id;
-    if (element.type === "text") {
-      textEditStore.open({ targetElementId: element.id, text: element.text, editsShapeLabel: false });
-      return;
-    }
-    if ("points" in element) return;
-
-    const boundText = (element.boundElements ?? [])
-      .map((id) => scene.getElement(id))
-      .find((candidate): candidate is Extract<Element, { type: "text" }> => candidate?.type === "text" && !candidate.isDeleted);
-    textEditStore.open({
-      targetElementId: boundText?.id ?? element.id,
-      text: boundText?.text ?? "",
-      editsShapeLabel: !boundText,
-    });
-  },
-
-  saveTextEdit(text: string): void {
-    const request = textEditStore.getSnapshot();
-    if (!request) return;
-    const target = scene.getElement(request.targetElementId);
-    if (target?.type === "text") {
-      scene.mutateElement(target.id, { text } as Partial<Omit<Element, "id" | "type">>);
-    } else if (target && request.editsShapeLabel && text.trim()) {
-      const bounds = getElementBounds(target);
-      const textElement = createTextElement({
-        x: bounds.minX,
-        y: bounds.minY,
-        width: bounds.maxX - bounds.minX,
-        height: bounds.maxY - bounds.minY,
-        angle: target.angle ?? 0,
-        text,
-        textAlign: "center",
-        verticalAlign: "middle",
-      });
-      scene.addElement(textElement);
-      scene.mutateElement(target.id, { boundElements: [...(target.boundElements ?? []), textElement.id] } as Partial<Omit<Element, "id" | "type">>);
-    }
-    textEditStore.close();
-  },
-
-  cancelTextEdit(): void {
-    textEditStore.close();
   },
 
   exitPointEditing(): boolean {
@@ -439,19 +518,108 @@ export const selectionController = {
     return true;
   },
 
+  exitGroupEditing(): boolean {
+    if (groupDrillPath.length === 0) return false;
+    const exitedGroup = groupDrillPath.pop();
+    if (exitedGroup) selectionStore.set(getGroupMemberIds(exitedGroup));
+    return true;
+  },
+
+  isCompleteGroupSelection(): boolean {
+    const selectedIds = new Set(
+      [...selectionStore.getSnapshot()].filter((id) => {
+        const element = scene.getElement(id);
+        return element !== undefined && !element.isDeleted;
+      }),
+    );
+    if (selectedIds.size < 2) return false;
+
+    for (const groupId of [...selectedIds].flatMap(
+      (id) => scene.getElement(id)?.groupIds ?? [],
+    )) {
+      const members = getGroupMemberIds(groupId);
+      if (
+        members.length === selectedIds.size &&
+        members.every((id) => selectedIds.has(id))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  groupSelection(): boolean {
+    const elements = [...selectionStore.getSnapshot()]
+      .map((id) => scene.getElement(id))
+      .filter((element): element is Element => !!element && !element.isDeleted);
+    if (elements.length < 2) return false;
+
+    const groupId = crypto.randomUUID();
+    for (const element of elements) {
+      const groupIds = [...(element.groupIds ?? [])];
+      const activeGroup = groupDrillPath.at(-1);
+      const insertAt = activeGroup ? groupIds.lastIndexOf(activeGroup) : -1;
+      if (insertAt >= 0) groupIds.splice(insertAt, 0, groupId);
+      else groupIds.push(groupId);
+      scene.mutateElement(element.id, {
+        groupIds,
+      });
+    }
+    selectionStore.set(elements.map((element) => element.id));
+    return true;
+  },
+
+  ungroupSelection(): boolean {
+    const selectedElements = [...selectionStore.getSnapshot()]
+      .map((id) => scene.getElement(id))
+      .filter((element): element is Element => !!element && !element.isDeleted);
+    const groupIds = new Set<string>();
+    for (const element of selectedElements) {
+      const stack = [...(element.groupIds ?? [])].reverse();
+      const groupId =
+        stack[groupDrillPath.length] ?? groupDrillPath.at(-1) ?? stack[0];
+      if (groupId) groupIds.add(groupId);
+    }
+    if (groupIds.size === 0) return false;
+
+    groupDrillPath = [];
+    const affectedElements = scene
+      .getElements()
+      .filter(
+        (element) =>
+          !element.isDeleted &&
+          element.groupIds?.some((groupId) => groupIds.has(groupId)),
+      );
+    for (const element of affectedElements) {
+      scene.mutateElement(element.id, {
+        groupIds: (element.groupIds ?? []).filter(
+          (groupId) => !groupIds.has(groupId),
+        ),
+      });
+    }
+    return true;
+  },
+
   selectAll(): void {
-    selectionStore.set(scene.getElements().filter((element) => !element.isDeleted).map((element) => element.id));
+    selectionStore.set(
+      scene
+        .getElements()
+        .filter((element) => !element.isDeleted)
+        .map((element) => element.id),
+    );
   },
 
   deleteSelection(): void {
-    for (const id of selectionStore.getSnapshot()) scene.mutateElement(id, { isDeleted: true });
+    for (const id of selectionStore.getSnapshot())
+      scene.mutateElement(id, { isDeleted: true });
     selectionStore.clear();
   },
 
   nudgeSelection(dx: number, dy: number): void {
     for (const id of selectionStore.getSnapshot()) {
       const element = scene.getElement(id);
-      if (element && !element.isDeleted) scene.mutateElement(id, { x: element.x + dx, y: element.y + dy });
+      if (element && !element.isDeleted)
+        scene.mutateElement(id, { x: element.x + dx, y: element.y + dy });
     }
   },
 };
@@ -467,18 +635,49 @@ function cloneElement(element: Element): Element {
   return { ...element };
 }
 
+function getGroupMemberIds(groupId: string): string[] {
+  return scene
+    .getElements()
+    .filter(
+      (element) => !element.isDeleted && element.groupIds?.includes(groupId),
+    )
+    .map((element) => element.id);
+}
+
+function getClickSelectionIds(element: Element): string[] {
+  const stack = [...(element.groupIds ?? [])].reverse();
+  const activeGroup = groupDrillPath.at(-1);
+  if (activeGroup && !stack.includes(activeGroup)) groupDrillPath = [];
+  const groupId = stack[groupDrillPath.length];
+  return groupId ? getGroupMemberIds(groupId) : [element.id];
+}
+
 type Rect = { minX: number; minY: number; maxX: number; maxY: number };
 function getSelectionBounds(ids: readonly string[]): Rect | null {
-  const elements = ids.map((id) => scene.getElement(id)).filter((e): e is Element => !!e && !e.isDeleted);
+  const elements = ids
+    .map((id) => scene.getElement(id))
+    .filter((e): e is Element => !!e && !e.isDeleted);
   if (!elements.length) return null;
   const bounds = elements.map(getElementBounds);
-  return { minX: Math.min(...bounds.map((b) => b.minX)), minY: Math.min(...bounds.map((b) => b.minY)), maxX: Math.max(...bounds.map((b) => b.maxX)), maxY: Math.max(...bounds.map((b) => b.maxY)) };
+  return {
+    minX: Math.min(...bounds.map((b) => b.minX)),
+    minY: Math.min(...bounds.map((b) => b.minY)),
+    maxX: Math.max(...bounds.map((b) => b.maxX)),
+    maxY: Math.max(...bounds.map((b) => b.maxY)),
+  };
 }
 function rectHandleAt(b: Rect, p: Point, zoom: number): ResizeHandle | null {
-  const nearL = Math.abs(p.x - b.minX) <= 8 / zoom, nearR = Math.abs(p.x - b.maxX) <= 8 / zoom;
-  const nearT = Math.abs(p.y - b.minY) <= 8 / zoom, nearB = Math.abs(p.y - b.maxY) <= 8 / zoom;
-  if (nearT && nearL) return "nw"; if (nearT && nearR) return "ne";
-  if (nearB && nearL) return "sw"; if (nearB && nearR) return "se";
-  if (nearT) return "n"; if (nearB) return "s"; if (nearL) return "w"; if (nearR) return "e";
+  const nearL = Math.abs(p.x - b.minX) <= 8 / zoom,
+    nearR = Math.abs(p.x - b.maxX) <= 8 / zoom;
+  const nearT = Math.abs(p.y - b.minY) <= 8 / zoom,
+    nearB = Math.abs(p.y - b.maxY) <= 8 / zoom;
+  if (nearT && nearL) return "nw";
+  if (nearT && nearR) return "ne";
+  if (nearB && nearL) return "sw";
+  if (nearB && nearR) return "se";
+  if (nearT) return "n";
+  if (nearB) return "s";
+  if (nearL) return "w";
+  if (nearR) return "e";
   return null;
 }
