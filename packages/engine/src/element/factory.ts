@@ -11,6 +11,11 @@ import type {
   TextElement,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
+import {
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_FONT_SIZE,
+  measureText,
+} from "../text";
 
 export type ElementOptions = Partial<BaseElement>;
 
@@ -57,17 +62,41 @@ export function createRectangleElement(
   };
 }
 
-export function createTextElement(options: ElementOptions & { text: string; fontSize?: number; textAlign?: TextElement["textAlign"]; verticalAlign?: TextElement["verticalAlign"] }): TextElement {
-  const fontSize = options.fontSize ?? 20;
-  const lines = options.text.split("\n");
-  const width = Math.max(20, ...lines.map((line) => line.length * fontSize * 0.6));
-  const height = Math.max(1, lines.length) * fontSize * 1.2;
+export function createTextElement(
+  options: ElementOptions & {
+    text: string;
+    fontSize?: number;
+    textAlign?: TextElement["textAlign"];
+    verticalAlign?: TextElement["verticalAlign"];
+  },
+): TextElement {
+  const fontSize = options.fontSize ?? DEFAULT_TEXT_FONT_SIZE;
+  const fontFamily = DEFAULT_TEXT_FONT_FAMILY;
+  const { width: measuredWidth, height } = measureText(
+    options.text,
+    fontSize,
+    fontFamily,
+  );
+  const width = Math.max(20, measuredWidth);
   return {
-    id: options.id ?? generateElementId(), type: "text", x: options.x ?? 0, y: options.y ?? 0,
-    width: options.width ?? width, height: options.height ?? height, angle: options.angle ?? 0,
-    strokeColor: options.strokeColor ?? "#1e1e1e", opacity: options.opacity ?? 100,
-    text: options.text, fontSize, fontFamily: "sans-serif", textAlign: options.textAlign ?? "left", verticalAlign: options.verticalAlign ?? "top",
-    version: 1, versionNonce: generateSeed(), isDeleted: false, updated: Date.now(),
+    id: options.id ?? generateElementId(),
+    type: "text",
+    x: options.x ?? 0,
+    y: options.y ?? 0,
+    width: options.width ?? width,
+    height: options.height ?? height,
+    angle: options.angle ?? 0,
+    strokeColor: options.strokeColor ?? "#1e1e1e",
+    opacity: options.opacity ?? 100,
+    text: options.text,
+    fontSize,
+    fontFamily,
+    textAlign: options.textAlign ?? "left",
+    verticalAlign: options.verticalAlign ?? "top",
+    version: 1,
+    versionNonce: generateSeed(),
+    isDeleted: false,
+    updated: Date.now(),
   };
 }
 

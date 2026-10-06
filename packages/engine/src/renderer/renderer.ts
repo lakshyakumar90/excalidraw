@@ -15,6 +15,11 @@ import {
   sampleCatmullRom,
 } from "../geometry";
 import { buildClosedStrokePath } from "../geometry/strokeOutline";
+import {
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_FONT_SIZE,
+  TEXT_LINE_HEIGHT,
+} from "../text";
 
 export interface RenderContext {
   context: CanvasRenderingContext2D;
@@ -595,8 +600,8 @@ function drawText(
   applyElementTransform(context, element);
   context.globalAlpha = (element.opacity ?? 100) / 100;
   context.fillStyle = element.strokeColor ?? "#1e1e1e";
-  context.font =
-    (element.fontSize || 20) + "px " + (element.fontFamily || "sans-serif");
+  const fontSize = element.fontSize || DEFAULT_TEXT_FONT_SIZE;
+  context.font = `${fontSize}px ${element.fontFamily || DEFAULT_TEXT_FONT_FAMILY}`;
   context.textAlign = element.textAlign ?? "left";
   context.textBaseline = "top";
   const x =
@@ -606,7 +611,7 @@ function drawText(
         ? (element.width ?? 0)
         : 0;
   const lines = element.text.split("\n");
-  const lineHeight = element.fontSize || 20;
+  const lineHeight = fontSize * TEXT_LINE_HEIGHT;
   const textHeight = lines.length * lineHeight;
   const y =
     element.verticalAlign === "middle"
