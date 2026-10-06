@@ -207,9 +207,9 @@ function drawDiamond(
   const y = element.y ?? 0;
   const width = element.width ?? 0;
   const height = element.height ?? 0;
+  const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
-  const backgr  const angle = element.angle ?? 0;
-oundColor = element.backgroundColor ?? "transparent";
+  const backgroundColor = element.backgroundColor ?? "transparent";
   const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
 

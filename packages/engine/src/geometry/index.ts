@@ -14,3 +14,5 @@ export * from "./element";
 export * from "./elementLocalBounds";
 export * from "./elementCorners";
 export * from "./rotation";
+export * from "./hitTest";
+
