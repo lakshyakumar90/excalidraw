@@ -1,27 +1,57 @@
-//This uses the hit-testing code. Because that function checks elements from top to bottom, overlapping elements select the one drawn on top.
-
 import type { Point } from "@repo/common";
 import { getElementAtPosition } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import { selectionStore } from "./selectionStore";
 
+export interface MarqueePreview {
+  start: Point;
+  current: Point;
+}
+
+let marquee: MarqueePreview | null = null;
+
 export const selectionController = {
-  selectAt(point: Point, shiftKey: boolean, zoom: number): void {
+  selectAt(point: Point, shiftKey: boolean, zoom: number) {
+    // A new pointer down ends any previous marquee.
+    marquee = null;
+
     const hit = getElementAtPosition(scene.getElements(), point, zoom);
 
     if (!hit) {
-      // Clicking empty canvas clears the current selection.
       selectionStore.clear();
-      return;
+      return null;
     }
 
     if (shiftKey) {
-      // Shift-click adds an unselected element or removes a selected one.
       selectionStore.toggle(hit.id);
-      return;
+    } else {
+      selectionStore.set([hit.id]);
     }
 
-    // A regular click selects just the element under the pointer.
-    selectionStore.set([hit.id]);
+    return hit;
+  },
+
+  beginMarquee(point: Point): void {
+    marquee = {
+      start: point,
+      current: point,
+    };
+  },
+
+  updateMarquee(point: Point): void {
+    if (!marquee) return;
+
+    marquee = {
+      ...marquee,
+      current: point,
+    };
+  },
+
+  getMarquee(): MarqueePreview | null {
+    return marquee;
+  },
+
+  endMarquee(): void {
+    marquee = null;
   },
 };

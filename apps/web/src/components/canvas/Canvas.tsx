@@ -14,6 +14,8 @@ import {
 import { toolManager } from "@/lib/tools/toolManager";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 import { selectionController } from "@/lib/selection/selectionController";
+import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
+import { selectionStore } from "@/lib/selection/selectionStore";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -79,6 +81,20 @@ export function Canvas() {
             },
             toolManager.getPreviewElement(),
           );
+
+          const selectedElements = [...selectionStore.getSnapshot()]
+            .map((id) => scene.getElement(id))
+            .filter(
+              (element): element is Element =>
+                element !== undefined && !element.isDeleted,
+            );
+
+          drawSelectionOverlay(
+            interactiveContext,
+            viewportRef.current,
+            selectedElements,
+            selectionController.getMarquee(),
+          );
         },
       },
       {
@@ -88,6 +104,10 @@ export function Canvas() {
     );
 
     const unsubscribeToolManager = toolManager.subscribe(() => {
+      renderLoop.invalidateInteractive();
+    });
+
+    const unsubscribeSelectionStore = selectionStore.subscribe(() => {
       renderLoop.invalidateInteractive();
     });
 
@@ -159,6 +179,13 @@ export function Canvas() {
       }
 
       const scenePoint = viewportToScene(point, viewportRef.current);
+
+      if (toolManager.getActiveTool() === "selection") {
+        selectionController.updateMarquee(scenePoint);
+        renderLoop.invalidateInteractive();
+        return;
+      }
+      
       toolManager.onPointerMove(scenePoint, {
         shiftKey: event.shiftKey,
         button: event.button,
@@ -186,11 +213,15 @@ export function Canvas() {
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        selectionController.selectAt(
+        const hit = selectionController.selectAt(
           scenePoint,
           event.shiftKey,
           viewportRef.current.zoom,
         );
+
+        if (!hit) {
+          selectionController.beginMarquee(scenePoint);
+        }
 
         renderLoop.invalidateInteractive();
         interactiveCanvas.setPointerCapture(event.pointerId);
@@ -223,7 +254,18 @@ export function Canvas() {
       }
 
       const viewportPoint = getPointerPosition(event);
-      const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
+      const scenePoint = viewportToScene(viewportPoint, viewportRef.current); 
+
+      if (toolManager.getActiveTool() === "selection") {
+        selectionController.endMarquee();
+        renderLoop.invalidateInteractive();
+      
+        if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
+          interactiveCanvas.releasePointerCapture(event.pointerId);
+        }
+      
+        return;
+      }
 
       toolManager.onPointerUp(scenePoint, {
         shiftKey: event.shiftKey,
@@ -400,6 +442,7 @@ export function Canvas() {
 
     return () => {
       unsubscribeToolManager();
+      unsubscribeSelectionStore();
       clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();
