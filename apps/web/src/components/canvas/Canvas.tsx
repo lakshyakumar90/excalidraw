@@ -8,6 +8,7 @@ import {
   RenderLoop,
   renderInteractive,
   renderStatic,
+  sceneToViewport,
   viewportToScene,
   zoomAtPoint,
   measureText,
@@ -85,14 +86,13 @@ export function Canvas() {
   );
   const [textEditorPosition, setTextEditorPosition] = useState<{
     elementId: string;
-    left: number;
-    top: number;
     sceneX: number;
     sceneY: number;
     value: string;
     inputWidth: number;
     inputHeight: number;
   } | null>(null);
+  const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const interactiveCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -329,6 +329,7 @@ export function Canvas() {
           scrollX: viewport.scrollX + dx,
           scrollY: viewport.scrollY + dy,
         };
+        setViewport(viewportRef.current);
 
         lastPointerRef.current = point;
         scenePointerRef.current = viewportToScene(point, viewportRef.current);
@@ -441,8 +442,6 @@ export function Canvas() {
         });
         setTextEditorPosition({
           elementId: textElement.id,
-          left: viewportPoint.x,
-          top: viewportPoint.y,
           sceneX: scenePoint.x,
           sceneY: scenePoint.y,
           value: "",
@@ -809,6 +808,7 @@ export function Canvas() {
           center,
           viewport.zoom * 1.2,
         );
+        setViewport(viewportRef.current);
 
         renderLoop.invalidateStatic();
       }
@@ -821,6 +821,7 @@ export function Canvas() {
           center,
           viewport.zoom / 1.2,
         );
+        setViewport(viewportRef.current);
 
         renderLoop.invalidateStatic();
       }
@@ -829,6 +830,7 @@ export function Canvas() {
         event.preventDefault();
 
         viewportRef.current = zoomAtPoint(viewport, center, 1);
+        setViewport(viewportRef.current);
 
         renderLoop.invalidateStatic();
       }
@@ -854,6 +856,7 @@ export function Canvas() {
       const zoomFactor = Math.exp(-event.deltaY * 0.001);
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
+        setViewport(viewportRef.current);
       scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
       renderLoop.invalidateStatic();
     };
@@ -895,6 +898,13 @@ export function Canvas() {
     };
   }, [closeContextMenu]);
 
+  const textEditorScreenPosition = textEditorPosition
+    ? sceneToViewport(
+        { x: textEditorPosition.sceneX, y: textEditorPosition.sceneY },
+        viewport,
+      )
+    : null;
+
   return (
     <div className="fixed inset-0 overflow-hidden">
       <canvas
@@ -915,10 +925,11 @@ export function Canvas() {
             const value = event.currentTarget.value;
             const measured = measureText(value);
             const inputWidth = Math.max(20, measured.width);
-            event.currentTarget.style.width = `${inputWidth}px`;
+            const zoom = viewportRef.current.zoom;
+            event.currentTarget.style.width = `${inputWidth * zoom}px`;
             event.currentTarget.style.height = "auto";
             const inputHeight = Math.max(
-              event.currentTarget.scrollHeight,
+              event.currentTarget.scrollHeight / zoom,
               measured.height,
             );
             scene.mutateElement(textEditorPosition.elementId, {
@@ -933,12 +944,12 @@ export function Canvas() {
           spellCheck={false}
           className="absolute z-20 resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent outline-none"
           style={{
-            left: textEditorPosition.left,
-            top: textEditorPosition.top,
-            width: textEditorPosition.inputWidth,
-            height: textEditorPosition.inputHeight,
-            fontSize: 20,
-            lineHeight: "24px",
+            left: textEditorScreenPosition?.x ?? 0,
+            top: textEditorScreenPosition?.y ?? 0,
+            width: textEditorPosition.inputWidth * viewport.zoom,
+            height: textEditorPosition.inputHeight * viewport.zoom,
+            fontSize: 20 * viewport.zoom,
+            lineHeight: `${24 * viewport.zoom}px`,
           }}
         />
       )}
