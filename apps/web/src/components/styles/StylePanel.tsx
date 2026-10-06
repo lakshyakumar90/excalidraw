@@ -1,6 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import type { Element } from "@repo/common";
 import { toolManager } from "@/lib/tools/toolManager";
 import { scene } from "@/lib/scene/scene";
 import { selectionStore } from "@/lib/selection/selectionStore";
@@ -83,14 +84,52 @@ export function StylePanel() {
     const element = scene.getElement(id);
     return element !== undefined && !element.isDeleted;
   }).length;
+  const selectedElements = [...selectedIds]
+    .map((id) => scene.getElement(id))
+    .filter(
+      (element): element is Element =>
+        element !== undefined && !element.isDeleted,
+    );
   const isDrawingTool = Object.hasOwn(TOOL_NAMES, activeTool);
+
+  useEffect(() => {
+    const selectedElement = [...selectedIds]
+      .map((id) => scene.getElement(id))
+      .find(
+        (element): element is Element =>
+          element !== undefined && !element.isDeleted,
+      );
+
+    if (selectedElement) {
+      styleStore.loadFromElement(selectedElement);
+    }
+    // Scene revisions keep the panel in sync if the selected element is changed
+    // by another editor action while it remains selected.
+  }, [selectedIds, sceneRevision]);
 
   if (selectedCount === 0 && !isDrawingTool) return null;
 
   const update = <K extends keyof CurrentItemStyle>(
     key: K,
     value: CurrentItemStyle[K],
-  ) => styleStore.set(key, value);
+  ) => {
+    const changes: Partial<CurrentItemStyle> = { [key]: value };
+    if (
+      key === "backgroundColor" &&
+      value !== "transparent" &&
+      style.fillStyle === "none"
+    ) {
+      changes.fillStyle = "solid";
+    }
+    if (key === "fillStyle" && value === "none") {
+      changes.backgroundColor = "transparent";
+    }
+
+    styleStore.update(changes);
+    for (const element of selectedElements) {
+      scene.mutateElement(element.id, changes);
+    }
+  };
 
   return (
     <aside
@@ -108,7 +147,10 @@ export function StylePanel() {
               : `Defaults for ${TOOL_NAMES[activeTool]}`}
           </p>
         </div>
-        <span aria-hidden="true" className="mt-1 h-2 w-2 rounded-full bg-blue-500" />
+        <span
+          aria-hidden="true"
+          className="mt-1 h-2 w-2 rounded-full bg-blue-500"
+        />
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
@@ -128,7 +170,9 @@ export function StylePanel() {
                 aria-label="Stroke width"
                 className={selectClassName()}
                 value={style.strokeWidth}
-                onChange={(event) => update("strokeWidth", Number(event.target.value))}
+                onChange={(event) =>
+                  update("strokeWidth", Number(event.target.value))
+                }
               >
                 <option value={1}>Thin</option>
                 <option value={2}>Medium</option>
@@ -140,7 +184,12 @@ export function StylePanel() {
                 aria-label="Stroke style"
                 className={selectClassName()}
                 value={style.strokeStyle}
-                onChange={(event) => update("strokeStyle", event.target.value as CurrentItemStyle["strokeStyle"])}
+                onChange={(event) =>
+                  update(
+                    "strokeStyle",
+                    event.target.value as CurrentItemStyle["strokeStyle"],
+                  )
+                }
               >
                 <option value="solid">Solid</option>
                 <option value="dashed">Dashed</option>
@@ -157,18 +206,33 @@ export function StylePanel() {
                 <input
                   aria-label="Background color"
                   type="color"
-                  value={style.backgroundColor === "transparent" ? "#ffffff" : style.backgroundColor}
-                  onChange={(event) => update("backgroundColor", event.target.value)}
+                  value={
+                    style.backgroundColor === "transparent"
+                      ? "#ffffff"
+                      : style.backgroundColor
+                  }
+                  onChange={(event) =>
+                    update("backgroundColor", event.target.value)
+                  }
                   disabled={style.backgroundColor === "transparent"}
                   className="h-8 w-10 cursor-pointer rounded-md border border-neutral-200 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <button
                   type="button"
                   aria-pressed={style.backgroundColor === "transparent"}
-                  onClick={() => update("backgroundColor", style.backgroundColor === "transparent" ? "#ffffff" : "transparent")}
+                  onClick={() =>
+                    update(
+                      "backgroundColor",
+                      style.backgroundColor === "transparent"
+                        ? "#ffffff"
+                        : "transparent",
+                    )
+                  }
                   className="rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
-                  {style.backgroundColor === "transparent" ? "Transparent" : "Clear"}
+                  {style.backgroundColor === "transparent"
+                    ? "Transparent"
+                    : "Clear"}
                 </button>
               </div>
             </Field>
@@ -177,7 +241,12 @@ export function StylePanel() {
                 aria-label="Fill style"
                 className={selectClassName()}
                 value={style.fillStyle}
-                onChange={(event) => update("fillStyle", event.target.value as CurrentItemStyle["fillStyle"])}
+                onChange={(event) =>
+                  update(
+                    "fillStyle",
+                    event.target.value as CurrentItemStyle["fillStyle"],
+                  )
+                }
               >
                 <option value="none">None</option>
                 <option value="solid">Solid</option>
@@ -195,7 +264,9 @@ export function StylePanel() {
                 aria-label="Sloppiness"
                 className={selectClassName()}
                 value={style.roughness}
-                onChange={(event) => update("roughness", Number(event.target.value))}
+                onChange={(event) =>
+                  update("roughness", Number(event.target.value))
+                }
               >
                 <option value={0}>Architect</option>
                 <option value={1}>Artist</option>
@@ -207,7 +278,12 @@ export function StylePanel() {
                 aria-label="Edges"
                 className={selectClassName()}
                 value={style.edgeStyle}
-                onChange={(event) => update("edgeStyle", event.target.value as CurrentItemStyle["edgeStyle"])}
+                onChange={(event) =>
+                  update(
+                    "edgeStyle",
+                    event.target.value as CurrentItemStyle["edgeStyle"],
+                  )
+                }
               >
                 <option value="sharp">Sharp</option>
                 <option value="rounded">Rounded</option>
@@ -222,10 +298,14 @@ export function StylePanel() {
                   max={100}
                   step={5}
                   value={style.opacity}
-                  onChange={(event) => update("opacity", Number(event.target.value))}
+                  onChange={(event) =>
+                    update("opacity", Number(event.target.value))
+                  }
                   className="min-w-0 flex-1 accent-blue-600"
                 />
-                <span className="w-9 text-right text-xs tabular-nums text-neutral-500">{style.opacity}%</span>
+                <span className="w-9 text-right text-xs tabular-nums text-neutral-500">
+                  {style.opacity}%
+                </span>
               </div>
             </Field>
           </div>

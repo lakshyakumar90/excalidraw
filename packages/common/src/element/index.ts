@@ -2,6 +2,7 @@ export type {
   ElementType,
   FillStyle,
   StrokeStyle,
+  EdgeStyle,
   StrokeWidth,
   BaseElement,
   RectangleElement,

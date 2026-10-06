@@ -1,6 +1,7 @@
 export type FillStyle = "none" | "solid" | "hachure" | "cross-hatch";
 export type StrokeStyle = "solid" | "dashed" | "dotted";
-export type EdgeStyle = "sharp" | "rounded";
+import type { EdgeStyle, Element } from "@repo/common";
+export type { EdgeStyle } from "@repo/common";
 
 export interface CurrentItemStyle {
   strokeColor: string;
@@ -43,9 +44,65 @@ export const styleStore = {
     return currentItemStyle;
   },
 
+  loadFromElement(element: Element): void {
+    const nextStyle: CurrentItemStyle = {
+      strokeColor: element.strokeColor ?? DEFAULT_STYLE.strokeColor,
+      backgroundColor: element.backgroundColor ?? DEFAULT_STYLE.backgroundColor,
+      fillStyle:
+        element.fillStyle === "none" &&
+        element.backgroundColor !== "transparent"
+          ? "solid"
+          : (element.fillStyle ?? DEFAULT_STYLE.fillStyle),
+      strokeWidth: element.strokeWidth ?? DEFAULT_STYLE.strokeWidth,
+      strokeStyle: element.strokeStyle ?? DEFAULT_STYLE.strokeStyle,
+      roughness: element.roughness ?? DEFAULT_STYLE.roughness,
+      edgeStyle: element.edgeStyle ?? DEFAULT_STYLE.edgeStyle,
+      opacity: element.opacity ?? DEFAULT_STYLE.opacity,
+    };
+
+    if (
+      Object.keys(nextStyle).every((key) => {
+        const styleKey = key as keyof CurrentItemStyle;
+        return Object.is(currentItemStyle[styleKey], nextStyle[styleKey]);
+      })
+    )
+      return;
+
+    currentItemStyle = nextStyle;
+    notify();
+  },
+
+  getElementStyle(): Pick<
+    Element,
+    | "strokeColor"
+    | "backgroundColor"
+    | "fillStyle"
+    | "strokeWidth"
+    | "strokeStyle"
+    | "roughness"
+    | "edgeStyle"
+    | "opacity"
+  > {
+    return { ...currentItemStyle };
+  },
+
   set<K extends keyof CurrentItemStyle>(key: K, value: CurrentItemStyle[K]) {
     if (Object.is(currentItemStyle[key], value)) return;
     currentItemStyle = { ...currentItemStyle, [key]: value };
+    notify();
+  },
+
+  update(changes: Partial<CurrentItemStyle>): void {
+    const nextStyle = { ...currentItemStyle, ...changes };
+    if (
+      Object.keys(nextStyle).every((key) => {
+        const styleKey = key as keyof CurrentItemStyle;
+        return Object.is(currentItemStyle[styleKey], nextStyle[styleKey]);
+      })
+    )
+      return;
+
+    currentItemStyle = nextStyle;
     notify();
   },
 };

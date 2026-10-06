@@ -9,7 +9,6 @@ import {
   renderStatic,
   viewportToScene,
   zoomAtPoint,
-  Tool,
 } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
@@ -17,6 +16,7 @@ import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
 import { selectionStore } from "@/lib/selection/selectionStore";
 import { TextEditDialog } from "./TextEditDialog";
+import { styleStore } from "@/lib/styles/styleStore";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -80,7 +80,12 @@ export function Canvas() {
               height,
               viewport: viewportRef.current,
             },
-            toolManager.getPreviewElement(),
+            (() => {
+              const preview = toolManager.getPreviewElement();
+              return preview
+                ? { ...preview, ...styleStore.getElementStyle() }
+                : null;
+            })(),
           );
 
           const selectedElements = [...selectionStore.getSnapshot()]
@@ -127,6 +132,9 @@ export function Canvas() {
     });
 
     const unsubscribeSelectionStore = selectionStore.subscribe(() => {
+      renderLoop.invalidateInteractive();
+    });
+    const unsubscribeStyleStore = styleStore.subscribe(() => {
       renderLoop.invalidateInteractive();
     });
 
@@ -304,11 +312,7 @@ export function Canvas() {
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
 
       if (toolManager.getActiveTool() === "selection") {
-        selectionController.pointerUp(
-          scenePoint,
-          event.shiftKey,
-          event.altKey,
-        );
+        selectionController.pointerUp(scenePoint, event.shiftKey, event.altKey);
         interactiveCanvas.style.cursor = selectionController.getCursor(
           scenePoint,
           viewportRef.current.zoom,
@@ -385,18 +389,32 @@ export function Canvas() {
         return;
       }
 
-      if (toolManager.getActiveTool() === "selection" && (event.key === "Delete" || event.key === "Backspace")) {
+      if (
+        toolManager.getActiveTool() === "selection" &&
+        (event.key === "Delete" || event.key === "Backspace")
+      ) {
         event.preventDefault();
         selectionController.deleteSelection();
         return;
       }
 
-      if (toolManager.getActiveTool() === "selection" && event.key.startsWith("Arrow")) {
+      if (
+        toolManager.getActiveTool() === "selection" &&
+        event.key.startsWith("Arrow")
+      ) {
         event.preventDefault();
         const step = event.shiftKey ? 10 : 1;
         selectionController.nudgeSelection(
-          event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0,
-          event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0,
+          event.key === "ArrowLeft"
+            ? -step
+            : event.key === "ArrowRight"
+              ? step
+              : 0,
+          event.key === "ArrowUp"
+            ? -step
+            : event.key === "ArrowDown"
+              ? step
+              : 0,
         );
         return;
       }
@@ -548,6 +566,7 @@ export function Canvas() {
     return () => {
       unsubscribeToolManager();
       unsubscribeSelectionStore();
+      unsubscribeStyleStore();
       clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();

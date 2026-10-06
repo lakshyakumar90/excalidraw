@@ -6,6 +6,7 @@ export type ElementType =
 export type FillStyle = "solid" | "hachure" | "cross-hatch" | "none";
 
 export type StrokeStyle = "solid" | "dashed" | "dotted";
+export type EdgeStyle = "sharp" | "rounded";
 
 export type StrokeWidth = number;
 
@@ -21,6 +22,7 @@ export interface BaseElement {
   backgroundColor?: string;
   fillStyle?: FillStyle;
   strokeStyle?: StrokeStyle;
+  edgeStyle?: EdgeStyle;
   strokeWidth?: StrokeWidth;
   roughness?: number;
   opacity?: number;

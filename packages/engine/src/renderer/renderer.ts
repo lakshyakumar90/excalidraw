@@ -3,6 +3,7 @@ import type {
   Element,
   FreedrawElement,
   LineElement,
+  Point,
   Viewport,
 } from "@repo/common";
 import { viewportToSceneBounds } from "./viewport";
@@ -132,6 +133,218 @@ function drawOrigin(
   context.restore();
 }
 
+interface LocalBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function getRoundedPolygonPoints(
+  vertices: readonly Point[],
+  radius: number,
+): Point[] {
+  if (radius <= 0) return [...vertices];
+
+  const points: Point[] = [];
+  const steps = 5;
+
+  for (let index = 0; index < vertices.length; index += 1) {
+    const previous = vertices[(index - 1 + vertices.length) % vertices.length];
+    const current = vertices[index];
+    const next = vertices[(index + 1) % vertices.length];
+    if (!previous || !current || !next) continue;
+
+    const incomingLength = Math.hypot(
+      current.x - previous.x,
+      current.y - previous.y,
+    );
+    const outgoingLength = Math.hypot(next.x - current.x, next.y - current.y);
+    const inset = Math.min(radius, incomingLength / 2, outgoingLength / 2);
+    const start = {
+      x: current.x + ((previous.x - current.x) / incomingLength) * inset,
+      y: current.y + ((previous.y - current.y) / incomingLength) * inset,
+    };
+    const end = {
+      x: current.x + ((next.x - current.x) / outgoingLength) * inset,
+      y: current.y + ((next.y - current.y) / outgoingLength) * inset,
+    };
+
+    points.push(start);
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps;
+      const inverse = 1 - t;
+      points.push({
+        x:
+          inverse * inverse * start.x +
+          2 * inverse * t * current.x +
+          t * t * end.x,
+        y:
+          inverse * inverse * start.y +
+          2 * inverse * t * current.y +
+          t * t * end.y,
+      });
+    }
+  }
+
+  return points;
+}
+
+function getRoughPathPoints(
+  points: readonly Point[],
+  closed: boolean,
+  element: Element,
+): Point[] {
+  const roughness = Math.max(0, element.roughness ?? 0);
+  if (roughness === 0 || points.length < 2) return [...points];
+
+  let state = (element.seed ?? 1) >>> 0;
+  if (state === 0) state = 0x6d2b79f5;
+  const random = () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+
+  const amplitude = Math.min(4, roughness * 0.8);
+  const result: Point[] = [];
+  const segmentCount = closed ? points.length : points.length - 1;
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    const start = points[index];
+    const end = points[(index + 1) % points.length];
+    if (!start || !end) continue;
+
+    result.push(start);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    const subdivisions = Math.max(1, Math.ceil(length / 8));
+    const normalX = length === 0 ? 0 : -dy / length;
+    const normalY = length === 0 ? 0 : dx / length;
+
+    for (let step = 1; step < subdivisions; step += 1) {
+      const t = step / subdivisions;
+      const jitter = (random() * 2 - 1) * amplitude;
+      result.push({
+        x: start.x + dx * t + normalX * jitter,
+        y: start.y + dy * t + normalY * jitter,
+      });
+    }
+  }
+
+  if (!closed) {
+    const last = points[points.length - 1];
+    if (last) result.push(last);
+  }
+
+  return result;
+}
+
+function tracePoints(
+  context: CanvasRenderingContext2D,
+  points: readonly Point[],
+  closed: boolean,
+): void {
+  const first = points[0];
+  if (!first) return;
+
+  context.beginPath();
+  context.moveTo(first.x, first.y);
+  for (let index = 1; index < points.length; index += 1) {
+    const point = points[index];
+    if (point) context.lineTo(point.x, point.y);
+  }
+  if (closed) context.closePath();
+}
+
+function applyStrokeAppearance(
+  context: CanvasRenderingContext2D,
+  element: Element,
+): void {
+  const width = element.strokeWidth ?? 1;
+  const strokeStyle = element.strokeStyle ?? "solid";
+  const rounded = element.edgeStyle === "rounded";
+
+  context.strokeStyle = element.strokeColor ?? "#000000";
+  context.lineWidth = width;
+  context.lineJoin = rounded ? "round" : "miter";
+  context.lineCap = rounded || strokeStyle === "dotted" ? "round" : "butt";
+  context.setLineDash(
+    strokeStyle === "dashed"
+      ? [width * 4, width * 2.5]
+      : strokeStyle === "dotted"
+        ? [Math.max(0.1, width * 0.1), width * 2.2]
+        : [],
+  );
+}
+
+function fillShape(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  bounds: LocalBounds,
+  createPath: () => void,
+): void {
+  const backgroundColor = element.backgroundColor ?? "transparent";
+  if (backgroundColor === "transparent") return;
+
+  // Keep backgrounds visible for existing elements created before fill styles were rendered.
+  const fillStyle =
+    element.fillStyle === "none" && backgroundColor !== "transparent"
+      ? "solid"
+      : (element.fillStyle ?? "none");
+  if (fillStyle === "none") return;
+
+  context.save();
+  createPath();
+
+  if (fillStyle === "solid") {
+    context.fillStyle = backgroundColor;
+    context.fill();
+    context.restore();
+    return;
+  }
+
+  context.clip();
+  context.strokeStyle = backgroundColor;
+  context.lineWidth = Math.max(0.75, (element.strokeWidth ?? 1) * 0.65);
+  context.lineCap = "butt";
+  context.setLineDash([]);
+  const spacing = 9;
+  const firstOffset = bounds.x - bounds.height;
+  const lastOffset = bounds.x + bounds.width;
+
+  for (let offset = firstOffset; offset <= lastOffset; offset += spacing) {
+    context.beginPath();
+    context.moveTo(offset, bounds.y);
+    context.lineTo(offset + bounds.height, bounds.y + bounds.height);
+    context.stroke();
+
+    if (fillStyle === "cross-hatch") {
+      context.beginPath();
+      context.moveTo(offset, bounds.y + bounds.height);
+      context.lineTo(offset + bounds.height, bounds.y);
+      context.stroke();
+    }
+  }
+
+  context.restore();
+}
+
+function strokePoints(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  points: readonly Point[],
+  closed = false,
+): void {
+  const styledPoints = getRoughPathPoints(points, closed, element);
+  applyStrokeAppearance(context, element);
+  tracePoints(context, styledPoints, closed);
+  context.stroke();
+}
+
 function drawRectangle(
   context: CanvasRenderingContext2D,
   element: Extract<Element, { type: "rectangle" }>,
@@ -139,22 +352,25 @@ function drawRectangle(
   const width = element.width ?? 0;
   const height = element.height ?? 0;
   const opacity = element.opacity ?? 100;
-  const backgroundColor = element.backgroundColor ?? "transparent";
-  const strokeColor = element.strokeColor ?? "#000000";
-  const strokeWidth = element.strokeWidth ?? 1;
-
   context.save();
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
 
-  if (backgroundColor !== "transparent") {
-    context.fillStyle = backgroundColor;
-    context.fillRect(0, 0, width, height);
-  }
+  const vertices = [
+    { x: 0, y: 0 },
+    { x: width, y: 0 },
+    { x: width, y: height },
+    { x: 0, y: height },
+  ];
+  const radius =
+    element.edgeStyle === "rounded"
+      ? Math.min(12, Math.min(width, height) * 0.2)
+      : 0;
+  const outline = getRoundedPolygonPoints(vertices, radius);
+  const createPath = () => tracePoints(context, outline, true);
 
-  context.strokeStyle = strokeColor;
-  context.lineWidth = strokeWidth;
-  context.strokeRect(0, 0, width, height);
+  fillShape(context, element, { x: 0, y: 0, width, height }, createPath);
+  strokePoints(context, element, outline, true);
   context.restore();
 }
 
@@ -168,34 +384,34 @@ function drawEllipse(
   const height = element.height ?? 0;
   const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
-  const backgroundColor = element.backgroundColor ?? "transparent";
-  const strokeColor = element.strokeColor ?? "#000000";
-  const strokeWidth = element.strokeWidth ?? 1;
-
   context.save();
   context.translate(x + width / 2, y + height / 2);
   context.rotate(angle);
   context.globalAlpha = opacity / 100;
 
-  context.beginPath();
-  context.ellipse(
-    0,
-    0,
-    Math.abs(width) / 2,
-    Math.abs(height) / 2,
-    0,
-    0,
-    Math.PI * 2,
+  const halfWidth = Math.abs(width) / 2;
+  const halfHeight = Math.abs(height) / 2;
+  const createPath = () => {
+    context.beginPath();
+    context.ellipse(0, 0, halfWidth, halfHeight, 0, 0, Math.PI * 2);
+  };
+  const points = Array.from({ length: 64 }, (_, index) => {
+    const angle = (index / 64) * Math.PI * 2;
+    return { x: Math.cos(angle) * halfWidth, y: Math.sin(angle) * halfHeight };
+  });
+
+  fillShape(
+    context,
+    element,
+    {
+      x: -halfWidth,
+      y: -halfHeight,
+      width: halfWidth * 2,
+      height: halfHeight * 2,
+    },
+    createPath,
   );
-
-  if (backgroundColor !== "transparent") {
-    context.fillStyle = backgroundColor;
-    context.fill();
-  }
-
-  context.strokeStyle = strokeColor;
-  context.lineWidth = strokeWidth;
-  context.stroke();
+  strokePoints(context, element, points, true);
   context.restore();
 }
 
@@ -209,10 +425,6 @@ function drawDiamond(
   const height = element.height ?? 0;
   const angle = element.angle ?? 0;
   const opacity = element.opacity ?? 100;
-  const backgroundColor = element.backgroundColor ?? "transparent";
-  const strokeColor = element.strokeColor ?? "#000000";
-  const strokeWidth = element.strokeWidth ?? 1;
-
   context.save();
   context.translate(x + width / 2, y + height / 2);
   context.rotate(angle);
@@ -221,21 +433,31 @@ function drawDiamond(
   const halfWidth = Math.abs(width) / 2;
   const halfHeight = Math.abs(height) / 2;
 
-  context.beginPath();
-  context.moveTo(0, -halfHeight);
-  context.lineTo(halfWidth, 0);
-  context.lineTo(0, halfHeight);
-  context.lineTo(-halfWidth, 0);
-  context.closePath();
+  const vertices = [
+    { x: 0, y: -halfHeight },
+    { x: halfWidth, y: 0 },
+    { x: 0, y: halfHeight },
+    { x: -halfWidth, y: 0 },
+  ];
+  const radius =
+    element.edgeStyle === "rounded"
+      ? Math.min(12, Math.min(halfWidth, halfHeight) * 0.35)
+      : 0;
+  const outline = getRoundedPolygonPoints(vertices, radius);
+  const createPath = () => tracePoints(context, outline, true);
 
-  if (backgroundColor !== "transparent") {
-    context.fillStyle = backgroundColor;
-    context.fill();
-  }
-
-  context.strokeStyle = strokeColor;
-  context.lineWidth = strokeWidth;
-  context.stroke();
+  fillShape(
+    context,
+    element,
+    {
+      x: -halfWidth,
+      y: -halfHeight,
+      width: halfWidth * 2,
+      height: halfHeight * 2,
+    },
+    createPath,
+  );
+  strokePoints(context, element, outline, true);
   context.restore();
 }
 
@@ -244,8 +466,6 @@ function drawLine(
   element: Extract<Element, { type: "line" }>,
 ): void {
   const opacity = element.opacity ?? 100;
-  const strokeColor = element.strokeColor ?? "#000000";
-  const strokeWidth = element.strokeWidth ?? 1;
   const points = element.points ?? [];
 
   if (points.length < 2) {
@@ -255,28 +475,7 @@ function drawLine(
   context.save();
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
-  context.strokeStyle = strokeColor;
-  context.lineWidth = strokeWidth;
-  context.beginPath();
-
-  const firstPoint = points[0];
-
-  if (!firstPoint) {
-    context.restore();
-    return;
-  }
-
-  context.moveTo(firstPoint.x, firstPoint.y);
-
-  for (let index = 1; index < points.length; index += 1) {
-    const point = points[index];
-
-    if (point) {
-      context.lineTo(point.x, point.y);
-    }
-  }
-
-  context.stroke();
+  strokePoints(context, element, points);
   context.restore();
 }
 
@@ -299,32 +498,14 @@ export function drawArrow(
   }
 
   const opacity = element.opacity ?? 100;
-  const strokeColor = element.strokeColor ?? "#000000";
   const strokeWidth = element.strokeWidth ?? 1;
 
   context.save();
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
-  context.strokeStyle = strokeColor;
-  context.lineWidth = strokeWidth;
-  context.lineCap = "round";
-  context.lineJoin = "round";
 
   // Body
-  context.beginPath();
-  context.moveTo(start.x, start.y);
-
-  for (let i = 1; i < points.length; i += 1) {
-    const point = points[i];
-
-    if (!point) {
-      continue;
-    }
-
-    context.lineTo(point.x, point.y);
-  }
-
-  context.stroke();
+  strokePoints(context, element, points);
 
   // Arrowhead
   const arrowHead = getArrowHeadPoints(
@@ -334,15 +515,8 @@ export function drawArrow(
   );
 
   if (arrowHead) {
-    context.beginPath();
-
-    context.moveTo(end.x, end.y);
-    context.lineTo(arrowHead.left.x, arrowHead.left.y);
-
-    context.moveTo(end.x, end.y);
-    context.lineTo(arrowHead.right.x, arrowHead.right.y);
-
-    context.stroke();
+    strokePoints(context, element, [end, arrowHead.left]);
+    strokePoints(context, element, [end, arrowHead.right]);
   }
 
   context.restore();
@@ -371,29 +545,11 @@ export function drawCurvedLine(
   }
 
   const opacity = element.opacity ?? 100;
-  const strokeColor = element.strokeColor ?? "#000000";
-  const strokeWidth = element.strokeWidth ?? 1;
 
   context.save();
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
-  context.strokeStyle = strokeColor;
-  context.lineWidth = strokeWidth;
-  context.lineCap = "round";
-  context.lineJoin = "round";
-  context.beginPath();
-  context.moveTo(firstPoint.x, firstPoint.y);
-
-  for (let i = 1; i < points.length; i += 1) {
-    const point = points[i];
-
-    if (!point) {
-      continue;
-    }
-    context.lineTo(point.x, point.y);
-  }
-
-  context.stroke();
+  strokePoints(context, element, points);
   context.restore();
 }
 
@@ -424,37 +580,43 @@ function drawFreedraw(
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.fillStyle = strokeColor;
-  context.beginPath();
-  context.moveTo(firstPoint.x, firstPoint.y);
-
-  for (let i = 1; i < path.length; i += 1) {
-    const point = path[i];
-
-    if (!point) {
-      continue;
-    }
-
-    context.lineTo(point.x, point.y);
-  }
-  context.closePath();
+  const roughPath = getRoughPathPoints(path, true, element);
+  tracePoints(context, roughPath, true);
   context.fill();
+  strokePoints(context, element, path, true);
   context.restore();
 }
 
-function drawText(context: CanvasRenderingContext2D, element: Extract<Element, { type: "text" }>): void {
+function drawText(
+  context: CanvasRenderingContext2D,
+  element: Extract<Element, { type: "text" }>,
+): void {
   context.save();
   applyElementTransform(context, element);
   context.globalAlpha = (element.opacity ?? 100) / 100;
   context.fillStyle = element.strokeColor ?? "#1e1e1e";
-  context.font = (element.fontSize || 20) + "px " + (element.fontFamily || "sans-serif");
+  context.font =
+    (element.fontSize || 20) + "px " + (element.fontFamily || "sans-serif");
   context.textAlign = element.textAlign ?? "left";
   context.textBaseline = "top";
-  const x = element.textAlign === "center" ? (element.width ?? 0) / 2 : element.textAlign === "right" ? (element.width ?? 0) : 0;
+  const x =
+    element.textAlign === "center"
+      ? (element.width ?? 0) / 2
+      : element.textAlign === "right"
+        ? (element.width ?? 0)
+        : 0;
   const lines = element.text.split("\n");
   const lineHeight = element.fontSize || 20;
   const textHeight = lines.length * lineHeight;
-  const y = element.verticalAlign === "middle" ? ((element.height ?? textHeight) - textHeight) / 2 : element.verticalAlign === "bottom" ? (element.height ?? textHeight) - textHeight : 0;
-  lines.forEach((line, index) => context.fillText(line, x, y + index * lineHeight));
+  const y =
+    element.verticalAlign === "middle"
+      ? ((element.height ?? textHeight) - textHeight) / 2
+      : element.verticalAlign === "bottom"
+        ? (element.height ?? textHeight) - textHeight
+        : 0;
+  lines.forEach((line, index) =>
+    context.fillText(line, x, y + index * lineHeight),
+  );
   context.restore();
 }
 
