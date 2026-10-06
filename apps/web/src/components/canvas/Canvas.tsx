@@ -17,6 +17,9 @@ import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
 import { selectionStore } from "@/lib/selection/selectionStore";
 import { TextEditDialog } from "./TextEditDialog";
 import { styleStore } from "@/lib/styles/styleStore";
+import { eyedropperStore } from "@/lib/styles/eyedropperStore";
+import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
+import { EyedropperOverlay } from "@/components/styles/EyedropperOverlay";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -25,6 +28,50 @@ const INITIAL_VIEWPORT: Viewport = {
   scrollY: 0,
   zoom: 1,
 };
+
+function sampleCanvasColor(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  point: Point,
+): string | null {
+  const rect = canvas.getBoundingClientRect();
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    point.x < 0 ||
+    point.y < 0 ||
+    point.x >= rect.width ||
+    point.y >= rect.height
+  ) {
+    return null;
+  }
+
+  const pixelX = Math.floor((point.x / rect.width) * canvas.width);
+  const pixelY = Math.floor((point.y / rect.height) * canvas.height);
+
+  try {
+    const pixel = context.getImageData(pixelX, pixelY, 1, 1).data;
+    const red = pixel[0];
+    const green = pixel[1];
+    const blue = pixel[2];
+    const alpha = pixel[3];
+    if (
+      red === undefined ||
+      green === undefined ||
+      blue === undefined ||
+      alpha === undefined
+    ) {
+      return null;
+    }
+    if (alpha === 0) return "transparent";
+
+    return `#${[red, green, blue]
+      .map((channel) => channel.toString(16).padStart(2, "0"))
+      .join("")}`;
+  } catch {
+    return null;
+  }
+}
 
 export function Canvas() {
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -36,6 +83,7 @@ export function Canvas() {
   const lastPointerRef = useRef<Point>({ x: 0, y: 0 });
   const spacePressRef = useRef(false);
   const visibleElementCountRef = useRef(0);
+  const eyedropperPointerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
@@ -112,7 +160,9 @@ export function Canvas() {
 
     const updateCanvasCursor = () => {
       const activeTool = toolManager.getActiveTool();
-      if (isPanningRef.current) {
+      if (eyedropperStore.getTarget()) {
+        interactiveCanvas.style.cursor = "none";
+      } else if (isPanningRef.current) {
         interactiveCanvas.style.cursor = "grabbing";
       } else if (activeTool === "hand") {
         interactiveCanvas.style.cursor = "grab";
@@ -189,6 +239,17 @@ export function Canvas() {
       pointerRef.current = point;
       scenePointerRef.current = viewportToScene(point, viewportRef.current);
 
+      if (eyedropperPointerIdRef.current === event.pointerId) return;
+
+      if (eyedropperStore.getTarget()) {
+        interactiveCanvas.style.cursor = "none";
+        eyedropperStore.updatePointer(
+          point,
+          sampleCanvasColor(staticCanvas, staticContext, point),
+        );
+        return;
+      }
+
       if (isPanningRef.current) {
         const dx = point.x - lastPointerRef.current.x;
         const dy = point.y - lastPointerRef.current.y;
@@ -236,6 +297,40 @@ export function Canvas() {
     };
 
     const handlePointerDown = (event: PointerEvent) => {
+      const eyedropperTarget = eyedropperStore.getTarget();
+      if (eyedropperTarget) {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        eyedropperPointerIdRef.current = event.pointerId;
+        interactiveCanvas.setPointerCapture(event.pointerId);
+
+        const point = getPointerPosition(event);
+        const color = sampleCanvasColor(staticCanvas, staticContext, point);
+        if (color) {
+          const changes =
+            eyedropperTarget === "strokeColor"
+              ? { strokeColor: color }
+              : {
+                  backgroundColor: color,
+                  ...(styleStore.getSnapshot().fillStyle === "none"
+                    ? { fillStyle: "solid" as const }
+                    : {}),
+                };
+
+          styleStore.update(changes);
+          colorHistoryStore.add(color);
+          for (const id of selectionStore.getSnapshot()) {
+            const element = scene.getElement(id);
+            if (element && !element.isDeleted) {
+              scene.mutateElement(element.id, changes);
+            }
+          }
+          eyedropperStore.cancel();
+          updateCanvasCursor();
+        }
+        return;
+      }
+
       const isMiddleMouse = event.button === 1;
       const isSpacePan = event.button === 0 && spacePressRef.current;
 
@@ -291,6 +386,14 @@ export function Canvas() {
     };
 
     const handlePointerUp = (event: PointerEvent) => {
+      if (eyedropperPointerIdRef.current === event.pointerId) {
+        eyedropperPointerIdRef.current = null;
+        if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
+          interactiveCanvas.releasePointerCapture(event.pointerId);
+        }
+        return;
+      }
+
       if (isPanningRef.current) {
         isPanningRef.current = false;
         const pointer = getPointerPosition(event);
@@ -373,6 +476,12 @@ export function Canvas() {
       }
 
       if (event.key === "Escape") {
+        if (eyedropperStore.getTarget()) {
+          eyedropperStore.cancel();
+          updateCanvasCursor();
+          renderLoop.invalidateInteractive();
+          return;
+        }
         if (selectionController.exitPointEditing()) {
           renderLoop.invalidateInteractive();
           return;
@@ -591,6 +700,7 @@ export function Canvas() {
         ref={interactiveCanvasRef}
         className="absolute inset-0 block h-full w-full touch-none select-none"
       />
+      <EyedropperOverlay />
       <TextEditDialog />
     </div>
   );

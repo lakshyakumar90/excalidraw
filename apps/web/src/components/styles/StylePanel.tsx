@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { Element } from "@repo/common";
 import { ColorPicker } from "@/components/styles/ColorPicker";
 import { toolManager } from "@/lib/tools/toolManager";
 import { scene } from "@/lib/scene/scene";
 import { selectionStore } from "@/lib/selection/selectionStore";
 import { styleStore, type CurrentItemStyle } from "@/lib/styles/styleStore";
+import { eyedropperStore } from "@/lib/styles/eyedropperStore";
+import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
+const EMPTY_RECENT_COLORS: readonly string[] = [];
 
 const TOOL_NAMES: Record<string, string> = {
   rectangle: "Rectangle",
@@ -58,7 +61,6 @@ function selectClassName() {
 }
 
 export function StylePanel() {
-  const [recentColors, setRecentColors] = useState<string[]>([]);
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
@@ -78,6 +80,16 @@ export function StylePanel() {
     styleStore.subscribe,
     styleStore.getSnapshot,
     styleStore.getSnapshot,
+  );
+  const activeEyedropperTarget = useSyncExternalStore(
+    eyedropperStore.subscribeMode,
+    eyedropperStore.getTarget,
+    () => null,
+  );
+  const recentColors = useSyncExternalStore(
+    colorHistoryStore.subscribe,
+    colorHistoryStore.getSnapshot,
+    () => EMPTY_RECENT_COLORS,
   );
 
   // Read the scene revision so deleted or replaced selected elements update the panel.
@@ -137,15 +149,6 @@ export function StylePanel() {
     }
   };
 
-  const rememberColor = (color: string) => {
-    setRecentColors((colors) =>
-      [color, ...colors.filter((recentColor) => recentColor !== color)].slice(
-        0,
-        8,
-      ),
-    );
-  };
-
   return (
     <aside
       aria-label="Style properties"
@@ -175,8 +178,10 @@ export function StylePanel() {
               label="Stroke color"
               value={style.strokeColor}
               recentColors={recentColors}
+              eyedropperActive={activeEyedropperTarget === "strokeColor"}
               onChange={(color) => update("strokeColor", color)}
-              onCommit={rememberColor}
+              onCommit={colorHistoryStore.add}
+              onPickFromCanvas={() => eyedropperStore.activate("strokeColor")}
             />
             <Field label="Width">
               <select
@@ -223,8 +228,12 @@ export function StylePanel() {
                     : style.backgroundColor
                 }
                 recentColors={recentColors}
+                eyedropperActive={activeEyedropperTarget === "backgroundColor"}
                 onChange={(color) => update("backgroundColor", color)}
-                onCommit={rememberColor}
+                onCommit={colorHistoryStore.add}
+                onPickFromCanvas={() =>
+                  eyedropperStore.activate("backgroundColor")
+                }
               />
               <div className="flex items-center gap-2">
                 <button

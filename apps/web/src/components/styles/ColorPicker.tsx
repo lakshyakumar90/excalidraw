@@ -10,9 +10,11 @@ interface PaletteColor {
 interface ColorPickerProps {
   label: string;
   value: string;
-  recentColors: string[];
+  recentColors: readonly string[];
+  eyedropperActive: boolean;
   onChange: (color: string) => void;
   onCommit: (color: string) => void;
+  onPickFromCanvas: () => void;
 }
 
 const PALETTE_COLORS: PaletteColor[] = [
@@ -144,8 +146,10 @@ export function ColorPicker({
   label,
   value,
   recentColors,
+  eyedropperActive,
   onChange,
   onCommit,
+  onPickFromCanvas,
 }: ColorPickerProps) {
   const [hexInput, setHexInput] = useState(value);
 
@@ -205,7 +209,7 @@ export function ColorPicker({
                 event.currentTarget.blur();
               }
             }}
-            className="h-8 w-24 rounded-md border border-neutral-200 bg-white px-2 font-mono text-xs uppercase text-neutral-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-8 w-20 rounded-md border border-neutral-200 bg-white px-2 font-mono text-xs uppercase text-neutral-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
           />
           <input
             aria-label={`${label} color picker`}
@@ -215,6 +219,32 @@ export function ColorPicker({
             onBlur={(event) => onCommit(event.currentTarget.value)}
             className="h-8 w-10 cursor-pointer rounded-md border border-neutral-200 bg-white p-1"
           />
+          <button
+            type="button"
+            aria-label={`Pick ${label.toLowerCase()} from canvas`}
+            aria-pressed={eyedropperActive}
+            title="Pick a color from the canvas"
+            onClick={onPickFromCanvas}
+            className={`grid h-8 w-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+              eyedropperActive
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m14 6 4 4M4 20l4.5-1 9.8-9.8a2.1 2.1 0 0 0-3-3L5.5 16 4 20Z" />
+              <path d="m13 7 4 4" />
+            </svg>
+          </button>
         </div>
       </div>
 
