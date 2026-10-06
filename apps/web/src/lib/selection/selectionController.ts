@@ -448,13 +448,34 @@ export const selectionController = {
     }
 
     if (gesture.kind === "resize") {
-      const resized = resizeElement(
+      let resized = resizeElement(
         gesture.original,
         gesture.handle,
         point,
         shiftKey,
         altKey,
       );
+
+      if (gesture.original.type === "text" && resized.type === "text") {
+        const originalWidth = Math.max(1, gesture.original.width ?? 0);
+        const originalHeight = Math.max(1, gesture.original.height ?? 0);
+        const scaleX = Math.max(0.05, (resized.width ?? 0) / originalWidth);
+        const scaleY = Math.max(0.05, (resized.height ?? 0) / originalHeight);
+        const horizontal =
+          gesture.handle.includes("w") || gesture.handle.includes("e");
+        const vertical =
+          gesture.handle.includes("n") || gesture.handle.includes("s");
+        const fontScale =
+          horizontal && vertical
+            ? Math.sqrt(scaleX * scaleY)
+            : horizontal
+              ? scaleX
+              : scaleY;
+        resized = {
+          ...resized,
+          fontSize: Math.max(1, gesture.original.fontSize * fontScale),
+        };
+      }
 
       scene.mutateElement(
         gesture.original.id,

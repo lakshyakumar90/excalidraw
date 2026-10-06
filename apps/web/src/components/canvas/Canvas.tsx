@@ -680,11 +680,40 @@ export function Canvas() {
         return;
       }
 
-      selectionController.handleDoubleClick(
-        scenePoint,
-        viewportRef.current.zoom,
-      );
-      renderLoop.invalidateInteractive();
+      if (hitElement && (hitElement.groupIds?.length ?? 0) > 0) {
+        selectionController.handleDoubleClick(
+          scenePoint,
+          viewportRef.current.zoom,
+        );
+        renderLoop.invalidateInteractive();
+        return;
+      }
+
+      commitTextElement(textEditorRef.current);
+      const textElement = createTextElement({
+        text: "",
+        x: scenePoint.x,
+        y: scenePoint.y,
+      });
+      scene.addElement({
+        ...textElement,
+        ...styleStore.getElementStyle(),
+      });
+      const editor: TextEditorState = {
+        elementId: textElement.id,
+        angle: textElement.angle ?? 0,
+        fontSize: textElement.fontSize,
+        fontFamily: textElement.fontFamily,
+        textAlign: textElement.textAlign,
+        verticalAlign: textElement.verticalAlign,
+        sceneX: scenePoint.x,
+        sceneY: scenePoint.y,
+        value: "",
+        inputWidth: 20,
+        inputHeight: 24,
+      };
+      textEditorRef.current = editor;
+      setTextEditorPosition(editor);
     };
 
     const handleContextMenu = (event: MouseEvent) => {
@@ -1029,6 +1058,7 @@ export function Canvas() {
       window.removeEventListener("resize", resizeCanvas);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
       interactiveCanvas.removeEventListener("contextmenu", handleContextMenu);
+      interactiveCanvas.removeEventListener("dblclick", handleDoubleClick);
       interactiveCanvas.removeEventListener("pointermove", handlePointerMove);
       interactiveCanvas.removeEventListener("pointerup", handlePointerUp);
       interactiveCanvas.removeEventListener("wheel", handleWheel);
@@ -1150,8 +1180,8 @@ export function Canvas() {
             top: textEditorScreenPosition?.y ?? 0,
             width: textEditorPosition.inputWidth * viewport.zoom,
             height: textEditorPosition.inputHeight * viewport.zoom,
-            fontSize: 20 * viewport.zoom,
-            lineHeight: `${24 * viewport.zoom}px`,
+            fontSize: textEditorPosition.fontSize * viewport.zoom,
+            lineHeight: `${textEditorPosition.fontSize * 1.2 * viewport.zoom}px`,
             textAlign: textEditorPosition.textAlign,
             caretColor: "#1e1e1e",
             transform: `rotate(${textEditorPosition.angle}rad)`,
