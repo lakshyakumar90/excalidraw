@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Element } from "@repo/common";
+import { ColorPicker } from "@/components/styles/ColorPicker";
 import { toolManager } from "@/lib/tools/toolManager";
 import { scene } from "@/lib/scene/scene";
 import { selectionStore } from "@/lib/selection/selectionStore";
@@ -57,6 +58,7 @@ function selectClassName() {
 }
 
 export function StylePanel() {
+  const [recentColors, setRecentColors] = useState<string[]>([]);
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
@@ -135,6 +137,15 @@ export function StylePanel() {
     }
   };
 
+  const rememberColor = (color: string) => {
+    setRecentColors((colors) =>
+      [color, ...colors.filter((recentColor) => recentColor !== color)].slice(
+        0,
+        8,
+      ),
+    );
+  };
+
   return (
     <aside
       aria-label="Style properties"
@@ -160,15 +171,13 @@ export function StylePanel() {
       <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-5 [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]">
         <Section title="Stroke">
           <div className="space-y-2">
-            <Field label="Color">
-              <input
-                aria-label="Stroke color"
-                type="color"
-                value={style.strokeColor}
-                onChange={(event) => update("strokeColor", event.target.value)}
-                className="h-8 w-10 cursor-pointer rounded-md border border-neutral-200 bg-white p-1"
-              />
-            </Field>
+            <ColorPicker
+              label="Stroke color"
+              value={style.strokeColor}
+              recentColors={recentColors}
+              onChange={(color) => update("strokeColor", color)}
+              onCommit={rememberColor}
+            />
             <Field label="Width">
               <select
                 aria-label="Stroke width"
@@ -205,22 +214,19 @@ export function StylePanel() {
 
         <Section title="Background">
           <div className="space-y-2">
-            <Field label="Color">
+            <div className="space-y-2">
+              <ColorPicker
+                label="Background color"
+                value={
+                  style.backgroundColor === "transparent"
+                    ? "#ffffff"
+                    : style.backgroundColor
+                }
+                recentColors={recentColors}
+                onChange={(color) => update("backgroundColor", color)}
+                onCommit={rememberColor}
+              />
               <div className="flex items-center gap-2">
-                <input
-                  aria-label="Background color"
-                  type="color"
-                  value={
-                    style.backgroundColor === "transparent"
-                      ? "#ffffff"
-                      : style.backgroundColor
-                  }
-                  onChange={(event) =>
-                    update("backgroundColor", event.target.value)
-                  }
-                  disabled={style.backgroundColor === "transparent"}
-                  className="h-8 w-10 cursor-pointer rounded-md border border-neutral-200 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
-                />
                 <button
                   type="button"
                   aria-pressed={style.backgroundColor === "transparent"}
@@ -239,7 +245,7 @@ export function StylePanel() {
                     : "Clear"}
                 </button>
               </div>
-            </Field>
+            </div>
             <Field label="Fill style">
               <select
                 aria-label="Fill style"
