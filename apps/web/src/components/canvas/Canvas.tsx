@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
@@ -19,6 +19,11 @@ import { styleStore } from "@/lib/styles/styleStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 import { EyedropperOverlay } from "@/components/styles/EyedropperOverlay";
+import {
+  CanvasContextMenu,
+  type CanvasContextMenuAction,
+  type CanvasContextMenuState,
+} from "./CanvasContextMenu";
 
 import { scene } from "@/lib/scene/scene";
 
@@ -73,6 +78,10 @@ function sampleCanvasColor(
 }
 
 export function Canvas() {
+  const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
+    null,
+  );
+  const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const interactiveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<Viewport>(INITIAL_VIEWPORT);
@@ -83,6 +92,52 @@ export function Canvas() {
   const spacePressRef = useRef(false);
   const visibleElementCountRef = useRef(0);
   const eyedropperPointerIdRef = useRef<number | null>(null);
+
+  const closeContextMenu = useCallback(() => {
+    contextMenuRef.current = null;
+    setContextMenu(null);
+  }, []);
+
+  const performContextMenuAction = useCallback(
+    (action: CanvasContextMenuAction, scenePoint: Point) => {
+      closeContextMenu();
+      switch (action) {
+        case "paste":
+          void selectionController.pasteFromClipboard(scenePoint);
+          break;
+        case "select-all":
+          selectionController.selectAll();
+          break;
+        case "cut":
+          void selectionController.copySelectionToClipboard().then((copied) => {
+            if (copied) selectionController.deleteSelection();
+          });
+          break;
+        case "copy":
+          void selectionController.copySelectionToClipboard();
+          break;
+        case "duplicate":
+          selectionController.duplicateSelection();
+          break;
+        case "group":
+          selectionController.groupSelection();
+          break;
+        case "ungroup":
+          selectionController.ungroupSelection();
+          break;
+        case "backward":
+        case "forward":
+        case "back":
+        case "front":
+          scene.reorderElements(selectionStore.getSnapshot(), action);
+          break;
+        case "delete":
+          selectionController.deleteSelection();
+          break;
+      }
+    },
+    [closeContextMenu],
+  );
 
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
@@ -458,6 +513,47 @@ export function Canvas() {
       renderLoop.invalidateInteractive();
     };
 
+    const handleContextMenu = (event: MouseEvent) => {
+      if (eyedropperStore.getTarget()) return;
+      event.preventDefault();
+
+      const viewportPoint = getPointerPosition(event);
+      const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
+      pointerRef.current = viewportPoint;
+      scenePointerRef.current = scenePoint;
+      if (toolManager.getActiveTool() === "selection") {
+        selectionController.selectAtContextMenu(
+          scenePoint,
+          viewportRef.current.zoom,
+        );
+      }
+      const selectedElements = [...selectionStore.getSnapshot()]
+        .map((id) => scene.getElement(id))
+        .filter(
+          (element): element is Element =>
+            element !== undefined && !element.isDeleted,
+        );
+      const width = 224;
+      const height = 440;
+      const next: CanvasContextMenuState = {
+        x: Math.min(
+          Math.max(8, event.clientX),
+          Math.max(8, window.innerWidth - width - 8),
+        ),
+        y: Math.min(
+          Math.max(8, event.clientY),
+          Math.max(8, window.innerHeight - height - 8),
+        ),
+        scenePoint,
+        selectedCount: selectedElements.length,
+        hasGroupedSelection: selectedElements.some(
+          (element) => (element.groupIds?.length ?? 0) > 0,
+        ),
+      };
+      contextMenuRef.current = next;
+      setContextMenu(next);
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       if (
@@ -476,6 +572,11 @@ export function Canvas() {
       }
 
       if (event.key === "Escape") {
+        if (contextMenuRef.current) {
+          event.preventDefault();
+          closeContextMenu();
+          return;
+        }
         if (eyedropperStore.getTarget()) {
           eyedropperStore.cancel();
           updateCanvasCursor();
@@ -530,6 +631,18 @@ export function Canvas() {
       ) {
         event.preventDefault();
         void selectionController.copySelectionToClipboard();
+        return;
+      }
+
+      if (
+        toolManager.getActiveTool() === "selection" &&
+        (event.ctrlKey || event.metaKey) &&
+        event.code === "KeyX"
+      ) {
+        event.preventDefault();
+        void selectionController.copySelectionToClipboard().then((copied) => {
+          if (copied) selectionController.deleteSelection();
+        });
         return;
       }
 
@@ -709,6 +822,7 @@ export function Canvas() {
 
     window.addEventListener("resize", resizeCanvas);
     interactiveCanvas.addEventListener("pointerdown", handlePointerDown);
+    interactiveCanvas.addEventListener("contextmenu", handleContextMenu);
     interactiveCanvas.addEventListener("dblclick", handleDoubleClick);
     interactiveCanvas.addEventListener("pointermove", handlePointerMove);
     interactiveCanvas.addEventListener("pointerup", handlePointerUp);
@@ -728,13 +842,14 @@ export function Canvas() {
       renderLoop.stop();
       window.removeEventListener("resize", resizeCanvas);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
+      interactiveCanvas.removeEventListener("contextmenu", handleContextMenu);
       interactiveCanvas.removeEventListener("pointermove", handlePointerMove);
       interactiveCanvas.removeEventListener("pointerup", handlePointerUp);
       interactiveCanvas.removeEventListener("wheel", handleWheel);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, []);
+  }, [closeContextMenu]);
 
   return (
     <div className="fixed inset-0 overflow-hidden">
@@ -748,6 +863,13 @@ export function Canvas() {
         className="absolute inset-0 block h-full w-full touch-none select-none"
       />
       <EyedropperOverlay />
+      {contextMenu && (
+        <CanvasContextMenu
+          state={contextMenu}
+          onAction={performContextMenuAction}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   );
 }

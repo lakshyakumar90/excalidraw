@@ -611,6 +611,31 @@ export const selectionController = {
     return false;
   },
 
+  selectAtContextMenu(point: Point, zoom: number): boolean {
+    const element = getElementAtPosition(scene.getElements(), point, zoom);
+    if (!element) return false;
+
+    const clickSelection = getClickSelectionIds(element);
+    const selectedIds = selectionStore.getSnapshot();
+    const unitIsSelected = clickSelection.every((id) => selectedIds.has(id));
+    if (
+      !selectedIds.has(element.id) ||
+      (clickSelection.length > 1 && selectedIds.size === 1 && !unitIsSelected)
+    ) {
+      selectionStore.set(clickSelection);
+    }
+    return true;
+  },
+
+  canUngroupSelection(): boolean {
+    return [...selectionStore.getSnapshot()].some((id) => {
+      const element = scene.getElement(id);
+      return (
+        !!element && !element.isDeleted && (element.groupIds?.length ?? 0) > 0
+      );
+    });
+  },
+
   groupSelection(): boolean {
     const elements = [...selectionStore.getSnapshot()]
       .map((id) => scene.getElement(id))
