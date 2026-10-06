@@ -19,6 +19,7 @@ export type ToolType =
   | "curved-line"
   | "freedraw"
   | "selection"
+  | "text"
   | "hand";
 
 export interface ToolManagerOptions {

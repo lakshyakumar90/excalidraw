@@ -81,6 +81,12 @@ export function Canvas() {
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
     null,
   );
+  const [textEditorPosition, setTextEditorPosition] = useState<{
+    left: number;
+    top: number;
+    sceneX: number;
+    sceneY: number;
+  } | null>(null);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const interactiveCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -232,6 +238,9 @@ export function Canvas() {
     };
 
     const unsubscribeToolManager = toolManager.subscribe(() => {
+      if (toolManager.getActiveTool() !== "text") {
+        setTextEditorPosition(null);
+      }
       updateCanvasCursor();
       renderLoop.invalidateInteractive();
     });
@@ -412,6 +421,17 @@ export function Canvas() {
 
       const viewportPoint = getPointerPosition(event);
       const scenePoint = viewportToScene(viewportPoint, viewportRef.current);
+
+      if (toolManager.getActiveTool() === "text") {
+        event.preventDefault();
+        setTextEditorPosition({
+          left: viewportPoint.x,
+          top: viewportPoint.y,
+          sceneX: scenePoint.x,
+          sceneY: scenePoint.y,
+        });
+        return;
+      }
 
       if (toolManager.getActiveTool() === "selection") {
         selectionController.pointerDown(
@@ -706,6 +726,11 @@ export function Canvas() {
         return;
       }
 
+      if (key === "t") {
+        toolManager.setActiveTool("text");
+        return;
+      }
+
       if (key === "r") {
         toolManager.setActiveTool("rectangle");
         return;
@@ -862,6 +887,22 @@ export function Canvas() {
         ref={interactiveCanvasRef}
         className="absolute inset-0 block h-full w-full touch-none select-none"
       />
+      {textEditorPosition && (
+        <textarea
+          aria-label="Text input"
+          autoFocus
+          spellCheck={false}
+          className="absolute z-20 resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent outline-none"
+          style={{
+            left: textEditorPosition.left,
+            top: textEditorPosition.top,
+            width: 1,
+            height: 1,
+            fontSize: 20,
+            lineHeight: "24px",
+          }}
+        />
+      )}
       <EyedropperOverlay />
       {contextMenu && (
         <CanvasContextMenu

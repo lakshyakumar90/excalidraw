@@ -7,6 +7,7 @@ import { toolManager } from "@/lib/tools/toolManager";
 
 const TOOL_LABELS: Record<ToolType, string> = {
   selection: "Select",
+  text: "Text",
   hand: "Hand",
   rectangle: "Rectangle",
   ellipse: "Ellipse",
@@ -20,6 +21,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
   selection: "V",
+  text: "T",
   hand: "H",
   rectangle: "R",
   ellipse: "E",
@@ -36,10 +38,25 @@ function ToolIcon({ type }: { type: ToolType }) {
 
   switch (type) {
     case "selection":
-      shape = <path d="M5 3v17l4.5-4.5 3 6 2.5-1.2-3-6H19L5 3Z" fill="currentColor" stroke="none" />;
+      shape = (
+        <path
+          d="M5 3v17l4.5-4.5 3 6 2.5-1.2-3-6H19L5 3Z"
+          fill="currentColor"
+          stroke="none"
+        />
+      );
+      break;
+    case "text":
+      shape = (
+        <>
+          <path d="M4 6V4h16v2M12 4v16m-4 0h8" />
+        </>
+      );
       break;
     case "hand":
-      shape = <path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10 4.5a1.5 1.5 0 0 1 3 0V10 5.5a1.5 1.5 0 0 1 3 0V12l.7-1.1a1.6 1.6 0 0 1 2.8 1.4l-2 5A4 4 0 0 1 14.8 20h-2.1a4 4 0 0 1-3.1-1.5L6.2 14a1.7 1.7 0 0 1 2.5-2.2L10 13" />;
+      shape = (
+        <path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10 4.5a1.5 1.5 0 0 1 3 0V10 5.5a1.5 1.5 0 0 1 3 0V12l.7-1.1a1.6 1.6 0 0 1 2.8 1.4l-2 5A4 4 0 0 1 14.8 20h-2.1a4 4 0 0 1-3.1-1.5L6.2 14a1.7 1.7 0 0 1 2.5-2.2L10 13" />
+      );
       break;
     case "rectangle":
       shape = <rect x="4" y="5" width="16" height="14" rx="1" />;
@@ -54,7 +71,15 @@ function ToolIcon({ type }: { type: ToolType }) {
       shape = <path d="m5 19 14-14" />;
       break;
     case "multiPointLine":
-      shape = <><path d="m4 18 6-11 4 8 6-9" /><circle cx="4" cy="18" r="1.2" fill="currentColor" /><circle cx="10" cy="7" r="1.2" fill="currentColor" /><circle cx="14" cy="15" r="1.2" fill="currentColor" /><circle cx="20" cy="6" r="1.2" fill="currentColor" /></>;
+      shape = (
+        <>
+          <path d="m4 18 6-11 4 8 6-9" />
+          <circle cx="4" cy="18" r="1.2" fill="currentColor" />
+          <circle cx="10" cy="7" r="1.2" fill="currentColor" />
+          <circle cx="14" cy="15" r="1.2" fill="currentColor" />
+          <circle cx="20" cy="6" r="1.2" fill="currentColor" />
+        </>
+      );
       break;
     case "arrow":
       shape = <path d="M4 12h15m-6-6 6 6-6 6" />;
@@ -93,9 +118,10 @@ function ToolButton({
   onClick: () => void;
 }) {
   const label = TOOL_LABELS[type];
-  const tooltip = type === "selection"
-    ? `${label} · ${TOOL_SHORTCUTS[type]} · Alt-click cycles overlaps`
-    : `${label} · ${TOOL_SHORTCUTS[type]}`;
+  const tooltip =
+    type === "selection"
+      ? `${label} · ${TOOL_SHORTCUTS[type]} · Alt-click cycles overlaps`
+      : `${label} · ${TOOL_SHORTCUTS[type]}`;
 
   return (
     <button
