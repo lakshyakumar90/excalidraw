@@ -10,6 +10,7 @@ import {
   readExcalidrawFile,
 } from "@/lib/persistence/importDocument";
 import { exportElementsToPng } from "@/lib/persistence/rasterExport";
+import { exportElementsToSvg } from "@/lib/persistence/svgExport";
 
 export function FileMenu() {
   const [open, setOpen] = useState(false);
@@ -133,6 +134,26 @@ export function FileMenu() {
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             Export PNG
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              try {
+                exportElementsToSvg(scene.getElements());
+                publishImportStatus("SVG exported");
+              } catch (error) {
+                publishImportStatus(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not export the SVG",
+                );
+              }
+              setOpen(false);
+            }}
+            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Export SVG
           </button>
         </div>
       )}
