@@ -9,10 +9,13 @@ import {
   publishImportStatus,
   readExcalidrawFile,
 } from "@/lib/persistence/importDocument";
+import { exportElementsToPng } from "@/lib/persistence/rasterExport";
 
 export function FileMenu() {
   const [open, setOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [pngScale, setPngScale] = useState(2);
+  const [transparentBackground, setTransparentBackground] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -84,6 +87,52 @@ export function FileMenu() {
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             Import .excalidraw
+          </button>
+          <div className="my-1 border-t border-neutral-100" />
+          <label className="flex items-center justify-between gap-4 px-3 py-2 text-sm text-neutral-700">
+            PNG scale
+            <select
+              aria-label="PNG scale"
+              value={pngScale}
+              onChange={(event) => setPngScale(Number(event.target.value))}
+              className="rounded border border-neutral-200 bg-white px-2 py-1 text-sm"
+            >
+              <option value={1}>1×</option>
+              <option value={2}>2×</option>
+              <option value={3}>3×</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={transparentBackground}
+              onChange={(event) =>
+                setTransparentBackground(event.target.checked)
+              }
+            />
+            Transparent background
+          </label>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              void exportElementsToPng(scene.getElements(), {
+                scale: pngScale,
+                transparentBackground,
+              })
+                .then(() => publishImportStatus("PNG exported"))
+                .catch((error: unknown) =>
+                  publishImportStatus(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not export the PNG",
+                  ),
+                );
+              setOpen(false);
+            }}
+            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Export PNG
           </button>
         </div>
       )}

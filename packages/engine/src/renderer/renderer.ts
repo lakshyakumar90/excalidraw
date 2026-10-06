@@ -28,6 +28,12 @@ export interface RenderContext {
   viewport: Viewport;
 }
 
+export interface StaticRenderOptions {
+  background?: boolean;
+  grid?: boolean;
+  origin?: boolean;
+}
+
 //This moves the drawing context to the element’s center, rotates it, and moves back. The resulting transform matches the center-based rotation already used by getElementCorners.
 
 function applyElementTransform(
@@ -798,12 +804,13 @@ function applyViewportTransform(
 export function renderStatic(
   renderContext: RenderContext,
   elements: readonly Element[],
+  options: StaticRenderOptions = {},
 ): number {
   const { context, width, height, viewport } = renderContext;
   clearCanvas(context, width, height);
-  drawBackground(context, width, height);
-  drawGrid(context, width, height, viewport);
-  drawOrigin(context, viewport);
+  if (options.background !== false) drawBackground(context, width, height);
+  if (options.grid !== false) drawGrid(context, width, height, viewport);
+  if (options.origin !== false) drawOrigin(context, viewport);
 
   const viewportBounds = viewportToSceneBounds({ width, height }, viewport);
   const visibleElements = getVisibleElements(elements, viewportBounds);
