@@ -45,12 +45,13 @@ export function downloadBlob(blob: Blob, fileName: string): void {
 export function downloadExcalidrawFile(
   elements: readonly Element[],
   viewport: Viewport,
+  fileName = "drawing.excalidraw",
 ): void {
   const documentData = createExcalidrawDocument(elements, viewport);
   downloadBlob(
     new Blob([JSON.stringify(documentData, null, 2)], {
       type: "application/json",
     }),
-    "drawing.excalidraw",
+    fileName,
   );
 }

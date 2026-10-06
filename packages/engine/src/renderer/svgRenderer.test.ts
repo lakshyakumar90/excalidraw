@@ -50,4 +50,11 @@ describe("renderSceneToSvg", () => {
     expect(svg).toContain('viewBox="0 0 ');
     expect(svg.match(/<rect/g)).toHaveLength(2);
   });
+
+  it("exports only the elements provided for selection-only output", () => {
+    const selected = createRectangleElement({ id: "selected", x: 80 });
+    const svg = renderSceneToSvg([selected]);
+    expect(svg.match(/<rect/g)).toHaveLength(1);
+    expect(svg).not.toContain("not-selected");
+  });
 });

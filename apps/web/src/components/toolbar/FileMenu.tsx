@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { Element } from "@repo/common";
 import { scene } from "@/lib/scene/scene";
+import { selectionStore } from "@/lib/selection/selectionStore";
 import { getCurrentViewport } from "@/lib/persistence/viewportStore";
 import { downloadExcalidrawFile } from "@/lib/persistence/excalidrawFile";
 import {
@@ -18,6 +20,16 @@ export function FileMenu() {
   const [pngScale, setPngScale] = useState(2);
   const [transparentBackground, setTransparentBackground] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedIds = useSyncExternalStore(
+    selectionStore.subscribe,
+    selectionStore.getSnapshot,
+    selectionStore.getSnapshot,
+  );
+  const selectedElements = [...selectedIds]
+    .map((id) => scene.getElement(id))
+    .filter(
+      (element): element is Element => !!element && !element.isDeleted,
+    );
 
   useEffect(() => {
     const onStatus = (event: Event) => {
@@ -154,6 +166,73 @@ export function FileMenu() {
             className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             Export SVG
+          </button>
+          <div className="my-1 border-t border-neutral-100" />
+          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+            Selection only ({selectedElements.length})
+          </div>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={selectedElements.length === 0}
+            onClick={() => {
+              try {
+                downloadExcalidrawFile(
+                  selectedElements,
+                  getCurrentViewport(),
+                  "selection.excalidraw",
+                );
+                publishImportStatus("Selection exported");
+              } catch (error) {
+                publishImportStatus(
+                  error instanceof Error ? error.message : "Could not export selection",
+                );
+              }
+              setOpen(false);
+            }}
+            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Export selection as .excalidraw
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={selectedElements.length === 0}
+            onClick={() => {
+              void exportElementsToPng(selectedElements, {
+                scale: pngScale,
+                transparentBackground,
+              })
+                .then(() => publishImportStatus("Selection exported as PNG"))
+                .catch((error: unknown) =>
+                  publishImportStatus(
+                    error instanceof Error ? error.message : "Could not export selection",
+                  ),
+                );
+              setOpen(false);
+            }}
+            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Export selection as PNG
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={selectedElements.length === 0}
+            onClick={() => {
+              try {
+                exportElementsToSvg(selectedElements);
+                publishImportStatus("Selection exported as SVG");
+              } catch (error) {
+                publishImportStatus(
+                  error instanceof Error ? error.message : "Could not export selection",
+                );
+              }
+              setOpen(false);
+            }}
+            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Export selection as SVG
           </button>
         </div>
       )}
