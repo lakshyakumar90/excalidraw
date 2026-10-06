@@ -20,6 +20,8 @@ export class HistoryManager {
   private redoStack: HistoryEntry[] = [];
   private captureOrigin: HistoryOrigin | null = null;
   private beforeSelection: string[] = [];
+  private snapshot = { canUndo: false, canRedo: false };
+  private listeners = new Set<() => void>();
 
   constructor(
     private readonly scene: Scene,
@@ -44,9 +46,24 @@ export class HistoryManager {
     return this.redoStack.length;
   }
 
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  getSnapshot(): { canUndo: boolean; canRedo: boolean } {
+    return this.snapshot;
+  }
+
+  private notify(): void {
+    this.snapshot = { canUndo: this.canUndo, canRedo: this.canRedo };
+    for (const listener of this.listeners) listener();
+  }
+
   clear(): void {
     this.undoStack = [];
     this.redoStack = [];
+    this.notify();
   }
 
   startCapture(origin: HistoryOrigin = "local"): void {
@@ -73,6 +90,7 @@ export class HistoryManager {
     });
     if (this.undoStack.length > this.maxDepth) this.undoStack.shift();
     this.redoStack = [];
+    this.notify();
     return true;
   }
 
@@ -93,6 +111,7 @@ export class HistoryManager {
     }
     this.restoreSelection(entry.beforeSelection);
     this.redoStack.push(entry);
+    this.notify();
     return true;
   }
 
@@ -104,6 +123,7 @@ export class HistoryManager {
     }
     this.restoreSelection(entry.afterSelection);
     this.undoStack.push(entry);
+    this.notify();
     return true;
   }
 

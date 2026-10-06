@@ -1254,6 +1254,7 @@ export function Canvas() {
     });
     const unsubscribeViewport = subscribeViewport(() => {
       viewportRef.current = getCurrentViewport();
+      autosaveRef.current?.schedule();
       renderLoop.invalidateStatic();
       renderLoop.invalidateInteractive();
     });
