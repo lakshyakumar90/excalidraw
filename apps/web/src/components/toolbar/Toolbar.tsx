@@ -6,6 +6,7 @@ import { toolManager } from "@/lib/tools/toolManager";
 
 const TOOL_LABELS: Record<ToolType, string> = {
   selection: "Select",
+  hand: "Hand",
   rectangle: "Rectangle",
   ellipse: "Ellipse",
   diamond: "Diamond",
@@ -18,6 +19,7 @@ const TOOL_LABELS: Record<ToolType, string> = {
 
 const TOOL_SHORTCUTS: Record<ToolType, string> = {
   selection: "V",
+  hand: "H",
   rectangle: "R",
   ellipse: "E",
   diamond: "D",
@@ -44,9 +46,10 @@ function ToolButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-
+      aria-pressed={active}
+      title={type === "selection" ? "Select (V); Alt-click cycles overlapping objects" : `${label} (${TOOL_SHORTCUTS[type]})`}
       className={[
-        "rounded-md px-3 py-2 text-sm transition",
+        "rounded-md px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
         active
           ? "bg-neutral-900 text-white"
           : "text-neutral-700 hover:bg-neutral-100",
@@ -72,7 +75,7 @@ export function Toolbar() {
   };
 
   return (
-    <div className="fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur">
+    <div role="toolbar" aria-label="Drawing tools" className="fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur">
       {(Object.keys(TOOL_LABELS) as ToolType[]).map((type) => (
         <ToolButton
           key={type}

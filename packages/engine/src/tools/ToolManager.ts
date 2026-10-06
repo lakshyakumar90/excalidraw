@@ -18,7 +18,8 @@ export type ToolType =
   | "arrow"
   | "curved-line"
   | "freedraw"
-  | "selection";
+  | "selection"
+  | "hand";
 
 export interface ToolManagerOptions {
   onCommit: (element: Element) => void;

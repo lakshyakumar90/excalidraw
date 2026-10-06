@@ -7,7 +7,7 @@ This controller owns canvas selection, transforms, and point editing:
 */
 
 import type { Element, Point } from "@repo/common";
-import { elementIntersectsRect, getElementAtPosition, getElementBounds } from "@repo/engine";
+import { elementIntersectsRect, getElementAtPosition, getElementsAtPosition, getElementBounds } from "@repo/engine";
 import { createTextElement } from "@repo/engine";
 import { textEditStore } from "./textEditStore";
 import { scene } from "@/lib/scene/scene";
@@ -58,6 +58,8 @@ let gesture: Gesture = { kind: "idle" };
 let pointEditingElementId: string | null = null;
 
 const MIN_MARQUEE_PIXELS = 3;
+const CLICK_DRAG_THRESHOLD_PIXELS = 10;
+let previousOverlapClick: { x: number; y: number; ids: string[]; index: number } | null = null;
 
 export const selectionController = {
   getCursor(point: Point, zoom: number): string {
@@ -90,7 +92,7 @@ export const selectionController = {
       : "default";
   },
 
-  pointerDown(point: Point, shiftKey: boolean, zoom: number): void {
+  pointerDown(point: Point, shiftKey: boolean, zoom: number, altKey = false): void {
     if (pointEditingElementId) {
       const element = scene.getElement(pointEditingElementId);
       if (element && "points" in element) {
@@ -142,7 +144,25 @@ export const selectionController = {
       }
     }
 
-    const hit = getElementAtPosition(scene.getElements(), point, zoom);
+    const hits = getElementsAtPosition(scene.getElements(), point, zoom);
+    let hit = hits[0];
+
+    if (altKey && hits.length > 1) {
+      const hitIds = hits.map((element) => element.id);
+      const previous = previousOverlapClick;
+      const sameStack =
+        previous !== null &&
+        previous.ids.length === hitIds.length &&
+        previous.ids.every((id, index) => id === hitIds[index]) &&
+        Math.hypot(point.x - previous.x, point.y - previous.y) <= 6 / zoom;
+      const index = sameStack
+        ? ((previous?.index ?? 0) + 1) % hits.length
+        : 1 % hits.length;
+      previousOverlapClick = { x: point.x, y: point.y, ids: hitIds, index };
+      hit = hits[index];
+    } else if (!altKey) {
+      previousOverlapClick = null;
+    }
 
     if (!hit) {
       const selectionAtStart = [...selectionStore.getSnapshot()];
@@ -165,7 +185,7 @@ export const selectionController = {
 
     const wasSelected = selectionStore.getSnapshot().has(hit.id);
 
-    if (!shiftKey && wasSelected && selectedIds.length > 1) {
+    if (!shiftKey && !altKey && wasSelected && selectedIds.length > 1) {
       const elements = selectedIds
         .map((id) => scene.getElement(id))
         .filter((element): element is Element => !!element && !element.isDeleted)
@@ -180,7 +200,9 @@ export const selectionController = {
       return;
     }
 
-    if (shiftKey && wasSelected) {
+    if (altKey) {
+      selectionStore.set([hit.id]);
+    } else if (shiftKey && wasSelected) {
       // Shift-click on a selected element removes it from the selection.
       selectionStore.toggle(hit.id);
       gesture = { kind: "idle" };
@@ -213,7 +235,7 @@ export const selectionController = {
 
   pointerMove(point: Point, shiftKey: boolean, altKey: boolean): void {
     if (gesture.kind === "group-press") {
-      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < MIN_MARQUEE_PIXELS / gesture.zoom) return;
+      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom) return;
       gesture = {
         kind: "move",
         start: gesture.start,
@@ -301,7 +323,7 @@ export const selectionController = {
 
   pointerUp(point: Point, shiftKey: boolean, altKey: boolean): void {
     if (gesture.kind === "group-press") {
-      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < MIN_MARQUEE_PIXELS / gesture.zoom) {
+      if (Math.hypot(point.x - gesture.start.x, point.y - gesture.start.y) < CLICK_DRAG_THRESHOLD_PIXELS / gesture.zoom) {
         selectionStore.set([gesture.selectedId]);
       } else {
         this.pointerMove(point, shiftKey, altKey);

@@ -114,13 +114,6 @@ function isPointInPolygon(point: Point, polygon: readonly Point[]): boolean {
   return inside;
 }
 
-function isFilled(element: Element): boolean {
-  return (
-    element.backgroundColor !== undefined &&
-    element.backgroundColor !== "transparent"
-  );
-}
-
 function hitRectangle(
   element: Extract<Element, { type: "rectangle" | "text" }>,
   point: Point,
@@ -139,7 +132,9 @@ function hitRectangle(
   const inside =
     point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height;
 
-  if (isFilled(element) && inside) return true;
+  // Excalidraw-style picking treats the whole shape body as selectable, even
+  // when its visual fill is transparent. This makes interior clicks reliable.
+  if (inside) return true;
   return distanceToPolyline(point, corners, tolerance, true);
 }
 
@@ -159,7 +154,7 @@ function hitEllipse(
   const normalizedDistance =
     ((point.x - center.x) / rx) ** 2 + ((point.y - center.y) / ry) ** 2;
 
-  if (isFilled(element) && normalizedDistance <= 1) return true;
+  if (normalizedDistance <= 1) return true;
 
   // Approximate the ellipse outline with short segments for pointer hit testing.
   const outline: Point[] = [];
@@ -191,7 +186,7 @@ function hitDiamond(
     { x: 0, y: height / 2 },
   ];
 
-  if (isFilled(element) && isPointInPolygon(point, polygon)) return true;
+  if (isPointInPolygon(point, polygon)) return true;
   return distanceToPolyline(point, polygon, tolerance, true);
 }
 
@@ -309,16 +304,26 @@ export function getElementAtPosition(
   point: Point,
   zoom: number,
 ): Element | undefined {
+  return getElementsAtPosition(elements, point, zoom)[0];
+}
+
+/** Returns all elements under a point in paint order, frontmost first. */
+export function getElementsAtPosition(
+  elements: readonly Element[],
+  point: Point,
+  zoom: number,
+): Element[] {
+  const hits: Element[] = [];
   // Elements later in the array are drawn on top, so check them first.
   for (let i = elements.length - 1; i >= 0; i -= 1) {
     const element = elements[i];
 
     if (element && isPointOnElement(element, point, zoom)) {
-      return element;
+      hits.push(element);
     }
   }
 
-  return undefined;
+  return hits;
 }
 
 export interface SelectionRect {

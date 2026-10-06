@@ -105,7 +105,24 @@ export function Canvas() {
       },
     );
 
+    const updateCanvasCursor = () => {
+      const activeTool = toolManager.getActiveTool();
+      if (isPanningRef.current) {
+        interactiveCanvas.style.cursor = "grabbing";
+      } else if (activeTool === "hand") {
+        interactiveCanvas.style.cursor = "grab";
+      } else if (activeTool === "selection") {
+        interactiveCanvas.style.cursor = selectionController.getCursor(
+          scenePointerRef.current,
+          viewportRef.current.zoom,
+        );
+      } else {
+        interactiveCanvas.style.cursor = "crosshair";
+      }
+    };
+
     const unsubscribeToolManager = toolManager.subscribe(() => {
+      updateCanvasCursor();
       renderLoop.invalidateInteractive();
     });
 
@@ -176,11 +193,17 @@ export function Canvas() {
 
         lastPointerRef.current = point;
         scenePointerRef.current = viewportToScene(point, viewportRef.current);
+        interactiveCanvas.style.cursor = "grabbing";
         renderLoop.invalidateStatic();
         return;
       }
 
       const scenePoint = viewportToScene(point, viewportRef.current);
+
+      if (toolManager.getActiveTool() === "hand") {
+        interactiveCanvas.style.cursor = "grab";
+        return;
+      }
 
       if (toolManager.getActiveTool() === "selection") {
         interactiveCanvas.style.cursor = selectionController.getCursor(
@@ -212,6 +235,16 @@ export function Canvas() {
         event.preventDefault();
 
         isPanningRef.current = true;
+        interactiveCanvas.style.cursor = "grabbing";
+        lastPointerRef.current = getPointerPosition(event);
+        interactiveCanvas.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      if (event.button === 0 && toolManager.getActiveTool() === "hand") {
+        event.preventDefault();
+        isPanningRef.current = true;
+        interactiveCanvas.style.cursor = "grabbing";
         lastPointerRef.current = getPointerPosition(event);
         interactiveCanvas.setPointerCapture(event.pointerId);
         return;
@@ -227,6 +260,7 @@ export function Canvas() {
           scenePoint,
           event.shiftKey,
           viewportRef.current.zoom,
+          event.altKey,
         );
 
         interactiveCanvas.style.cursor = selectionController.getCursor(
@@ -251,6 +285,9 @@ export function Canvas() {
     const handlePointerUp = (event: PointerEvent) => {
       if (isPanningRef.current) {
         isPanningRef.current = false;
+        const pointer = getPointerPosition(event);
+        scenePointerRef.current = viewportToScene(pointer, viewportRef.current);
+        updateCanvasCursor();
 
         if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
           interactiveCanvas.releasePointerCapture(event.pointerId);
@@ -315,6 +352,16 @@ export function Canvas() {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
       if (event.code === "Space") {
         spacePressRef.current = true;
         event.preventDefault();
@@ -361,6 +408,11 @@ export function Canvas() {
       }
 
       const key = event.key.toLowerCase();
+
+      if (key === "h") {
+        toolManager.setActiveTool("hand");
+        return;
+      }
 
       if (key === "v") {
         toolManager.setActiveTool("selection");
