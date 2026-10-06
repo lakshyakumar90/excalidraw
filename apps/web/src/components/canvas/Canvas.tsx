@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { Element, Point, Viewport } from "@repo/common";
 import {
   createRenderState,
@@ -26,7 +32,17 @@ import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 import { historyStore } from "@/lib/history/historyStore";
 import { startAutosave, type AutosaveHandle } from "@/lib/persistence/autosave";
 import { loadScene } from "@/lib/persistence/indexedDb";
-import { setCurrentViewport } from "@/lib/persistence/viewportStore";
+import {
+  getCurrentViewport,
+  getInitialViewport,
+  setCurrentViewport,
+  subscribeViewport,
+} from "@/lib/persistence/viewportStore";
+import {
+  applyImportedDocument,
+  publishImportStatus,
+  readExcalidrawFile,
+} from "@/lib/persistence/importDocument";
 import { EyedropperOverlay } from "@/components/styles/EyedropperOverlay";
 import {
   CanvasContextMenu,
@@ -115,7 +131,11 @@ export function Canvas() {
   );
   const [textEditorPosition, setTextEditorPosition] =
     useState<TextEditorState | null>(null);
-  const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
+  const viewport = useSyncExternalStore(
+    subscribeViewport,
+    getCurrentViewport,
+    getInitialViewport,
+  );
   const [persistenceReady, setPersistenceReady] = useState(false);
   const contextMenuRef = useRef<CanvasContextMenuState | null>(null);
   const textEditorRef = useRef<TextEditorState | null>(null);
@@ -154,7 +174,6 @@ export function Canvas() {
           ) {
             viewportRef.current = restoredViewport;
             setCurrentViewport(restoredViewport);
-            setViewport(restoredViewport);
           }
         }
         autosave = startAutosave(scene, () => viewportRef.current);
@@ -226,6 +245,7 @@ export function Canvas() {
     if (!staticCanvas || !interactiveCanvas) {
       return;
     }
+    viewportRef.current = getCurrentViewport();
 
     const staticContext = staticCanvas.getContext("2d");
     const interactiveContext = interactiveCanvas.getContext("2d");
@@ -396,7 +416,7 @@ export function Canvas() {
           scrollX: viewport.scrollX + dx,
           scrollY: viewport.scrollY + dy,
         };
-        setViewport(viewportRef.current);
+
         setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
@@ -1072,7 +1092,7 @@ export function Canvas() {
           center,
           viewport.zoom * 1.2,
         );
-        setViewport(viewportRef.current);
+
         setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
@@ -1087,7 +1107,7 @@ export function Canvas() {
           center,
           viewport.zoom / 1.2,
         );
-        setViewport(viewportRef.current);
+
         setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
@@ -1098,7 +1118,7 @@ export function Canvas() {
         event.preventDefault();
 
         viewportRef.current = zoomAtPoint(viewport, center, 1);
-        setViewport(viewportRef.current);
+
         setCurrentViewport(viewportRef.current);
         autosaveRef.current?.schedule();
 
@@ -1126,7 +1146,7 @@ export function Canvas() {
       const zoomFactor = Math.exp(-event.deltaY * 0.001);
       const nextZoom = viewport.zoom * zoomFactor;
       viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
-      setViewport(viewportRef.current);
+
       setCurrentViewport(viewportRef.current);
       autosaveRef.current?.schedule();
       scenePointerRef.current = viewportToScene(cursor, viewportRef.current);
@@ -1135,6 +1155,11 @@ export function Canvas() {
 
     const unsubscribe = scene.subscribe(() => {
       renderLoop.invalidateStatic();
+    });
+    const unsubscribeViewport = subscribeViewport(() => {
+      viewportRef.current = getCurrentViewport();
+      renderLoop.invalidateStatic();
+      renderLoop.invalidateInteractive();
     });
 
     resizeCanvas();
@@ -1156,6 +1181,7 @@ export function Canvas() {
       unsubscribeToolManager();
       unsubscribeSelectionStore();
       unsubscribeStyleStore();
+      unsubscribeViewport();
       clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();
@@ -1183,6 +1209,27 @@ export function Canvas() {
       className="fixed inset-0 overflow-hidden"
       style={{ visibility: persistenceReady ? "visible" : "hidden" }}
       aria-busy={!persistenceReady}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        const file = event.dataTransfer.files[0];
+        if (!file) return;
+        event.preventDefault();
+        if (!file.name.toLowerCase().endsWith(".excalidraw")) return;
+        void readExcalidrawFile(file)
+          .then((document) => {
+            applyImportedDocument(document);
+            publishImportStatus(`Imported ${file.name}`);
+          })
+          .catch((error: unknown) => {
+            publishImportStatus(
+              error instanceof Error
+                ? error.message
+                : "Could not import this drawing",
+            );
+          });
+      }}
     >
       <canvas
         ref={staticCanvasRef}

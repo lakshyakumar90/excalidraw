@@ -44,6 +44,11 @@ export class HistoryManager {
     return this.redoStack.length;
   }
 
+  clear(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
   startCapture(origin: HistoryOrigin = "local"): void {
     if (this.captureOrigin) {
       throw new Error("A history capture is already active");
