@@ -9,6 +9,7 @@
   },
   "scripts": {
     "db:emit": "prisma contract emit",
+    "db:migration-check": "prisma migration check",
     "db:sign": "prisma db sign",
     "db:update": "prisma db update"
   },

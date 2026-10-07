@@ -52,7 +52,7 @@ model Scene {
   ownerId   String
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   title     String   @default("Untitled")
-  data      Json
+  data      Jsonb
   room      Room?
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()

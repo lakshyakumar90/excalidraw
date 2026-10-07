@@ -1,0 +1,35 @@
+name: Database migrations
+
+on:
+  pull_request:
+    paths:
+      - "packages/db/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/database-migrations.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/db/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/database-migrations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  migration-integrity:
+    name: Check migration history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          require-lockfile: true
+      - name: Check the migration graph
+        run: pnpm --filter @repo/db db:migration-check

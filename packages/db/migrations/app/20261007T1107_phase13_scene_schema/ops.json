@@ -1,0 +1,598 @@
+[
+  {
+    "id": "table.invite",
+    "label": "Create table \"invite\"",
+    "summary": "Creates table \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"invite\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"invite\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"invite\"",
+        "sql": "CREATE TABLE \"public\".\"invite\" (\n  \"codeHash\" text NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"email\" text NOT NULL,\n  \"expiresAt\" timestamptz NOT NULL,\n  \"id\" text NOT NULL,\n  \"roomId\" int4 NOT NULL,\n  \"usedAt\" timestamptz,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"invite\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"invite\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.scene",
+    "label": "Create table \"scene\"",
+    "summary": "Creates table \"scene\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "scene"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"scene\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"scene\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"scene\"",
+        "sql": "CREATE TABLE \"public\".\"scene\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"data\" jsonb NOT NULL,\n  \"id\" text NOT NULL,\n  \"ownerId\" text NOT NULL,\n  \"title\" text DEFAULT 'Untitled' NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"scene\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"scene\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.room.sceneId",
+    "label": "Add column \"sceneId\" to \"room\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "sceneId",
+        "table": "room"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"sceneId\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "room",
+          "sceneId"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"sceneId\"",
+        "sql": "ALTER TABLE \"public\".\"room\" ADD COLUMN \"sceneId\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"sceneId\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "room",
+          "sceneId"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.roomMember.role",
+    "label": "Add column \"role\" to \"roomMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "role",
+        "table": "roomMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"role\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "roomMember",
+          "role"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"role\"",
+        "sql": "ALTER TABLE \"public\".\"roomMember\" ADD COLUMN \"role\" text DEFAULT 'editor' NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"role\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "roomMember",
+          "role"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.invite.invite_codeHash_key",
+    "label": "Add unique constraint on \"invite\" (codeHash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "invite_codeHash_key",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"invite_codeHash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "invite_codeHash_key",
+          "public",
+          "\"public\".\"invite\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"invite_codeHash_key\"",
+        "sql": "ALTER TABLE \"public\".\"invite\" ADD CONSTRAINT \"invite_codeHash_key\" UNIQUE (\"codeHash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"invite_codeHash_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "invite_codeHash_key",
+          "public",
+          "\"public\".\"invite\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.room.room_sceneId_key",
+    "label": "Add unique constraint on \"room\" (sceneId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "room_sceneId_key",
+        "table": "room"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"room_sceneId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "room_sceneId_key",
+          "public",
+          "\"public\".\"room\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"room_sceneId_key\"",
+        "sql": "ALTER TABLE \"public\".\"room\" ADD CONSTRAINT \"room_sceneId_key\" UNIQUE (\"sceneId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"room_sceneId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "room_sceneId_key",
+          "public",
+          "\"public\".\"room\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.roomMember.roomMember_role_check_4e2c8b04",
+    "label": "Add check constraint \"roomMember_role_check_4e2c8b04\" on \"roomMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "roomMember_role_check_4e2c8b04",
+        "table": "roomMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"roomMember_role_check_4e2c8b04\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomMember_role_check_4e2c8b04",
+          "public",
+          "\"public\".\"roomMember\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"roomMember_role_check_4e2c8b04\"",
+        "sql": "ALTER TABLE \"public\".\"roomMember\" ADD CONSTRAINT \"roomMember_role_check_4e2c8b04\" CHECK (\"role\" IN ('owner', 'editor', 'viewer'))"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"roomMember_role_check_4e2c8b04\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomMember_role_check_4e2c8b04",
+          "public",
+          "\"public\".\"roomMember\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "room-members.backfill-admin-owner-role",
+    "label": "Mark existing room admins as owners",
+    "operationClass": "data",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [
+      {
+        "description": "Existing room admins with memberships are not owners",
+        "sql": "SELECT EXISTS (SELECT 1 FROM \"public\".\"roomMember\" AS member JOIN \"public\".\"room\" AS room ON room.\"id\" = member.\"roomId\" WHERE member.\"userId\" = room.\"adminId\" AND member.\"role\" <> 'owner')"
+      }
+    ],
+    "execute": [
+      {
+        "description": "Set matching room admin memberships to owner",
+        "sql": "UPDATE \"public\".\"roomMember\" AS member SET \"role\" = 'owner' FROM \"public\".\"room\" AS room WHERE room.\"id\" = member.\"roomId\" AND member.\"userId\" = room.\"adminId\" AND member.\"role\" <> 'owner'"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "All matching room admin memberships are owners",
+        "sql": "SELECT NOT EXISTS (SELECT 1 FROM \"public\".\"roomMember\" AS member JOIN \"public\".\"room\" AS room ON room.\"id\" = member.\"roomId\" WHERE member.\"userId\" = room.\"adminId\" AND member.\"role\" <> 'owner')"
+      }
+    ]
+  },
+  {
+    "id": "index.invite.invite_roomId_email_idx_66382e89",
+    "label": "Create index \"invite_roomId_email_idx_66382e89\" on \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "invite_roomId_email_idx_66382e89",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"invite_roomId_email_idx_66382e89\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"invite_roomId_email_idx_66382e89\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"invite_roomId_email_idx_66382e89\"",
+        "sql": "CREATE INDEX \"invite_roomId_email_idx_66382e89\" ON \"public\".\"invite\" (\"roomId\", \"email\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"invite_roomId_email_idx_66382e89\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"invite_roomId_email_idx_66382e89\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.invite.invite_roomId_idx_fe51d647",
+    "label": "Create index \"invite_roomId_idx_fe51d647\" on \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "invite_roomId_idx_fe51d647",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"invite_roomId_idx_fe51d647\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"invite_roomId_idx_fe51d647\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"invite_roomId_idx_fe51d647\"",
+        "sql": "CREATE INDEX \"invite_roomId_idx_fe51d647\" ON \"public\".\"invite\" (\"roomId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"invite_roomId_idx_fe51d647\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"invite_roomId_idx_fe51d647\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.scene.scene_ownerId_idx_e2d0c1ef",
+    "label": "Create index \"scene_ownerId_idx_e2d0c1ef\" on \"scene\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "scene_ownerId_idx_e2d0c1ef",
+        "table": "scene"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"scene_ownerId_idx_e2d0c1ef\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"scene_ownerId_idx_e2d0c1ef\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"scene_ownerId_idx_e2d0c1ef\"",
+        "sql": "CREATE INDEX \"scene_ownerId_idx_e2d0c1ef\" ON \"public\".\"scene\" (\"ownerId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"scene_ownerId_idx_e2d0c1ef\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"scene_ownerId_idx_e2d0c1ef\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.scene.scene_ownerId_updatedAt_idx_f0929af1",
+    "label": "Create index \"scene_ownerId_updatedAt_idx_f0929af1\" on \"scene\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "scene_ownerId_updatedAt_idx_f0929af1",
+        "table": "scene"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"scene_ownerId_updatedAt_idx_f0929af1\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"scene_ownerId_updatedAt_idx_f0929af1\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"scene_ownerId_updatedAt_idx_f0929af1\"",
+        "sql": "CREATE INDEX \"scene_ownerId_updatedAt_idx_f0929af1\" ON \"public\".\"scene\" (\"ownerId\", \"updatedAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"scene_ownerId_updatedAt_idx_f0929af1\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"scene_ownerId_updatedAt_idx_f0929af1\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.invite.invite_roomId_fkey",
+    "label": "Add foreign key \"invite_roomId_fkey\" on \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "invite_roomId_fkey",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"invite_roomId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "invite_roomId_fkey",
+          "public",
+          "\"public\".\"invite\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"invite_roomId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"invite\"\nADD CONSTRAINT \"invite_roomId_fkey\"\nFOREIGN KEY (\"roomId\")\nREFERENCES \"public\".\"room\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"invite_roomId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "invite_roomId_fkey",
+          "public",
+          "\"public\".\"invite\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.scene.scene_ownerId_fkey",
+    "label": "Add foreign key \"scene_ownerId_fkey\" on \"scene\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "scene_ownerId_fkey",
+        "table": "scene"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"scene_ownerId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "scene_ownerId_fkey",
+          "public",
+          "\"public\".\"scene\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"scene_ownerId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"scene\"\nADD CONSTRAINT \"scene_ownerId_fkey\"\nFOREIGN KEY (\"ownerId\")\nREFERENCES \"public\".\"user\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"scene_ownerId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "scene_ownerId_fkey",
+          "public",
+          "\"public\".\"scene\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.room.room_sceneId_fkey",
+    "label": "Add foreign key \"room_sceneId_fkey\" on \"room\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "room_sceneId_fkey",
+        "table": "room"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"room_sceneId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "room_sceneId_fkey",
+          "public",
+          "\"public\".\"room\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"room_sceneId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"room\"\nADD CONSTRAINT \"room_sceneId_fkey\"\nFOREIGN KEY (\"sceneId\")\nREFERENCES \"public\".\"scene\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"room_sceneId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "room_sceneId_fkey",
+          "public",
+          "\"public\".\"room\""
+        ]
+      }
+    ]
+  }
+]
