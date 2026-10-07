@@ -10,6 +10,7 @@ export type {
   DiamondElement,
   LineElement,
   ArrowElement,
+  ArrowBinding,
   FreedrawElement,
   FreedrawPoint,
   TextElement,

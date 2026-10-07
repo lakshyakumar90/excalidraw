@@ -160,7 +160,9 @@ function renderElement(
       return `${groupStart}<path d="${pathFromPoints(roughen(points, false, element))}" fill="none"/></g>`;
     }
     case "arrow": {
-      const points = element.points;
+      const points = element.lineType === "curved"
+        ? sampleCatmullRom(element.points, 12)
+        : element.points;
       const start = points[0];
       const end = points.at(-1);
       const previous = points.at(-2);

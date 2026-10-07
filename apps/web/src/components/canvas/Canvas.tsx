@@ -615,6 +615,7 @@ export function Canvas() {
             selectionController.getMarquee(),
             selectionController.getPointEditingElement(),
             selectionController.isCompleteGroupSelection(),
+            scene.getElements(),
           );
           drawEraserTrail(
             interactiveContext,

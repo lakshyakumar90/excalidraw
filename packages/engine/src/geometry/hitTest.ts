@@ -208,7 +208,10 @@ function hitArrow(
   point: Point,
   tolerance: number,
 ): boolean {
-  const points = element.points;
+  const points =
+    element.lineType === "curved"
+      ? sampleCatmullRom(element.points, 12)
+      : element.points;
 
   if (distanceToPolyline(point, points, tolerance)) return true;
 
@@ -264,7 +267,9 @@ export function isPointOnElement(
   // Avoid detailed shape checks when the pointer is clearly outside its bounds.
   // Curved lines can extend slightly beyond their control-point bounds, so skip
   // this early rejection for them.
-  const isCurvedLine = element.type === "line" && element.lineType === "curved";
+  const isCurvedLine =
+    (element.type === "line" || element.type === "arrow") &&
+    element.lineType === "curved";
 
   if (!isCurvedLine && !isPointInsideBounds(worldPoint, bounds, tolerance)) {
     return false;

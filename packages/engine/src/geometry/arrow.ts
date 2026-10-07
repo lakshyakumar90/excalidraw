@@ -1,6 +1,7 @@
 import type { ArrowElement, Point } from "@repo/common";
 import { boundsFromPoints, getBoundsCenter } from "./bounds";
 import { rotatePoint } from "./rotation";
+import { sampleCatmullRom } from "./curve";
 
 export interface ArrowHeadPoints {
   left: Point;
@@ -46,7 +47,10 @@ export function getArrowHeadPoints(
 
 /** Returns the path-length midpoint in scene coordinates for an arrow. */
 export function getArrowMidpoint(arrow: ArrowElement): Point {
-  const points = arrow.points;
+  const points =
+    arrow.lineType === "curved"
+      ? sampleCatmullRom(arrow.points, 12)
+      : arrow.points;
   if (points.length === 0) return { x: arrow.x, y: arrow.y };
 
   const lengths = points.slice(1).map((point, index) => {

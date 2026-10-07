@@ -65,7 +65,18 @@ export interface LineElement extends BaseElement {
 
 export interface ArrowElement extends BaseElement {
   type: "arrow";
+  lineType?: LineType;
   points: Point[];
+  startBinding?: ArrowBinding | null;
+  endBinding?: ArrowBinding | null;
+}
+
+/** Keeps an arrow endpoint attached to a relative direction on a shape. */
+export interface ArrowBinding {
+  elementId: string;
+  focus: number;
+  gap?: number;
+  fixedPoint?: [number, number];
 }
 
 export interface FreedrawElement extends BaseElement {

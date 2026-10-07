@@ -31,6 +31,7 @@ import {
 import { resizeElement } from "./resize";
 import { selectionStore } from "./selectionStore";
 import { historyStore } from "@/lib/history/historyStore";
+import { syncBoundArrowsForShape } from "./arrowBinding";
 
 export interface MarqueePreview {
   start: Point;
@@ -92,6 +93,10 @@ function translateSnapshots(
       x: element.x + dx,
       y: element.y + dy,
     });
+  }
+  for (const element of elements) {
+    const moved = scene.getElement(element.id);
+    if (moved) syncBoundArrowsForShape(moved);
   }
 }
 
@@ -319,23 +324,19 @@ export const selectionController = {
           selectedElement.type === "arrow"
         ) {
           if (isNearLinearBendHandle(selectedElement, point, zoom)) {
-            const bendPoint = getLinearBendHandlePoint(selectedElement);
-            const start = selectedElement.points[0];
-            const end = selectedElement.points[1];
-            if (bendPoint && start && end) {
+            if (selectedElement.points.length === 2) {
+              const bendPoint = getLinearBendHandlePoint(selectedElement);
+              const start = selectedElement.points[0];
+              const end = selectedElement.points[1];
+              if (!bendPoint || !start || !end) return;
               const middle = getLinearPointLocalPosition(
                 selectedElement,
                 bendPoint,
               );
-              const points = [{ ...start }, middle, { ...end }];
-              if (selectedElement.type === "line") {
-                scene.mutateElement(selectedElement.id, {
-                  points,
-                  lineType: "curved",
-                });
-              } else {
-                scene.mutateElement(selectedElement.id, { points });
-              }
+              scene.mutateElement(selectedElement.id, {
+                points: [{ ...start }, middle, { ...end }],
+                lineType: "curved",
+              });
               gesture = {
                 kind: "point",
                 elementId: selectedElement.id,
@@ -343,6 +344,12 @@ export const selectionController = {
               };
               return;
             }
+            gesture = {
+              kind: "point",
+              elementId: selectedElement.id,
+              pointIndex: Math.floor(selectedElement.points.length / 2),
+            };
+            return;
           }
           const pointIndex = getLinearPointHandleAtPosition(
             selectedElement,
@@ -577,7 +584,10 @@ export const selectionController = {
         resized as Partial<Omit<Element, "id" | "type">>,
       );
       const resizedElement = scene.getElement(gesture.original.id);
-      if (resizedElement) syncBoundTextToContainer(resizedElement);
+      if (resizedElement) {
+        syncBoundTextToContainer(resizedElement);
+        syncBoundArrowsForShape(resizedElement);
+      }
       return;
     }
 
@@ -633,6 +643,10 @@ export const selectionController = {
           original.id,
           changes as Partial<Omit<Element, "id" | "type">>,
         );
+      }
+      for (const original of gesture.originals) {
+        const resizedElement = scene.getElement(original.id);
+        if (resizedElement) syncBoundArrowsForShape(resizedElement);
       }
       return;
     }
@@ -1036,6 +1050,43 @@ export const selectionController = {
             });
           }
         }
+        if (element.type === "arrow") {
+          for (const binding of [element.startBinding, element.endBinding]) {
+            const target = binding
+              ? scene.getElement(binding.elementId)
+              : undefined;
+            if (
+              target &&
+              (target.type === "rectangle" ||
+                target.type === "ellipse" ||
+                target.type === "diamond")
+            ) {
+              scene.mutateElement(target.id, {
+                boundElements: (target.boundElements ?? []).filter(
+                  (boundId) => boundId !== element.id,
+                ),
+              });
+            }
+          }
+        }
+        if (
+          element.type === "rectangle" ||
+          element.type === "ellipse" ||
+          element.type === "diamond"
+        ) {
+          for (const boundId of element.boundElements ?? []) {
+            const arrow = scene.getElement(boundId);
+            if (arrow?.type !== "arrow") continue;
+            scene.mutateElement(arrow.id, {
+              ...(arrow.startBinding?.elementId === element.id
+                ? { startBinding: undefined }
+                : {}),
+              ...(arrow.endBinding?.elementId === element.id
+                ? { endBinding: undefined }
+                : {}),
+            });
+          }
+        }
       }
       for (const id of elementsToDelete) {
         scene.mutateElement(id, { isDeleted: true });
@@ -1114,6 +1165,23 @@ function duplicateElements(
       element.containerId
     ) {
       duplicate.containerId = elementIdMap.get(element.containerId);
+    }
+
+    if (element.type === "arrow" && duplicate.type === "arrow") {
+      for (const bindingKey of ["startBinding", "endBinding"] as const) {
+        const binding = element[bindingKey];
+        const mappedTargetId = binding
+          ? elementIdMap.get(binding.elementId)
+          : undefined;
+        if (binding && mappedTargetId) {
+          duplicate[bindingKey] = {
+            ...binding,
+            elementId: mappedTargetId,
+          };
+        } else {
+          delete duplicate[bindingKey];
+        }
+      }
     }
 
     return duplicate;
@@ -1231,6 +1299,19 @@ function isClipboardElement(value: unknown): value is Element {
   }
 
   if (
+    value.type === "arrow" &&
+    ((value.lineType !== undefined &&
+      value.lineType !== "straight" &&
+      value.lineType !== "curved") ||
+      (value.startBinding !== undefined &&
+      !isArrowBindingValue(value.startBinding)) ||
+      (value.endBinding !== undefined &&
+        !isArrowBindingValue(value.endBinding)))
+  ) {
+    return false;
+  }
+
+  if (
     value.type === "text" &&
     (typeof value.text !== "string" ||
       !isFiniteNumber(value.fontSize) ||
@@ -1254,6 +1335,20 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isArrowBindingValue(value: unknown): boolean {
+  if (value === null) return true;
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.elementId === "string" &&
+    isFiniteNumber(value.focus) &&
+    (value.gap === undefined || isFiniteNumber(value.gap)) &&
+    (value.fixedPoint === undefined ||
+      (Array.isArray(value.fixedPoint) &&
+        value.fixedPoint.length === 2 &&
+        value.fixedPoint.every(isFiniteNumber)))
+  );
 }
 
 function getGroupMemberIds(groupId: string): string[] {

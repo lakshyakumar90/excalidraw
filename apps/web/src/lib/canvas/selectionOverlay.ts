@@ -125,6 +125,7 @@ export function drawSelectionOverlay(
   marquee: MarqueePreview | null,
   pointEditingElement: Element | null = null,
   isCompleteGroupSelection = false,
+  sceneElements: readonly Element[] = [],
 ): void {
   context.save();
 
@@ -140,6 +141,54 @@ export function drawSelectionOverlay(
   const activeElements = (selectedElements ?? []).filter(
     (element) => !element.isDeleted,
   );
+
+  const drawConnectionPoint = (point: { x: number; y: number }) => {
+    context.beginPath();
+    context.arc(point.x, point.y, 3.5 / viewport.zoom, 0, Math.PI * 2);
+    context.fillStyle = "#4c7dff";
+    context.fill();
+    context.lineWidth = 1.5 / viewport.zoom;
+    context.strokeStyle = "#ffffff";
+    context.stroke();
+  };
+
+  for (const element of activeElements) {
+    if (
+      element.type === "rectangle" ||
+      element.type === "ellipse" ||
+      element.type === "diamond"
+    ) {
+      for (const boundId of element.boundElements ?? []) {
+        const arrow = sceneElements.find(
+          (candidate) => candidate.id === boundId && candidate.type === "arrow",
+        );
+        if (!arrow || arrow.type !== "arrow") continue;
+        if (arrow.startBinding?.elementId === element.id && arrow.points[0]) {
+          drawConnectionPoint(getLinearPointWorldPosition(arrow, arrow.points[0]));
+        }
+        const end = arrow.points[arrow.points.length - 1];
+        if (arrow.endBinding?.elementId === element.id && end) {
+          drawConnectionPoint(getLinearPointWorldPosition(arrow, end));
+        }
+      }
+    }
+
+    if (element.type === "arrow") {
+      if (element.startBinding && element.points[0]) {
+        drawConnectionPoint(
+          getLinearPointWorldPosition(element, element.points[0]),
+        );
+      }
+      const end = element.points[element.points.length - 1];
+      if (element.endBinding && end) {
+        drawConnectionPoint(getLinearPointWorldPosition(element, end));
+      }
+    }
+  }
+  // Endpoint markers use a white outline for contrast. Restore the selection
+  // style before drawing element outlines and the shared multi-selection box.
+  context.lineWidth = 1 / viewport.zoom;
+  context.strokeStyle = "#4c7dff";
   if (activeElements.length > 1) {
     const corners = activeElements.flatMap(getElementCorners);
     const xs = corners.map((p) => p.x),

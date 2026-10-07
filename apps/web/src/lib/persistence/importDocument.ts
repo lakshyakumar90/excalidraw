@@ -67,8 +67,34 @@ function validateElement(value: unknown): value is Element {
   ) {
     return false;
   }
+  if (
+    value.type === "arrow" &&
+    ((value.lineType !== undefined &&
+      value.lineType !== "straight" &&
+      value.lineType !== "curved") ||
+      (value.startBinding !== undefined &&
+      !isArrowBindingValue(value.startBinding)) ||
+      (value.endBinding !== undefined &&
+        !isArrowBindingValue(value.endBinding)))
+  ) {
+    return false;
+  }
   if (value.type === "image" && typeof value.fileId !== "string") return false;
   return true;
+}
+
+function isArrowBindingValue(value: unknown): boolean {
+  if (value === null) return true;
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.elementId === "string" &&
+    isFiniteNumber(value.focus) &&
+    (value.gap === undefined || isFiniteNumber(value.gap)) &&
+    (value.fixedPoint === undefined ||
+      (Array.isArray(value.fixedPoint) &&
+        value.fixedPoint.length === 2 &&
+        value.fixedPoint.every(isFiniteNumber)))
+  );
 }
 
 export function parseExcalidrawDocument(value: unknown): ImportedDocument {

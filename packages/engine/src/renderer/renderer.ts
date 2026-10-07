@@ -501,9 +501,11 @@ export function drawArrow(
     return;
   }
 
-  const start = points[0];
-  const end = points[points.length - 1];
-  const previous = points[points.length - 2];
+  const pathPoints =
+    element.lineType === "curved" ? sampleCatmullRom(points, 12) : points;
+  const start = pathPoints[0];
+  const end = pathPoints[pathPoints.length - 1];
+  const previous = pathPoints[pathPoints.length - 2];
 
   if (!start || !end || !previous) {
     return;
@@ -519,14 +521,14 @@ export function drawArrow(
   // Leave a small label-sized opening in the shaft so the arrow does not run
   // through its text. Measure the opening along the path at its midpoint.
   if (label && label.text.length > 0) {
-    const pathLength = getPolylineLength(points);
+    const pathLength = getPolylineLength(pathPoints);
     const midpointDistance = pathLength / 2;
     const before = getPolylinePointAt(
-      points,
+      pathPoints,
       Math.max(0, midpointDistance - 1),
     );
     const after = getPolylinePointAt(
-      points,
+      pathPoints,
       Math.min(pathLength, midpointDistance + 1),
     );
     const direction =
@@ -539,13 +541,13 @@ export function drawArrow(
     const halfGap = projectedLabelWidth / 2 + 6;
     const gapStart = Math.max(0, midpointDistance - halfGap);
     const gapEnd = Math.min(pathLength, midpointDistance + halfGap);
-    const beforeLabel = extractPolylineRange(points, 0, gapStart);
-    const afterLabel = extractPolylineRange(points, gapEnd, pathLength);
+    const beforeLabel = extractPolylineRange(pathPoints, 0, gapStart);
+    const afterLabel = extractPolylineRange(pathPoints, gapEnd, pathLength);
 
     if (beforeLabel.length > 1) strokePoints(context, element, beforeLabel);
     if (afterLabel.length > 1) strokePoints(context, element, afterLabel);
   } else {
-    strokePoints(context, element, points);
+    strokePoints(context, element, pathPoints);
   }
 
   // Arrowhead

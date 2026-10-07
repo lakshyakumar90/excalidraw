@@ -155,7 +155,7 @@ export function getLinearPathWorldPoints(
   element: Extract<Element, { type: "line" | "arrow" }>,
 ): Point[] {
   const points =
-    element.type === "line" && element.lineType === "curved"
+    element.lineType === "curved"
       ? sampleCatmullRom(element.points, 12)
       : element.points;
   return points.map((point) => getLinearPointWorldPosition(element, point));
@@ -181,7 +181,11 @@ export function getLinearEndpointHandles(
 export function getLinearBendHandlePoint(
   element: Extract<Element, { type: "line" | "arrow" }>,
 ): Point | null {
-  if (element.points.length !== 2) return null;
+  if (element.points.length < 2) return null;
+  if (element.points.length > 2) {
+    const middle = element.points[Math.floor(element.points.length / 2)];
+    return middle ? getLinearPointWorldPosition(element, middle) : null;
+  }
   const start = element.points[0];
   const end = element.points[1];
   if (!start || !end) return null;
