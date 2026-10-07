@@ -338,6 +338,9 @@ interface EraserTrailPoint extends Point {
   time: number;
 }
 
+const ERASER_TRAIL_LIFETIME_MS = 900;
+const ERASER_TRAIL_MAX_POINTS = 160;
+
 function drawEraserTrail(
   context: CanvasRenderingContext2D,
   points: readonly EraserTrailPoint[],
@@ -346,50 +349,57 @@ function drawEraserTrail(
   active: boolean,
 ): void {
   context.save();
-  context.lineCap = "round";
+  context.lineCap = "butt";
   context.lineJoin = "round";
 
-  const first = points[0];
-  const last = points[points.length - 1];
-  if (first && last && points.length > 1) {
-    const trailAlpha = Math.max(0, 1 - (now - last.time) / 320);
-    if (trailAlpha > 0) {
-      context.beginPath();
-      context.moveTo(first.x, first.y);
-      for (let index = 1; index < points.length - 1; index += 1) {
-        const current = points[index];
-        const next = points[index + 1];
-        if (!current || !next) continue;
-        context.quadraticCurveTo(
-          current.x,
-          current.y,
-          (current.x + next.x) / 2,
-          (current.y + next.y) / 2,
-        );
-      }
-      context.lineTo(last.x, last.y);
-      context.strokeStyle = "#8275ff";
-      context.shadowColor = "rgba(130, 117, 255, 0.18)";
-      context.shadowBlur = 5;
-      context.lineWidth = 7;
-      context.globalAlpha = trailAlpha * 0.16;
-      context.stroke();
-      context.shadowBlur = 0;
-      context.lineWidth = 3.5;
-      context.globalAlpha = trailAlpha * 0.38;
-      context.stroke();
-    }
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const next = points[index + 1];
+    if (!previous || !current) continue;
+
+    const age = Math.max(0, now - current.time);
+    const life = Math.max(0, 1 - age / ERASER_TRAIL_LIFETIME_MS);
+    if (life <= 0) continue;
+    const fade = life * life;
+    const start =
+      index === 1
+        ? previous
+        : {
+            x: (previous.x + current.x) / 2,
+            y: (previous.y + current.y) / 2,
+          };
+    const end = next
+      ? { x: (current.x + next.x) / 2, y: (current.y + next.y) / 2 }
+      : current;
+
+    context.beginPath();
+    context.moveTo(start.x, start.y);
+    if (next) context.quadraticCurveTo(current.x, current.y, end.x, end.y);
+    else context.lineTo(end.x, end.y);
+    context.strokeStyle = "#8275ff";
+    context.shadowColor = "rgba(117, 103, 237, 0.32)";
+    context.shadowBlur = 9;
+    context.lineWidth = 15;
+    context.globalAlpha = 0.16 * fade;
+    context.stroke();
+    context.shadowBlur = 0;
+    context.strokeStyle = "#7567ed";
+    context.lineWidth = 6;
+    context.globalAlpha = 0.52 * fade;
+    context.stroke();
   }
 
   if (active && cursor) {
+    context.lineCap = "round";
     context.globalAlpha = 1;
     context.shadowColor = "rgba(91, 77, 220, 0.28)";
-    context.shadowBlur = 9;
-    context.fillStyle = "rgba(130, 117, 255, 0.12)";
+    context.shadowBlur = 12;
+    context.fillStyle = "rgba(130, 117, 255, 0.17)";
     context.strokeStyle = "#7567ed";
-    context.lineWidth = 1.5;
+    context.lineWidth = 2;
     context.beginPath();
-    context.arc(cursor.x, cursor.y, 14, 0, Math.PI * 2);
+    context.arc(cursor.x, cursor.y, 16, 0, Math.PI * 2);
     context.fill();
     context.stroke();
   }
@@ -635,7 +645,10 @@ export function Canvas() {
     const animateEraserTrail = () => {
       eraserTrailFrame = 0;
       const now = performance.now();
-      while (eraserTrailPoints[0] && now - eraserTrailPoints[0].time > 320) {
+      while (
+        eraserTrailPoints[0] &&
+        now - eraserTrailPoints[0].time > ERASER_TRAIL_LIFETIME_MS
+      ) {
         eraserTrailPoints.shift();
       }
       renderLoop.invalidateInteractive();
@@ -646,11 +659,24 @@ export function Canvas() {
 
     const addEraserTrailPoint = (point: Point) => {
       const now = performance.now();
-      while (eraserTrailPoints[0] && now - eraserTrailPoints[0].time > 320) {
+      while (
+        eraserTrailPoints[0] &&
+        now - eraserTrailPoints[0].time > ERASER_TRAIL_LIFETIME_MS
+      ) {
         eraserTrailPoints.shift();
       }
-      eraserTrailPoints.push({ ...point, time: now });
-      if (eraserTrailPoints.length > 48) eraserTrailPoints.shift();
+      const previous = eraserTrailPoints[eraserTrailPoints.length - 1];
+      if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.5) {
+        previous.time = now;
+      } else {
+        eraserTrailPoints.push({ ...point, time: now });
+      }
+      if (eraserTrailPoints.length > ERASER_TRAIL_MAX_POINTS) {
+        eraserTrailPoints.splice(
+          0,
+          eraserTrailPoints.length - ERASER_TRAIL_MAX_POINTS,
+        );
+      }
       if (eraserTrailFrame === 0) {
         eraserTrailFrame = window.requestAnimationFrame(animateEraserTrail);
       }
@@ -880,6 +906,9 @@ export function Canvas() {
 
       if (toolManager.getActiveTool() === "eraser") {
         eraserCursor = point;
+        for (const sample of event.getCoalescedEvents?.() ?? []) {
+          addEraserTrailPoint(getPointerPosition(sample));
+        }
         addEraserTrailPoint(point);
         if (eraserPointerId === event.pointerId) {
           if (eraseAlongSegment(lastEraserScenePoint, scenePoint, event.altKey)) {
@@ -911,11 +940,23 @@ export function Canvas() {
         return;
       }
 
+      const coalescedPoints =
+        toolManager.getActiveTool() === "freedraw"
+          ? (event.getCoalescedEvents?.() ?? []).map((sample) => ({
+              point: viewportToScene(
+                getPointerPosition(sample),
+                viewportRef.current,
+              ),
+              pressure: sample.pressure,
+            }))
+          : undefined;
+
       toolManager.onPointerMove(scenePoint, {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
         pressure: event.pressure,
+        coalescedPoints,
       });
     };
 
@@ -1541,7 +1582,7 @@ export function Canvas() {
       }
 
       if (
-        toolManager.getActiveTool() === "selection" &&
+        selectionStore.getSnapshot().size > 0 &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
         event.preventDefault();

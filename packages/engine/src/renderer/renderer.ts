@@ -695,8 +695,7 @@ function drawFreedraw(
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.fillStyle = strokeColor;
-  const roughPath = getRoughPathPoints(path, true, element);
-  tracePoints(context, roughPath, true);
+  tracePoints(context, path, true);
   context.fill();
   strokePoints(context, element, path, true);
   context.restore();

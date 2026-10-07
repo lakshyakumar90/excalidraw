@@ -1,5 +1,8 @@
 import type { FreedrawPoint, Point } from "@repo/common";
+import { sampleCatmullRom } from "./curve";
 import { getPressureWidth } from "./stroke";
+
+const SMOOTH_SAMPLES_PER_SEGMENT = 8;
 
 export interface StrokeOutline {
   left: Point[];
@@ -158,14 +161,18 @@ export function buildClosedStrokePath(
   baseWidth: number,
   capSegments = 8,
 ): Point[] {
-  const outline = buildStrokeOutline(points, baseWidth);
+  const smoothedPoints = smoothFreedrawPoints(points);
+  const outline = buildStrokeOutline(smoothedPoints, baseWidth);
   if (outline.left.length === 0 || outline.right.length === 0) return [];
-  const first = points[0];
-  const last = points[points.length - 1];
+  const first = smoothedPoints[0];
+  const last = smoothedPoints[smoothedPoints.length - 1];
   if (!first || !last) return [];
 
-  const startTangent = getCapTangent(first, points[1] ?? first);
-  const endTangent = getCapTangent(points[points.length - 2] ?? last, last);
+  const startTangent = getCapTangent(first, smoothedPoints[1] ?? first);
+  const endTangent = getCapTangent(
+    smoothedPoints[smoothedPoints.length - 2] ?? last,
+    last,
+  );
   const startNormal = getNormal(startTangent);
   const endNormal = getNormal(endTangent);
   const startRadius = getRadius(baseWidth, first.pressure);
@@ -178,4 +185,67 @@ export function buildClosedStrokePath(
     ...outline.right.reverse(),
     ...capArc(first, startNormal, startTangent, startRadius, segments, -1),
   ];
+}
+
+export function smoothFreedrawPoints(
+  points: readonly FreedrawPoint[],
+): FreedrawPoint[] {
+  if (points.length < 3) return points.map((point) => ({ ...point }));
+
+  const filtered = points.map((point, index) => {
+    if (index === 0 || index === points.length - 1) return { ...point };
+
+    const neighbors = [
+      { offset: -2, weight: 1 },
+      { offset: -1, weight: 2 },
+      { offset: 0, weight: 4 },
+      { offset: 1, weight: 2 },
+      { offset: 2, weight: 1 },
+    ];
+    let weightedX = 0;
+    let weightedY = 0;
+    let totalWeight = 0;
+
+    for (const { offset, weight } of neighbors) {
+      const neighbor =
+        points[Math.max(0, Math.min(points.length - 1, index + offset))];
+      if (!neighbor) continue;
+      weightedX += neighbor.x * weight;
+      weightedY += neighbor.y * weight;
+      totalWeight += weight;
+    }
+
+    const smoothedX = weightedX / totalWeight;
+    const smoothedY = weightedY / totalWeight;
+    return {
+      ...point,
+      x: point.x * 0.35 + smoothedX * 0.65,
+      y: point.y * 0.35 + smoothedY * 0.65,
+    };
+  });
+
+  const sampled = sampleCatmullRom(filtered, SMOOTH_SAMPLES_PER_SEGMENT);
+  const finalIndex = sampled.length - 1;
+
+  return sampled.map((point, index) => {
+    if (index === finalIndex) {
+      return { ...point, pressure: points[points.length - 1]!.pressure };
+    }
+
+    const segmentIndex = Math.min(
+      points.length - 2,
+      Math.floor(index / SMOOTH_SAMPLES_PER_SEGMENT),
+    );
+    const segmentProgress =
+      (index - segmentIndex * SMOOTH_SAMPLES_PER_SEGMENT) /
+      SMOOTH_SAMPLES_PER_SEGMENT;
+    const startPressure = points[segmentIndex]!.pressure;
+    const endPressure = points[segmentIndex + 1]!.pressure;
+
+    return {
+      ...point,
+      pressure:
+        startPressure + (endPressure - startPressure) * segmentProgress,
+    };
+  });
 }

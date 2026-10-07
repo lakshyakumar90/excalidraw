@@ -114,6 +114,7 @@ export class ToolManager {
       button: number;
       pointerId: number;
       pressure: number;
+      coalescedPoints?: Array<{ point: Point; pressure: number }>;
     },
   ): void {
     const tool = this.tools.get(this.activeToolType);
@@ -128,6 +129,7 @@ export class ToolManager {
       button: event.button,
       pointerId: event.pointerId,
       pressure: event.pressure,
+      coalescedPoints: event.coalescedPoints,
     };
 
     const result = tool.onPointerMove(toolEvent);

@@ -7,6 +7,7 @@ export interface ToolPointerEvent {
   button: number;
   pointerId: number;
   pressure: number;
+  coalescedPoints?: Array<{ point: Point; pressure: number }>;
 }
 
 export interface ToolResult {

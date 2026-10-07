@@ -1,4 +1,4 @@
-import type { FreedrawElement, FreedrawPoint } from "@repo/common";
+import type { FreedrawElement, FreedrawPoint, Point } from "@repo/common";
 import { createFreedrawElementFromPoints } from "../element/factory";
 import { simplifyPoints } from "../geometry/simplify";
 import type { Tool, ToolPointerEvent, ToolResult } from "./Tool";
@@ -12,8 +12,8 @@ type FreedrawToolState =
       preview: FreedrawElement | null;
     };
 
-const MIN_POINT_DISTANCE = 3;
-const SIMPLIFY_TOLERANCE = 1.5;
+const MIN_POINT_DISTANCE = 1.25;
+const SIMPLIFY_TOLERANCE = 0.8;
 
 function empty(): ToolResult {
   return { previewElement: null, committedElement: null };
@@ -43,18 +43,10 @@ export class FreedrawTool implements Tool {
   onPointerMove(event: ToolPointerEvent): ToolResult {
     if (this.state.status !== "drawing") return empty();
     const points = this.state.points;
-    const last = points[points.length - 1];
-    if (!last) return empty();
-    if (
-      Math.hypot(event.point.x - last.x, event.point.y - last.y) >=
-      MIN_POINT_DISTANCE
-    ) {
-      points.push({
-        x: event.point.x,
-        y: event.point.y,
-        pressure: normalizePressure(event.pressure),
-      });
+    for (const sample of event.coalescedPoints ?? []) {
+      this.appendPoint(points, sample.point, sample.pressure);
     }
+    this.appendPoint(points, event.point, event.pressure);
     const preview = this.createPreview(points);
     this.state = { status: "drawing", points, preview };
     return { previewElement: preview, committedElement: null };
@@ -123,5 +115,24 @@ export class FreedrawTool implements Tool {
   private createPreview(points: readonly FreedrawPoint[]): FreedrawElement | null {
     if (points.length < 2) return null;
     return createFreedrawElementFromPoints([...points]);
+  }
+
+  private appendPoint(
+    points: FreedrawPoint[],
+    point: Point,
+    pressure: number,
+  ): void {
+    const last = points[points.length - 1];
+    if (!last) return;
+    if (
+      Math.hypot(point.x - last.x, point.y - last.y) < MIN_POINT_DISTANCE
+    ) {
+      return;
+    }
+    points.push({
+      x: point.x,
+      y: point.y,
+      pressure: normalizePressure(pressure),
+    });
   }
 }

@@ -11,7 +11,7 @@ import { getElementLocalBounds } from "./elementLocalBounds";
 import { rotatePoint } from "./rotation";
 import { getArrowHeadPoints } from "./arrow";
 import { sampleCatmullRom } from "./curve";
-import { buildClosedStrokePath } from "./strokeOutline";
+import { getPressureWidth } from "./stroke";
 
 const MIN_ZOOM = 0.1;
 const POINTER_TOLERANCE_PIXELS = 10;
@@ -240,15 +240,36 @@ function hitFreedraw(
   point: Point,
   tolerance: number,
 ): boolean {
-  const outline = buildClosedStrokePath(
-    element.points,
-    element.strokeWidth ?? 1,
-  );
+  // Test the recorded centerline directly instead of constructing its filled
+  // outline. This stays reliable for scribbles whose outline folds over itself
+  // and avoids resampling the full stroke during eraser hit checks.
+  const points = element.points;
+  const strokeWidth = element.strokeWidth ?? 1;
+  const pointerTolerance = tolerance - strokeWidth / 2;
 
-  return (
-    isPointInPolygon(point, outline) ||
-    distanceToPolyline(point, outline, tolerance, true)
-  );
+  if (points.length === 1) {
+    const onlyPoint = points[0]!;
+    const radius = getPressureWidth(strokeWidth, onlyPoint.pressure) / 2;
+    return (
+      Math.hypot(point.x - onlyPoint.x, point.y - onlyPoint.y) <=
+      pointerTolerance + radius
+    );
+  }
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1]!;
+    const end = points[index]!;
+    const pressure = (start.pressure + end.pressure) / 2;
+    const radius = getPressureWidth(strokeWidth, pressure) / 2;
+    if (
+      distanceToSegment(point, start, end) <=
+      pointerTolerance + radius
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function isPointOnElement(
@@ -271,7 +292,12 @@ export function isPointOnElement(
     (element.type === "line" || element.type === "arrow") &&
     element.lineType === "curved";
 
-  if (!isCurvedLine && !isPointInsideBounds(worldPoint, bounds, tolerance)) {
+  const boundsTolerance =
+    tolerance + (element.type === "freedraw" ? (element.strokeWidth ?? 1) / 2 : 0);
+  if (
+    !isCurvedLine &&
+    !isPointInsideBounds(worldPoint, bounds, boundsTolerance)
+  ) {
     return false;
   }
 
