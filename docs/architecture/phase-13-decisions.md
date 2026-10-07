@@ -15,14 +15,16 @@
   parsing middleware, following Better Auth's Express integration requirements.
   Keep browser requests credentialed and restrict CORS to the configured web
   origin.
-- Use the existing `packages/db` Prisma/PostgreSQL package for persistent
-  account, scene, room, membership, and invitation data.
-- Before implementing Better Auth's database schema, verify its adapter works
-  with this repository's `@prisma/orm-postgres` 8 RC contract runtime. Better
-  Auth's Prisma adapter examples use a conventional Prisma client, so do not
-  assume the current database package is a drop-in match. If it is unsupported,
-  select a supported Better Auth adapter or consolidate the database client
-  deliberately before creating migrations.
+- Use the existing `packages/db` Prisma/PostgreSQL package for application
+  models and the checked-in migration graph.
+- Use Better Auth's built-in PostgreSQL adapter through a `pg.Pool` for auth
+  persistence. The current `@repo/db` runtime is Prisma ORM 8's contract query
+  runtime, not the conventional `PrismaClient` expected by Better Auth's Prisma
+  adapter. Both clients use the same `DATABASE_URL`; auth tables are also
+  represented in the Prisma contract so schema changes stay in one migration
+  history.
+- Use Google as the first OAuth provider. Keep it disabled until both Google
+  credentials are present in the HTTP server environment.
 - Keep database use provider-neutral: local Docker PostgreSQL and Neon
   PostgreSQL are both configured through environment variables. Choose the
   deployment target later without changing scene or ownership rules.
@@ -37,8 +39,9 @@
   not durable.
 - Configure the frontend to call the HTTP server through an explicit API
   origin. Configure credentialed CORS and cookie/CSRF protections for the
-  chosen deployment origins. Configure both servers to validate the same
-  Better Auth session; do not put session tokens in WebSocket query strings.
+  chosen deployment origins. In Phase 14, have the WebSocket server validate
+  this same session cookie during the upgrade; never put session tokens in
+  WebSocket query strings.
 - Derive the current user from the server-validated session. API callers must
   not be allowed to choose an `ownerId` for scene or room operations.
 

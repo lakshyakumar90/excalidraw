@@ -3,14 +3,17 @@
 model User {
   id         String       @id @default(cuid(2))
   email      String       @unique
-  password   String       
+  password   String?
   username   String?
-  name       String?
+  name       String       @default("User")
   avatar     String?
+  emailVerified Boolean @default(false)
   rooms      Room[]       @relation("RoomAdmin")
   chats      Chat[]
   membership RoomMember[]
   scenes     Scene[]
+  sessions   Session[]
+  accounts   Account[]
   createdAt  TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -71,6 +74,50 @@ model Invite {
   createdAt TimestamptzString @default(now())
 
   @@index([roomId, email])
+}
+
+model Session {
+  id        String   @id
+  expiresAt TimestamptzString
+  token     String   @unique
+  createdAt TimestamptzString @default(now())
+  updatedAt TimestamptzString
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String   @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  TimestamptzString?
+  refreshTokenExpiresAt TimestamptzString?
+  scope                 String?
+  password              String?
+  createdAt             TimestamptzString @default(now())
+  updatedAt             TimestamptzString
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  TimestamptzString
+  createdAt  TimestamptzString @default(now())
+  updatedAt  TimestamptzString @default(now())
+
+  @@index([identifier])
 }
 
 model Chat {

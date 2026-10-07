@@ -1,143 +1,76 @@
 import express from "express";
-import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "@repo/backend-common";
-import { middleware } from "./middleware.js";
-import { CreateUserSchema, SigninSchema, RoomSchema } from "@repo/validations";
+import cors from "cors";
+import { toNodeHandler } from "better-auth/node";
+import { RoomSchema } from "@repo/validations";
 import { db } from "@repo/db";
-import bcrypt from "bcrypt";
+import { auth, authPool, authWebOrigin } from "./auth.js";
+import { requireAuth } from "./middleware.js";
 
 const app = express();
+
+app.use(
+  cors({
+    origin: authWebOrigin,
+    credentials: true,
+  }),
+);
+
+// Better Auth must receive the raw request body, so mount it before express.json().
+app.all("/api/auth", toNodeHandler(auth));
+app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use(express.json());
 
-app.post("/signup", async (req, res) => {
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.get("/me", requireAuth, (req, res) => {
+  res.json({ userId: req.userId });
+});
+
+app.post("/room", requireAuth, async (req, res) => {
   try {
-    if (!req.body) {
-      return res.status(400).json({ message: "Request body is required" });
-    }
-
-    const { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email, and password are required" });
-    }
-
-    const result = CreateUserSchema.safeParse({ name, email, password });
-
+    const result = RoomSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json(result.error);
     }
 
-    const existingUser = await db.orm?.public?.User
-          .select("id", "email", "name")
-          .where({ email: result.data.email })
-          .first();
-
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await db.orm?.public?.User
-          .select("id", "email", "name")
-          .create({
-            name: result.data.name,
-            email: result.data.email,
-            password: hashedPassword,
-          });
-
-    res.json({
-      message: "User registered successfully",
-      userId: user?.id,
+    const room = await db.orm?.public?.Room.create({
+      slug: result.data.name,
+      adminId: req.userId!,
     });
-  } catch (e) {
-    console.error("Signup error:", e);
-    res.status(500).json({
-      message: "Internal server error",
-      error: e instanceof Error ? e.message : String(e)
-    });
-  }
-});
 
-app.post("/signin", async (req, res) => {
-  try{
-    const { email, password } = req.body;
-    const result = SigninSchema.safeParse({ email, password });
-
-    if (!result.success) {
-      return res.status(400).json(result.error);
-    }
-
-    const { email: userEmail, password: userPassword } = result.data;
-
-    const existingUser = await db.orm?.public?.User
-      .select("id", "email", "name")
-      .where({ email: userEmail })
-      .first();
-
-    if (!existingUser) {
-      return res.status(400).json({ message: "User not found" });
-    }
-
-    const userId = existingUser.id;
-    const token = jwt.sign(
-      {
-        userId,
-      },
-      JWT_SECRET,
-    );
-
-    res.json({
-      token,
-    });
-  } catch (e) {
-    return res.status(500).json({
-      message: "Internal server error",
-      error: e instanceof Error ? e.message : String(e)
-    });
-  }
-});
-
-app.post("/room", middleware, async (req, res) => {
-  try{
-    const { name } = req.body;
-    const result = RoomSchema.safeParse({ name });
-
-    if (!result.success) {
-      return res.status(400).json(result.error);
-    }
-
-    const room = await db.orm?.public?.Room
-      .create({ slug: result.data.name, adminId: req.userId });
-
-    if(!room) {
+    if (!room) {
       return res.status(500).json({ message: "Failed to create room" });
     }
 
-    res.json({
+    return res.json({
       message: "Room created successfully",
       roomId: room.id,
     });
-  } catch (e) {
-    return res.status(500).json({
-      message: "Internal server error",
-      error: e instanceof Error ? e.message : String(e)
-    });
+  } catch (error) {
+    console.error("Room creation error:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 
 async function startServer() {
-  try {
-    await db.connect();
-    console.log("✅ Database driver connected successfully.");
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("Set BETTER_AUTH_SECRET to a random value of at least 32 characters.");
+  }
 
-    app.listen(process.env.PORT || 5000, () => {
-      console.log(`🚀 Server is running on port ${process.env.PORT || 5000}`);
+  try {
+    await Promise.all([db.connect(), authPool.query("SELECT 1")]);
+
+    const port = Number(process.env.PORT ?? 5000);
+    app.listen(port, () => {
+      console.log(`HTTP server is running on port ${port}`);
     });
   } catch (error) {
-    console.error("❌ Failed to connect to the database:", error);
+    console.error("Failed to connect to the database:", error);
     process.exit(1);
   }
 }
 
-startServer();
+void startServer();

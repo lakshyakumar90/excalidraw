@@ -1,28 +1,21 @@
-import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "@repo/backend-common";
+import type { NextFunction, Request, Response } from "express";
+import { fromNodeHeaders } from "better-auth/node";
+import { auth } from "./auth.js";
 
-interface CustomJwtPayload extends jwt.JwtPayload {
-  userId: string;
-}
-
-export function middleware(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers["authorization"];
-  
-  if (!token) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as CustomJwtPayload;
-    if (decoded) {
-      req.userId = decoded.userId;
-      next();
-    } else {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    if (!session) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    
+
+    req.userId = session.user.id;
+    return next();
   } catch (error) {
-    return res.status(401).json({ message: "Unauthorized" });
+    console.error("Session verification failed:", error);
+    return res.status(500).json({ message: "Unable to verify session" });
   }
-}  
+}
