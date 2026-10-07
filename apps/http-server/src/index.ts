@@ -5,6 +5,7 @@ import { RoomSchema } from "@repo/validations";
 import { db } from "@repo/db";
 import { auth, authPool, authWebOrigin } from "./auth.js";
 import { requireAuth } from "./middleware.js";
+import { scenesRouter } from "./scenes.js";
 
 const app = express();
 
@@ -18,7 +19,7 @@ app.use(
 // Better Auth must receive the raw request body, so mount it before express.json().
 app.all("/api/auth", toNodeHandler(auth));
 app.all("/api/auth/*splat", toNodeHandler(auth));
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -27,6 +28,8 @@ app.get("/health", (_req, res) => {
 app.get("/me", requireAuth, (req, res) => {
   res.json({ userId: req.userId });
 });
+
+app.use("/scenes", requireAuth, scenesRouter);
 
 app.post("/room", requireAuth, async (req, res) => {
   try {
