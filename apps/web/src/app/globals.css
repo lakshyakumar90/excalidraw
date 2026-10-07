@@ -25,6 +25,12 @@ body {
   font-family: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+@keyframes text-editor-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 html,
 body {
   width: 100%;
