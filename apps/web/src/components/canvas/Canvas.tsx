@@ -1707,9 +1707,23 @@ export function Canvas() {
       const cursor = getPointerPosition(event);
       pointerRef.current = cursor;
       const viewport = viewportRef.current;
-      const zoomFactor = Math.exp(-event.deltaY * 0.001);
-      const nextZoom = viewport.zoom * zoomFactor;
-      viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
+      if (event.ctrlKey) {
+        const zoomFactor = Math.exp(-event.deltaY * 0.001);
+        const nextZoom = viewport.zoom * zoomFactor;
+        viewportRef.current = zoomAtPoint(viewport, cursor, nextZoom);
+      } else {
+        const deltaScale =
+          event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? 16
+            : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+              ? interactiveCanvas.clientHeight
+              : 1;
+        viewportRef.current = {
+          ...viewport,
+          scrollX: viewport.scrollX - event.deltaX * deltaScale,
+          scrollY: viewport.scrollY - event.deltaY * deltaScale,
+        };
+      }
 
       setCurrentViewport(viewportRef.current);
       autosaveRef.current?.schedule();
