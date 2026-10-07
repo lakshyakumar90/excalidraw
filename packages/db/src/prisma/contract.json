@@ -8,12 +8,20 @@
       "model": "Chat",
       "namespace": "public"
     },
+    "invite": {
+      "model": "Invite",
+      "namespace": "public"
+    },
     "room": {
       "model": "Room",
       "namespace": "public"
     },
     "roomMember": {
       "model": "RoomMember",
+      "namespace": "public"
+    },
+    "scene": {
+      "model": "Scene",
       "namespace": "public"
     },
     "user": {
@@ -24,6 +32,25 @@
   "domain": {
     "namespaces": {
       "public": {
+        "enum": {
+          "RoomRole": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "owner",
+                "value": "owner"
+              },
+              {
+                "name": "editor",
+                "value": "editor"
+              },
+              {
+                "name": "viewer",
+                "value": "viewer"
+              }
+            ]
+          }
+        },
         "models": {
           "Chat": {
             "fields": {
@@ -119,6 +146,104 @@
               "table": "chat"
             }
           },
+          "Invite": {
+            "fields": {
+              "codeHash": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "expiresAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "roomId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "usedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "room": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "roomId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Room",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "codeHash": {
+                  "column": "codeHash"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "email": {
+                  "column": "email"
+                },
+                "expiresAt": {
+                  "column": "expiresAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "roomId": {
+                  "column": "roomId"
+                },
+                "usedAt": {
+                  "column": "usedAt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "invite"
+            }
+          },
           "Room": {
             "fields": {
               "adminId": {
@@ -139,6 +264,13 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "sceneId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
@@ -189,6 +321,21 @@
                   "namespace": "public"
                 }
               },
+              "invites": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "roomId"
+                  ]
+                },
+                "to": {
+                  "model": "Invite",
+                  "namespace": "public"
+                }
+              },
               "members": {
                 "cardinality": "1:N",
                 "on": {
@@ -203,6 +350,22 @@
                   "model": "RoomMember",
                   "namespace": "public"
                 }
+              },
+              "scene": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "sceneId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Scene",
+                  "namespace": "public"
+                }
               }
             },
             "storage": {
@@ -215,6 +378,9 @@
                 },
                 "id": {
                   "column": "id"
+                },
+                "sceneId": {
+                  "column": "sceneId"
                 },
                 "slug": {
                   "column": "slug"
@@ -241,6 +407,19 @@
                 "type": {
                   "codecId": "pg/timestamptz-string@1",
                   "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "RoomRole",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               },
               "roomId": {
@@ -300,6 +479,9 @@
                 "joinedAt": {
                   "column": "joinedAt"
                 },
+                "role": {
+                  "column": "role"
+                },
                 "roomId": {
                   "column": "roomId"
                 },
@@ -309,6 +491,110 @@
               },
               "namespaceId": "public",
               "table": "roomMember"
+            }
+          },
+          "Scene": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "ownerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "owner": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "ownerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "room": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "sceneId"
+                  ]
+                },
+                "to": {
+                  "model": "Room",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "data": {
+                  "column": "data"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "ownerId": {
+                  "column": "ownerId"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "scene"
             }
           },
           "User": {
@@ -413,6 +699,21 @@
                 },
                 "to": {
                   "model": "Room",
+                  "namespace": "public"
+                }
+              },
+              "scenes": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "ownerId"
+                  ]
+                },
+                "to": {
+                  "model": "Scene",
                   "namespace": "public"
                 }
               }
@@ -553,6 +854,99 @@
               },
               "uniques": []
             },
+            "invite": {
+              "columns": {
+                "codeHash": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "email": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "expiresAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "roomId": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "usedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": true
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "roomId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "invite"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "room"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "roomId",
+                    "email"
+                  ],
+                  "name": "invite_roomId_email_idx_66382e89",
+                  "prefix": "invite_roomId_email_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "roomId"
+                  ],
+                  "name": "invite_roomId_idx_fe51d647",
+                  "prefix": "invite_roomId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "codeHash"
+                  ]
+                }
+              ]
+            },
             "room": {
               "columns": {
                 "adminId": {
@@ -577,6 +971,11 @@
                   },
                   "nativeType": "int4",
                   "nullable": false
+                },
+                "sceneId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
                 },
                 "slug": {
                   "codecId": "pg/text@1",
@@ -605,6 +1004,23 @@
                     "namespaceId": "public",
                     "tableName": "user"
                   }
+                },
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "sceneId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "room"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "scene"
+                  }
                 }
               ],
               "indexes": [
@@ -627,10 +1043,22 @@
                   "columns": [
                     "slug"
                   ]
+                },
+                {
+                  "columns": [
+                    "sceneId"
+                  ]
                 }
               ]
             },
             "roomMember": {
+              "checks": [
+                {
+                  "expression": "\"role\" IN ('owner', 'editor', 'viewer')",
+                  "name": "roomMember_role_check_4e2c8b04",
+                  "prefix": "roomMember_role_check"
+                }
+              ],
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
@@ -649,6 +1077,21 @@
                   },
                   "nativeType": "timestamptz",
                   "nullable": false
+                },
+                "role": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "editor"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "RoomRole",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "roomId": {
                   "codecId": "pg/int4@1",
@@ -729,6 +1172,92 @@
                 }
               ]
             },
+            "scene": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "data": {
+                  "codecId": "pg/json@1",
+                  "nativeType": "json",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "ownerId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "title": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "Untitled"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "ownerId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "scene"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "ownerId"
+                  ],
+                  "name": "scene_ownerId_idx_e2d0c1ef",
+                  "prefix": "scene_ownerId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "ownerId",
+                    "updatedAt"
+                  ],
+                  "name": "scene_ownerId_updatedAt_idx_f0929af1",
+                  "prefix": "scene_ownerId_updatedAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "user": {
               "columns": {
                 "avatar": {
@@ -791,18 +1320,39 @@
                 }
               ]
             }
+          },
+          "valueSet": {
+            "RoomRole": {
+              "kind": "valueSet",
+              "values": [
+                "owner",
+                "editor",
+                "viewer"
+              ]
+            }
           }
         },
         "id": "public",
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "79cd2f31b1262014970585ef3bdc8cf2c3d81ec69e6424a60d2867a6b901d3ec"
+    "storageHash": "639f9c0da22b5c47d8c5cf8fe68ac761e3afd283d9d54491d85ddcef653c93e9"
   },
   "execution": {
-    "executionHash": "e817d82af9b616c6b5a34a9500bde515fa7fa71e619af261f47a9963a3525688",
+    "executionHash": "0186e367e9dde6664952e3358eaa80112fd085d073bbdde371ec5dc331b5f9dc",
     "mutations": {
       "defaults": [
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "invite"
+          }
+        },
         {
           "onCreate": {
             "id": "timestampNow",
@@ -816,6 +1366,32 @@
             "column": "updatedAt",
             "namespace": "public",
             "table": "room"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "scene"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "updatedAt",
+            "namespace": "public",
+            "table": "scene"
           }
         },
         {

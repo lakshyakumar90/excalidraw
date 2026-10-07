@@ -10,6 +10,7 @@ model User {
   rooms      Room[]       @relation("RoomAdmin")
   chats      Chat[]
   membership RoomMember[]
+  scenes     Scene[]
   createdAt  TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -21,6 +22,9 @@ model Room {
   admin     User         @relation("RoomAdmin", fields: [adminId], references: [id])
   chats     Chat[]
   members   RoomMember[]
+  sceneId   String?      @unique
+  scene     Scene?       @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  invites   Invite[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -31,9 +35,42 @@ model RoomMember {
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   roomId   Int
   room     Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  role     RoomRole @default(editor)
   joinedAt TimestamptzString @default(now())
 
   @@unique([userId, roomId])
+}
+
+enum RoomRole {
+  owner
+  editor
+  viewer
+}
+
+model Scene {
+  id        String   @id @default(cuid(2))
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title     String   @default("Untitled")
+  data      Json
+  room      Room?
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
+
+  @@index([ownerId, updatedAt])
+}
+
+model Invite {
+  id        String   @id @default(cuid(2))
+  codeHash  String   @unique
+  email     String
+  roomId    Int
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  expiresAt TimestamptzString
+  usedAt    TimestamptzString?
+  createdAt TimestamptzString @default(now())
+
+  @@index([roomId, email])
 }
 
 model Chat {
