@@ -1,0 +1,82 @@
+# Phase 13 architecture decisions
+
+**Status:** Accepted for Phase 13
+
+## Backend boundaries
+
+- Keep `apps/web` as the Next.js frontend only. Do not implement backend API
+  endpoints as Next.js route handlers.
+- Extend the existing Express server in `apps/http-server` for account,
+  session, scene CRUD, room, membership, and invitation HTTP endpoints.
+- Use Better Auth in `apps/http-server` for email/password, the chosen OAuth
+  provider, and session management. `apps/web` remains a frontend and calls the
+  HTTP server; it does not host auth or data API routes.
+- Mount Better Auth's Express handler in `apps/http-server` before global body
+  parsing middleware, following Better Auth's Express integration requirements.
+  Keep browser requests credentialed and restrict CORS to the configured web
+  origin.
+- Use the existing `packages/db` Prisma/PostgreSQL package for persistent
+  account, scene, room, membership, and invitation data.
+- Before implementing Better Auth's database schema, verify its adapter works
+  with this repository's `@prisma/orm-postgres` 8 RC contract runtime. Better
+  Auth's Prisma adapter examples use a conventional Prisma client, so do not
+  assume the current database package is a drop-in match. If it is unsupported,
+  select a supported Better Auth adapter or consolidate the database client
+  deliberately before creating migrations.
+- Keep database use provider-neutral: local Docker PostgreSQL and Neon
+  PostgreSQL are both configured through environment variables. Choose the
+  deployment target later without changing scene or ownership rules.
+- Keep `apps/ws-server` as a separate real-time service for Phase 14. It must
+  not be used as the HTTP API for authentication or scene CRUD.
+- Use the existing `ws` library in `apps/ws-server` for Phase 14 real-time
+  collaboration, with the browser's native `WebSocket` API in `apps/web`. Do
+  not add Socket.IO. The `ws` server owns WebSocket upgrades and message
+  fan-out; database room membership remains authoritative. Phase 14 must
+  implement room fan-out, heartbeat, reconnect behavior, acknowledgements, and
+  snapshot or version-based recovery explicitly. WebSocket delivery alone is
+  not durable.
+- Configure the frontend to call the HTTP server through an explicit API
+  origin. Configure credentialed CORS and cookie/CSRF protections for the
+  chosen deployment origins. Configure both servers to validate the same
+  Better Auth session; do not put session tokens in WebSocket query strings.
+- Derive the current user from the server-validated session. API callers must
+  not be allowed to choose an `ownerId` for scene or room operations.
+
+## Scene privacy and persistence
+
+- Phase 13 scenes are server-readable JSON data. End-to-end encryption is
+  intentionally out of scope for this portfolio build.
+- Store each drawing as one scene JSON document, including its elements,
+  viewport/app state, and image file data required to restore it.
+- Because the server can read this document, server-side recovery and future
+  scene processing remain possible. Do not describe saved scenes as
+  end-to-end encrypted.
+- Reconsider this decision before adding any encryption. Encrypting scene data
+  later requires a format and migration plan and removes the server's ability
+  to read existing encrypted scenes without client-provided keys.
+
+## Guest and signed-in routes
+
+- `/` remains the account-free guest canvas and continues using IndexedDB.
+- `/dashboard` is a Next.js frontend page that lists the signed-in user's saved scenes
+  by calling `apps/http-server`.
+- `/canvas/:id` is a Next.js frontend page that loads and saves only the requested
+  server scene through `apps/http-server`.
+- `/room/:roomId` is a Next.js frontend page that checks access through
+  `apps/http-server` and loads its scene.
+  Live synchronization and presence are Phase 14 work in `apps/ws-server`.
+- Saving or migrating a guest drawing must not silently replace or erase the
+  local IndexedDB drawing.
+
+## Implementation consequences
+
+1. Phase 13 must keep guest persistence separate from saved-scene persistence.
+2. Every scene and room endpoint must enforce ownership or membership on the
+   server, including reads, updates, and deletes.
+3. Database schema and migrations must preserve the existing user, room,
+   membership, and chat data while adding scenes and invitations.
+4. Better Auth session cookies, rather than browser storage or URL query
+   tokens, are the browser's authentication mechanism. The HTTP server owns
+   session validation and authorization; the WebSocket server validates the
+   same session before accepting a connection. WebSocket acknowledgements do
+   not replace persisted scene state or version checks.
