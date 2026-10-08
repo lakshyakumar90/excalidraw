@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { createScene, listScenes, type SceneSummary } from "@/lib/api/scenes";
@@ -12,6 +12,14 @@ export function useDashboardScenes(userId: string) {
   } | null>(null);
   const [actionError, setActionError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState<{ message: string } | null>(null);
+  const changedScenes = useRef(new Map<string, SceneSummary | null>());
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   useEffect(() => {
     let cancelled = false;
@@ -19,13 +27,15 @@ export function useDashboardScenes(userId: string) {
       (scenes) => {
         if (!cancelled)
           setResult((current) => ({
-            // Preserve a guest import completed while the initial list was loading.
+            // Preserve actions completed while the initial list was loading.
             scenes: [
               ...(current?.scenes ?? []).filter(
                 (saved) => !scenes.some((scene) => scene.id === saved.id),
               ),
               ...scenes,
-            ],
+            ]
+              .filter((scene) => changedScenes.current.get(scene.id) !== null)
+              .map((scene) => changedScenes.current.get(scene.id) ?? scene),
             error: "",
           }));
       },
@@ -71,14 +81,41 @@ export function useDashboardScenes(userId: string) {
   }
 
   return {
-    addSavedScene: (saved: SceneSummary) =>
+    addSavedScene: (saved: SceneSummary) => {
+      changedScenes.current.set(saved.id, saved);
       setResult((current) => ({
         scenes: [
           saved,
           ...(current?.scenes ?? []).filter((scene) => scene.id !== saved.id),
         ],
         error: current?.error ?? "",
-      })),
+      }));
+    },
+    handleRenamed: (saved: SceneSummary) => {
+      changedScenes.current.set(saved.id, saved);
+      setResult(
+        (current) =>
+          current && {
+            ...current,
+            scenes: current.scenes.map((scene) =>
+              scene.id === saved.id ? saved : scene,
+            ),
+          },
+      );
+      setNotice({ message: `Renamed scene to “${saved.title}”.` });
+    },
+    handleDeleted: (deleted: SceneSummary) => {
+      changedScenes.current.set(deleted.id, null);
+      setResult(
+        (current) =>
+          current && {
+            ...current,
+            scenes: current.scenes.filter((scene) => scene.id !== deleted.id),
+          },
+      );
+      setNotice({ message: `Deleted “${deleted.title}”.` });
+    },
+    notice: notice?.message,
     scenes: result?.scenes ?? [],
     loadingScenes: result === null,
     error: actionError || result?.error || "",

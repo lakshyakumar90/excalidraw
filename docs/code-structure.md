@@ -20,6 +20,8 @@ API modules make requests, and the drawing engine stays independent of React.
 - `apps/web/src/components/dashboard/AuthPanel.tsx`: signup, sign-in, Google, and email verification UI.
 - `apps/web/src/components/dashboard/AuthField.tsx`: the shared labeled form input.
 - `apps/web/src/components/dashboard/ScenesPanel.tsx`: account summary and scene cards.
+- `apps/web/src/components/dashboard/SceneCard.tsx`: scene link, inline rename form, and delete confirmation with keyboard focus handling.
+- `apps/web/src/hooks/dashboard/useSceneActions.ts`: rename/delete requests, title validation, pending state, and recoverable errors.
 - `apps/web/src/hooks/dashboard/useDashboardAuth.ts`: signup steps, request state, errors, and verification actions.
 - `apps/web/src/hooks/dashboard/useDashboardScenes.ts`: scene loading, creation, and sign-out actions.
 - `apps/web/src/components/dashboard/GuestDrawingOffer.tsx`: the signed-in guest save offer, dismissal, and success link.

@@ -1,7 +1,9 @@
-import Link from "next/link";
 import { useDashboardScenes } from "@/hooks/dashboard/useDashboardScenes";
 import { primaryButton, secondaryButton } from "./dashboardStyles";
 import { GuestDrawingOffer } from "./GuestDrawingOffer";
+import { SceneCard } from "./SceneCard";
+import { useEffect, useRef } from "react";
+import type { SceneSummary } from "@/lib/api/scenes";
 
 interface DashboardUser {
   id: string;
@@ -11,6 +13,21 @@ interface DashboardUser {
 
 export function ScenesPanel({ user }: { user: DashboardUser }) {
   const dashboard = useDashboardScenes(user.id);
+  const list = useRef<HTMLUListElement>(null);
+  const newSceneButton = useRef<HTMLButtonElement>(null);
+  const focusAfterDelete = useRef(false);
+
+  useEffect(() => {
+    if (!focusAfterDelete.current) return;
+    focusAfterDelete.current = false;
+    const target = list.current?.querySelector<HTMLAnchorElement>("a");
+    (target ?? newSceneButton.current)?.focus();
+  }, [dashboard.scenes]);
+
+  function handleDeleted(scene: SceneSummary) {
+    focusAfterDelete.current = true;
+    dashboard.handleDeleted(scene);
+  }
   return (
     <>
       <GuestDrawingOffer userId={user.id} onSaved={dashboard.addSavedScene} />
@@ -29,6 +46,7 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
             Sign out
           </button>
           <button
+            ref={newSceneButton}
             disabled={dashboard.creating}
             onClick={() => void dashboard.handleCreateScene()}
             className={primaryButton}
@@ -37,6 +55,14 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
           </button>
         </div>
       </section>
+      {dashboard.notice && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-800 break-words [overflow-wrap:anywhere]"
+        >
+          {dashboard.notice}
+        </p>
+      )}
       {dashboard.error && (
         <p
           role="alert"
@@ -62,19 +88,14 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
           </button>
         </section>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
+        <ul ref={list} className="grid gap-3 sm:grid-cols-2">
           {dashboard.scenes.map((scene) => (
-            <li key={scene.id}>
-              <Link
-                href={`/canvas/${encodeURIComponent(scene.id)}`}
-                className="block rounded-xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:border-violet-300 hover:shadow-md"
-              >
-                <h2 className="font-semibold">{scene.title}</h2>
-                <p className="mt-2 text-xs text-neutral-500">
-                  Updated {new Date(scene.updatedAt).toLocaleString()}
-                </p>
-              </Link>
-            </li>
+            <SceneCard
+              key={scene.id}
+              scene={scene}
+              onRenamed={dashboard.handleRenamed}
+              onDeleted={handleDeleted}
+            />
           ))}
         </ul>
       )}
