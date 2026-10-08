@@ -1916,6 +1916,11 @@
                   "columns": [
                     "email"
                   ]
+                },
+                {
+                  "columns": [
+                    "username"
+                  ]
                 }
               ]
             },
@@ -1994,7 +1999,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "83cf6d869558224f70157924fec71b447284dda77f1edda30985610eaf38b7cd"
+    "storageHash": "1573e84c9992c18979af521805a85e6b3b41115e122e37966eac13395197970e"
   },
   "execution": {
     "executionHash": "0186e367e9dde6664952e3358eaa80112fd085d073bbdde371ec5dc331b5f9dc",
