@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
   }
 }

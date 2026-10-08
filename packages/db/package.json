@@ -12,7 +12,8 @@
     "db:migration-check": "prisma migration check",
     "db:sign": "prisma db sign",
     "db:migrate": "prisma db migrate",
-    "db:update": "prisma db update"
+    "db:update": "prisma db update",
+    "check-types": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

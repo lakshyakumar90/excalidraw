@@ -9,7 +9,8 @@
     "./geometry/viewport": "./src/geometry/viewport.ts"
   },
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@repo/common": "workspace:*",
