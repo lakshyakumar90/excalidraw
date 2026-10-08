@@ -1,4 +1,4 @@
-import type { Viewport } from "@repo/common";
+import type { Element, Viewport } from "@repo/common";
 import type { Scene } from "@repo/engine";
 import { saveScene } from "./indexedDb";
 
@@ -12,6 +12,10 @@ export interface AutosaveHandle {
 export function startAutosave(
   scene: Scene,
   getViewport: () => Viewport,
+  save: (
+    elements: readonly Element[],
+    viewport: Viewport,
+  ) => Promise<void> = saveScene,
 ): AutosaveHandle {
   let timer: number | null = null;
   let dirty = false;
@@ -35,11 +39,11 @@ export function startAutosave(
       saveAgain = false;
       const sceneVersion = scene.version;
       try {
-        await saveScene(scene.getElements(), getViewport());
+        await save(scene.getElements(), getViewport());
         if (scene.version === sceneVersion) scene.markClean();
       } catch (error) {
         dirty = true;
-        console.error("Could not save the local drawing", error);
+        console.error("Could not save the drawing", error);
         break;
       }
     } while (saveAgain || dirty);
@@ -64,11 +68,11 @@ export function startAutosave(
   return {
     schedule,
     stop: () => {
-    unsubscribe();
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-    window.removeEventListener("beforeunload", onBeforeUnload);
-    if (timer !== null) window.clearTimeout(timer);
-    void persist();
+      unsubscribe();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      if (timer !== null) window.clearTimeout(timer);
+      void persist();
     },
   };
 }
