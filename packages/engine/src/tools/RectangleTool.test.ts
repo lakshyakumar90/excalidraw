@@ -18,6 +18,7 @@ function pointerEvent(
     shiftKey: options.shiftKey ?? false,
     button: options.button ?? 0,
     pointerId: 1,
+    pressure: 0.5,
   };
 }
 

@@ -70,6 +70,7 @@ export function createTextElement(
     textAlign?: TextElement["textAlign"];
     verticalAlign?: TextElement["verticalAlign"];
     containerId?: string;
+    wrapText?: boolean;
   },
 ): TextElement {
   const fontSize = options.fontSize ?? DEFAULT_TEXT_FONT_SIZE;
@@ -78,6 +79,7 @@ export function createTextElement(
     options.text,
     fontSize,
     fontFamily,
+    options.wrapText || options.containerId ? options.width : undefined,
   );
   const width = Math.max(20, measuredWidth);
   return {
@@ -92,6 +94,7 @@ export function createTextElement(
     opacity: options.opacity ?? 100,
     text: options.text,
     containerId: options.containerId,
+    wrapText: options.wrapText,
     fontSize,
     fontFamily,
     textAlign: options.textAlign ?? "left",

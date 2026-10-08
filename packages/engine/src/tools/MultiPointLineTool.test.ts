@@ -11,6 +11,7 @@ function pointer(x: number, y: number) {
     shiftKey: false,
     button: 0,
     pointerId: 1,
+    pressure: 0.5,
   };
 }
 

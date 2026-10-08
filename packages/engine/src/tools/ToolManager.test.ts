@@ -18,18 +18,19 @@ function pointerEvent(
     shiftKey: options.shiftKey ?? false,
     button: options.button ?? 0,
     pointerId: 1,
+    pressure: 0.5,
   };
 }
 
 describe("ToolManager", () => {
-  it("starts with rectangle tool", () => {
+  it("starts with selection tool", () => {
     const onCommit = vi.fn();
 
     const manager = new ToolManager({
       onCommit,
     });
 
-    expect(manager.getActiveTool()).toBe("rectangle");
+    expect(manager.getActiveTool()).toBe("selection");
   });
 
   it("creates a preview", () => {
@@ -38,6 +39,7 @@ describe("ToolManager", () => {
     const manager = new ToolManager({
       onCommit,
     });
+    manager.setActiveTool("rectangle");
 
     manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
@@ -64,6 +66,7 @@ describe("ToolManager", () => {
     const manager = new ToolManager({
       onCommit,
     });
+    manager.setActiveTool("rectangle");
 
     manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
@@ -71,7 +74,7 @@ describe("ToolManager", () => {
 
     expect(onCommit).toHaveBeenCalledTimes(1);
 
-    expect(onCommit.mock.calls[0][0]).toMatchObject({
+    expect(onCommit.mock.calls[0]?.[0]).toMatchObject({
       type: "rectangle",
       x: 100,
       y: 100,
@@ -84,6 +87,7 @@ describe("ToolManager", () => {
     const manager = new ToolManager({
       onCommit: () => {},
     });
+    manager.setActiveTool("rectangle");
 
     manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
@@ -100,6 +104,7 @@ describe("ToolManager", () => {
     const manager = new ToolManager({
       onCommit: () => {},
     });
+    manager.setActiveTool("rectangle");
 
     manager.onPointerDown(pointerEvent(100, 100).point, pointerEvent(100, 100));
 
@@ -115,7 +120,7 @@ describe("ToolManager", () => {
       onCommit: () => {},
     });
 
-    expect(manager.getActiveTool()).toBe("rectangle");
+    expect(manager.getActiveTool()).toBe("selection");
 
     manager.setActiveTool("rectangle");
 
@@ -131,17 +136,7 @@ describe("ToolManager", () => {
 
     const unsubscribe = manager.subscribe(listener);
 
-    manager.onPointerDown(
-      {
-        x: 100,
-        y: 100,
-      },
-      {
-        shiftKey: false,
-        button: 0,
-        pointerId: 1,
-      },
-    );
+    manager.setActiveTool("rectangle");
 
     expect(listener).toHaveBeenCalled();
 
@@ -166,6 +161,7 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
@@ -178,6 +174,7 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
@@ -198,12 +195,13 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
     expect(onCommit).toHaveBeenCalledTimes(1);
 
-    expect(onCommit.mock.calls[0][0]).toMatchObject({
+    expect(onCommit.mock.calls[0]?.[0]).toMatchObject({
       type: "ellipse",
       x: 100,
       y: 100,
@@ -230,6 +228,7 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
@@ -242,6 +241,7 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
@@ -274,6 +274,7 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
@@ -286,6 +287,7 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
@@ -306,12 +308,13 @@ describe("ToolManager", () => {
         shiftKey: false,
         button: 0,
         pointerId: 1,
+        pressure: 0.5,
       },
     );
 
     expect(onCommit).toHaveBeenCalledTimes(1);
 
-    expect(onCommit.mock.calls[0][0]).toMatchObject({
+    expect(onCommit.mock.calls[0]?.[0]).toMatchObject({
       type: "line",
       x: 100,
       y: 100,

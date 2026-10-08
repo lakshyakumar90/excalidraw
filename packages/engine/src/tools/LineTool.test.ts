@@ -21,6 +21,7 @@ function pointer(
     shiftKey: options.shiftKey ?? false,
 
     pointerId: 1,
+    pressure: 0.5,
   };
 }
 

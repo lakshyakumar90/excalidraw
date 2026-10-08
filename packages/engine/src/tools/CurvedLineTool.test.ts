@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { CurvedLineTool } from "./CurvedLineTool";
 
 function pointer(x: number, y: number, button = 0) {
-  return { point: { x, y }, button, shiftKey: false, pointerId: 1 };
+  return {
+    point: { x, y },
+    button,
+    shiftKey: false,
+    pointerId: 1,
+    pressure: 0.5,
+  };
 }
 
 describe("CurvedLineTool", () => {
