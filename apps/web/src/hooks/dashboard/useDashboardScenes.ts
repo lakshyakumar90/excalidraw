@@ -17,14 +17,24 @@ export function useDashboardScenes(userId: string) {
     let cancelled = false;
     void listScenes().then(
       (scenes) => {
-        if (!cancelled) setResult({ scenes, error: "" });
+        if (!cancelled)
+          setResult((current) => ({
+            // Preserve a guest import completed while the initial list was loading.
+            scenes: [
+              ...(current?.scenes ?? []).filter(
+                (saved) => !scenes.some((scene) => scene.id === saved.id),
+              ),
+              ...scenes,
+            ],
+            error: "",
+          }));
       },
       (error: unknown) => {
         if (!cancelled)
-          setResult({
-            scenes: [],
+          setResult((current) => ({
+            scenes: current?.scenes ?? [],
             error: errorMessage(error, "Could not load scenes"),
-          });
+          }));
       },
     );
     return () => {
@@ -61,6 +71,14 @@ export function useDashboardScenes(userId: string) {
   }
 
   return {
+    addSavedScene: (saved: SceneSummary) =>
+      setResult((current) => ({
+        scenes: [
+          saved,
+          ...(current?.scenes ?? []).filter((scene) => scene.id !== saved.id),
+        ],
+        error: current?.error ?? "",
+      })),
     scenes: result?.scenes ?? [],
     loadingScenes: result === null,
     error: actionError || result?.error || "",

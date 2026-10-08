@@ -11,6 +11,7 @@ API modules make requests, and the drawing engine stays independent of React.
 - `apps/http-server/src/services/email.ts`: delivers verification links with Resend, or logs a development link when mail is unconfigured.
 - `apps/http-server/src/routes/rooms.ts`: room reads and creation, including room membership checks.
 - `apps/http-server/src/routes/scenes.ts`: scene CRUD and ownership checks.
+- `apps/http-server/src/routes/guestImport.ts`: account-scoped, idempotent guest imports. A deterministic scene primary key prevents duplicate requests from creating multiple scenes.
 - `apps/http-server/src/middleware.ts`: validates the session before protected routes.
 
 ## Dashboard
@@ -21,6 +22,9 @@ API modules make requests, and the drawing engine stays independent of React.
 - `apps/web/src/components/dashboard/ScenesPanel.tsx`: account summary and scene cards.
 - `apps/web/src/hooks/dashboard/useDashboardAuth.ts`: signup steps, request state, errors, and verification actions.
 - `apps/web/src/hooks/dashboard/useDashboardScenes.ts`: scene loading, creation, and sign-out actions.
+- `apps/web/src/components/dashboard/GuestDrawingOffer.tsx`: the signed-in guest save offer, dismissal, and success link.
+- `apps/web/src/hooks/dashboard/useGuestImport.ts`: detects the local drawing, checks previous imports, and handles saving.
+- `apps/web/src/lib/persistence/guestImport.ts`: reads IndexedDB, packages referenced images and viewport, and fingerprints the drawing. Viewport-only changes do not trigger a second import; drawing changes can be saved as a new scene. The original guest drawing remains untouched.
 - `apps/web/src/lib/api/auth.ts`: authentication requests and frontend callback URLs.
 - `apps/web/src/lib/api/request.ts`: shared authenticated HTTP requests and response errors.
 - `apps/web/src/lib/api/scenes.ts`: scene requests and scene data types.

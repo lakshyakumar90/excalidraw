@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useDashboardScenes } from "@/hooks/dashboard/useDashboardScenes";
 import { primaryButton, secondaryButton } from "./dashboardStyles";
+import { GuestDrawingOffer } from "./GuestDrawingOffer";
 
 interface DashboardUser {
   id: string;
@@ -12,6 +13,7 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
   const dashboard = useDashboardScenes(user.id);
   return (
     <>
+      <GuestDrawingOffer userId={user.id} onSaved={dashboard.addSavedScene} />
       <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
         <div>
           <p className="font-medium">{user.name || user.email}</p>
