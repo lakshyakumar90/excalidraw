@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { db } from "@repo/db";
 import { CreateSceneSchema, UpdateSceneSchema } from "@repo/validations";
+import { guestImportRouter } from "./guestImport.js";
 
 type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 export const scenesRouter: Router = Router();
+scenesRouter.use("/guest-import", guestImportRouter);
 
 scenesRouter.get("/", async (req, res) => {
   try {
