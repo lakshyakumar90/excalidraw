@@ -9,13 +9,9 @@ This controller owns canvas selection, transforms, and point editing:
 import type { Element, Point } from "@repo/common";
 import {
   elementIntersectsRect,
-  getArrowMidpoint,
   getElementAtPosition,
   getElementsAtPosition,
   getElementBounds,
-  getBoundsCenter,
-  getElementLocalBounds,
-  measureText,
 } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import {
@@ -28,132 +24,27 @@ import {
   isNearLinearBendHandle,
   type ResizeHandle,
 } from "./handles";
-import { resizeElement } from "./resize";
+import {
+  resizeSelectedElement,
+  resizeSelectedGroup,
+  moveSelectedPoint,
+} from "./selectionTransforms";
 import { selectionStore } from "./selectionStore";
 import { historyStore } from "@/lib/history/historyStore";
-import { syncBoundArrowsForShape } from "./arrowBinding";
+
+import {
+  cloneElement,
+  duplicateElements,
+  parseCopiedElements,
+  ELEMENTS_CLIPBOARD_MARKER,
+  ELEMENTS_CLIPBOARD_VERSION,
+} from "./elementClipboard";
+import { getMovementSnapshots, translateSnapshots } from "./boundElements";
+import { getSelectionBounds, rectHandleAt, type Rect } from "./selectionBounds";
 
 export interface MarqueePreview {
   start: Point;
   current: Point;
-}
-
-const ELEMENTS_CLIPBOARD_MARKER = "excalidraw-elements";
-const ELEMENTS_CLIPBOARD_VERSION = 1;
-
-function getBoundMovementElements(element: Element): Element[] {
-  const related = new Map<string, Element>();
-
-  if (element.type === "text" && element.containerId) {
-    const container = scene.getElement(element.containerId);
-    if (container && !container.isDeleted) related.set(container.id, container);
-  }
-
-  for (const id of element.boundElements ?? []) {
-    const bound = scene.getElement(id);
-    if (
-      bound?.type === "text" &&
-      bound.containerId === element.id &&
-      !bound.isDeleted
-    ) {
-      related.set(bound.id, bound);
-    }
-  }
-
-  return [...related.values()];
-}
-
-function getMovementSnapshots(
-  elements: readonly Element[],
-): Array<{ id: string; x: number; y: number }> {
-  const snapshots = new Map<string, { id: string; x: number; y: number }>();
-  const pending = [...elements];
-
-  while (pending.length > 0) {
-    const element = pending.pop();
-    if (!element || snapshots.has(element.id)) continue;
-    snapshots.set(element.id, {
-      id: element.id,
-      x: element.x,
-      y: element.y,
-    });
-    pending.push(...getBoundMovementElements(element));
-  }
-
-  return [...snapshots.values()];
-}
-
-function translateSnapshots(
-  elements: readonly { id: string; x: number; y: number }[],
-  dx: number,
-  dy: number,
-): void {
-  for (const element of elements) {
-    scene.mutateElement(element.id, {
-      x: element.x + dx,
-      y: element.y + dy,
-    });
-  }
-  for (const element of elements) {
-    const moved = scene.getElement(element.id);
-    if (moved) syncBoundArrowsForShape(moved);
-  }
-}
-
-function syncBoundTextToContainer(container: Element): void {
-  if (container.type !== "rectangle" && container.type !== "arrow") return;
-
-  const boundTexts = (container.boundElements ?? [])
-    .map((id) => scene.getElement(id))
-    .filter(
-      (element): element is Extract<Element, { type: "text" }> =>
-        element?.type === "text" &&
-        element.containerId === container.id &&
-        !element.isDeleted,
-    );
-  let height = container.height ?? 0;
-  if (container.type === "rectangle") {
-    const wrappedHeight = Math.max(
-      0,
-      ...boundTexts.map(
-        (text) =>
-          measureText(
-            text.text,
-            text.fontSize,
-            text.fontFamily,
-            container.width ?? 0,
-          ).height,
-      ),
-    );
-    height = Math.max(height, wrappedHeight);
-
-    if (height > (container.height ?? 0)) {
-      scene.mutateElement(container.id, { height });
-    }
-  }
-
-  for (const text of boundTexts) {
-    if (container.type === "rectangle") {
-      scene.mutateElement(text.id, {
-        x: container.x,
-        y: container.y,
-        width: container.width,
-        height,
-        angle: container.angle,
-      });
-    } else {
-      const midpoint = getArrowMidpoint(container);
-      const metrics = measureText(text.text, text.fontSize, text.fontFamily);
-      const width = Math.max(20, metrics.width);
-      scene.mutateElement(text.id, {
-        x: midpoint.x - width / 2,
-        y: midpoint.y - metrics.height / 2,
-        width,
-        height: metrics.height,
-        angle: 0,
-      });
-    }
-  }
 }
 
 type Gesture =
@@ -275,15 +166,13 @@ export const selectionController = {
     if (pointEditingElementId) {
       const element = scene.getElement(pointEditingElementId);
       if (element && "points" in element) {
-        const nearest = element.points.findIndex(
-          (p) => {
-            const world =
-              element.type === "line" || element.type === "arrow"
-                ? getLinearPointWorldPosition(element, p)
-                : { x: element.x + p.x, y: element.y + p.y };
-            return Math.hypot(point.x - world.x, point.y - world.y) <= 10 / zoom;
-          },
-        );
+        const nearest = element.points.findIndex((p) => {
+          const world =
+            element.type === "line" || element.type === "arrow"
+              ? getLinearPointWorldPosition(element, p)
+              : { x: element.x + p.x, y: element.y + p.y };
+          return Math.hypot(point.x - world.x, point.y - world.y) <= 10 / zoom;
+        });
         if (nearest >= 0) {
           gesture = {
             kind: "point",
@@ -534,162 +423,26 @@ export const selectionController = {
     }
 
     if (gesture.kind === "resize") {
-      let resized = resizeElement(
+      resizeSelectedElement(
         gesture.original,
         gesture.handle,
         point,
         shiftKey,
         altKey,
       );
-
-      if (gesture.original.type === "text" && resized.type === "text") {
-        const originalWidth = Math.max(1, gesture.original.width ?? 0);
-        const originalHeight = Math.max(1, gesture.original.height ?? 0);
-        const scaleX = Math.max(0.05, (resized.width ?? 0) / originalWidth);
-        const scaleY = Math.max(0.05, (resized.height ?? 0) / originalHeight);
-        const horizontal =
-          gesture.handle.includes("w") || gesture.handle.includes("e");
-        const vertical =
-          gesture.handle.includes("n") || gesture.handle.includes("s");
-        const rawFontScale =
-          horizontal && vertical
-            ? Math.sqrt(scaleX * scaleY)
-            : horizontal
-              ? scaleX
-              : scaleY;
-        const fontSize = Math.max(1, gesture.original.fontSize * rawFontScale);
-        const width = Math.max(1, resized.width ?? 0);
-        const textHeight = measureText(
-          gesture.original.text,
-          fontSize,
-          gesture.original.fontFamily,
-          width,
-        ).height;
-        const height = Math.max(resized.height ?? 0, textHeight);
-        const resizedFromTop = gesture.handle.includes("n");
-        resized = {
-          ...resized,
-          fontSize,
-          width,
-          height,
-          y: resizedFromTop
-            ? gesture.original.y + (gesture.original.height ?? 0) - height
-            : resized.y,
-          wrapText: true,
-        };
-      }
-
-      scene.mutateElement(
-        gesture.original.id,
-        resized as Partial<Omit<Element, "id" | "type">>,
-      );
-      const resizedElement = scene.getElement(gesture.original.id);
-      if (resizedElement) {
-        syncBoundTextToContainer(resizedElement);
-        syncBoundArrowsForShape(resizedElement);
-      }
       return;
     }
-
     if (gesture.kind === "group-resize") {
-      const b = gesture.bounds;
-      const left = gesture.handle.includes("w"),
-        top = gesture.handle.includes("n");
-      const horizontal =
-        gesture.handle.includes("w") || gesture.handle.includes("e");
-      const vertical =
-        gesture.handle.includes("n") || gesture.handle.includes("s");
-      const anchorX = horizontal
-        ? left
-          ? b.maxX
-          : b.minX
-        : (b.minX + b.maxX) / 2;
-      const anchorY = vertical
-        ? top
-          ? b.maxY
-          : b.minY
-        : (b.minY + b.maxY) / 2;
-      const scaleX = horizontal
-        ? (point.x - anchorX) / ((left ? b.minX : b.maxX) - anchorX || 1)
-        : null;
-      const scaleY = vertical
-        ? (point.y - anchorY) / ((top ? b.minY : b.maxY) - anchorY || 1)
-        : null;
-      const scale =
-        scaleX !== null && scaleY !== null
-          ? Math.abs(scaleX) >= Math.abs(scaleY)
-            ? scaleX
-            : scaleY
-          : (scaleX ?? scaleY ?? 1);
-      for (const original of gesture.originals) {
-        const nextX = anchorX + (original.x - anchorX) * scale;
-        const nextY = anchorY + (original.y - anchorY) * scale;
-        const changes: Record<string, unknown> = {
-          x: nextX,
-          y: nextY,
-          width: (original.width ?? 0) * Math.abs(scale),
-          height: (original.height ?? 0) * Math.abs(scale),
-          strokeWidth: (original.strokeWidth ?? 1) * Math.abs(scale),
-        };
-        if (original.type === "text")
-          changes.fontSize = original.fontSize * Math.abs(scale);
-        if ("points" in original)
-          changes.points = original.points.map((p) => ({
-            ...p,
-            x: p.x * scale,
-            y: p.y * scale,
-          }));
-        scene.mutateElement(
-          original.id,
-          changes as Partial<Omit<Element, "id" | "type">>,
-        );
-      }
-      for (const original of gesture.originals) {
-        const resizedElement = scene.getElement(original.id);
-        if (resizedElement) syncBoundArrowsForShape(resizedElement);
-      }
+      resizeSelectedGroup(
+        gesture.originals,
+        gesture.bounds,
+        gesture.handle,
+        point,
+      );
       return;
     }
-
     if (gesture.kind === "point") {
-      const element = scene.getElement(gesture.elementId);
-      if (element && "points" in element) {
-        const points = element.points.map((p) => ({ ...p }));
-        const p = points[gesture.pointIndex];
-        if (p) {
-          const isLinear = element.type === "line" || element.type === "arrow";
-          const localPoint = isLinear
-            ? getLinearPointLocalPosition(element, point)
-            : { x: point.x - element.x, y: point.y - element.y };
-          points[gesture.pointIndex] = {
-            ...p,
-            ...localPoint,
-          };
-          if (isLinear) {
-            const oldCenter = getBoundsCenter(getElementLocalBounds(element));
-            const updatedElement = { ...element, points };
-            const newCenter = getBoundsCenter(
-              getElementLocalBounds(updatedElement),
-            );
-            const dx = oldCenter.x - newCenter.x;
-            const dy = oldCenter.y - newCenter.y;
-            const angle = element.angle ?? 0;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const originOffsetX = dx - (dx * cos - dy * sin);
-            const originOffsetY = dy - (dx * sin + dy * cos);
-            scene.mutateElement(element.id, {
-              points,
-              x: element.x + originOffsetX,
-              y: element.y + originOffsetY,
-            } as Partial<Omit<Element, "id" | "type">>);
-            return;
-          }
-        }
-        scene.mutateElement(element.id, { points } as Partial<
-          Omit<Element, "id" | "type">
-        >);
-      }
+      moveSelectedPoint(gesture.elementId, gesture.pointIndex, point);
       return;
     }
 
@@ -893,7 +646,9 @@ export const selectionController = {
   },
 
   groupSelection(): boolean {
-    return historyStore.captureUpdate(() => this.groupSelectionWithoutCapture());
+    return historyStore.captureUpdate(() =>
+      this.groupSelectionWithoutCapture(),
+    );
   },
 
   groupSelectionWithoutCapture(): boolean {
@@ -918,7 +673,9 @@ export const selectionController = {
   },
 
   ungroupSelection(): boolean {
-    return historyStore.captureUpdate(() => this.ungroupSelectionWithoutCapture());
+    return historyStore.captureUpdate(() =>
+      this.ungroupSelectionWithoutCapture(),
+    );
   },
 
   ungroupSelectionWithoutCapture(): boolean {
@@ -953,7 +710,9 @@ export const selectionController = {
   },
 
   duplicateSelection(offset = 10): boolean {
-    return historyStore.captureUpdate(() => this.duplicateSelectionWithoutCapture(offset));
+    return historyStore.captureUpdate(() =>
+      this.duplicateSelectionWithoutCapture(offset),
+    );
   },
 
   duplicateSelectionWithoutCapture(offset = 10): boolean {
@@ -1099,257 +858,13 @@ export const selectionController = {
     historyStore.captureUpdate(() => {
       const selectedElements = [...selectionStore.getSnapshot()]
         .map((id) => scene.getElement(id))
-        .filter((element): element is Element => !!element && !element.isDeleted);
+        .filter(
+          (element): element is Element => !!element && !element.isDeleted,
+        );
       translateSnapshots(getMovementSnapshots(selectedElements), dx, dy);
     });
   },
 };
-
-function cloneElement(element: Element): Element {
-  if ("points" in element) {
-    return {
-      ...element,
-      points: element.points.map((point) => ({ ...point })),
-    } as Element;
-  }
-
-  return { ...element };
-}
-
-function duplicateElements(
-  elements: readonly Element[],
-  offsetX: number,
-  offsetY: number,
-): Element[] {
-  const elementIdMap = new Map(
-    elements.map((element) => [element.id, crypto.randomUUID()]),
-  );
-  const groupIdMap = new Map<string, string>();
-  for (const element of elements) {
-    for (const groupId of element.groupIds ?? []) {
-      if (!groupIdMap.has(groupId)) {
-        groupIdMap.set(groupId, crypto.randomUUID());
-      }
-    }
-  }
-
-  const now = Date.now();
-  return elements.map((element) => {
-    const duplicate = {
-      ...cloneElement(element),
-      id: elementIdMap.get(element.id)!,
-      x: element.x + offsetX,
-      y: element.y + offsetY,
-      version: 1,
-      versionNonce: Math.floor(Math.random() * 2_147_483_647),
-      updated: now,
-    } as Element;
-
-    if (element.groupIds) {
-      duplicate.groupIds = element.groupIds.map((groupId) =>
-        groupIdMap.get(groupId)!,
-      );
-    }
-    if (element.boundElements) {
-      duplicate.boundElements = element.boundElements.flatMap((id) => {
-        const mappedId = elementIdMap.get(id);
-        return mappedId ? [mappedId] : [];
-      });
-    }
-    if (element.frameId) {
-      duplicate.frameId = elementIdMap.get(element.frameId) ?? null;
-    }
-    if (
-      element.type === "text" &&
-      duplicate.type === "text" &&
-      element.containerId
-    ) {
-      duplicate.containerId = elementIdMap.get(element.containerId);
-    }
-
-    if (element.type === "arrow" && duplicate.type === "arrow") {
-      for (const bindingKey of ["startBinding", "endBinding"] as const) {
-        const binding = element[bindingKey];
-        const mappedTargetId = binding
-          ? elementIdMap.get(binding.elementId)
-          : undefined;
-        if (binding && mappedTargetId) {
-          duplicate[bindingKey] = {
-            ...binding,
-            elementId: mappedTargetId,
-          };
-        } else {
-          delete duplicate[bindingKey];
-        }
-      }
-    }
-
-    return duplicate;
-  });
-}
-
-function parseCopiedElements(text: string): Element[] | null {
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (!isRecord(data)) return null;
-  if (
-    data.type !== ELEMENTS_CLIPBOARD_MARKER ||
-    data.version !== ELEMENTS_CLIPBOARD_VERSION ||
-    !Array.isArray(data.elements)
-  ) {
-    return null;
-  }
-
-  const elements = data.elements;
-  if (!elements.every(isClipboardElement)) return null;
-  const ids = elements.map((element) => element.id);
-  if (new Set(ids).size !== ids.length) return null;
-  return elements;
-}
-
-function isClipboardElement(value: unknown): value is Element {
-  if (!isRecord(value)) return false;
-  if (
-    typeof value.id !== "string" ||
-    typeof value.type !== "string" ||
-    ![
-      "rectangle",
-      "ellipse",
-      "diamond",
-      "line",
-      "arrow",
-      "freedraw",
-      "text",
-    ].includes(value.type) ||
-    !isFiniteNumber(value.x) ||
-    !isFiniteNumber(value.y)
-  ) {
-    return false;
-  }
-
-  for (const key of [
-    "width",
-    "height",
-    "angle",
-    "strokeWidth",
-    "roughness",
-    "opacity",
-    "seed",
-    "version",
-    "versionNonce",
-    "updated",
-  ]) {
-    if (value[key] !== undefined && !isFiniteNumber(value[key])) return false;
-  }
-  if (
-    value.groupIds !== undefined &&
-    (!Array.isArray(value.groupIds) || !value.groupIds.every(isString))
-  ) {
-    return false;
-  }
-  if (
-    value.boundElements !== undefined &&
-    (!Array.isArray(value.boundElements) ||
-      !value.boundElements.every(isString))
-  ) {
-    return false;
-  }
-  if (value.containerId !== undefined && !isString(value.containerId)) {
-    return false;
-  }
-  if (
-    value.frameId !== undefined &&
-    value.frameId !== null &&
-    typeof value.frameId !== "string"
-  ) {
-    return false;
-  }
-
-  if (
-    value.type === "line" ||
-    value.type === "arrow" ||
-    value.type === "freedraw"
-  ) {
-    if (
-      !Array.isArray(value.points) ||
-      !value.points.every((point: unknown) => {
-        if (
-          !isRecord(point) ||
-          !isFiniteNumber(point.x) ||
-          !isFiniteNumber(point.y)
-        ) {
-          return false;
-        }
-        return value.type !== "freedraw" || isFiniteNumber(point.pressure);
-      })
-    ) {
-      return false;
-    }
-    if (
-      value.type === "line" &&
-      value.lineType !== "straight" &&
-      value.lineType !== "curved"
-    ) {
-      return false;
-    }
-  }
-
-  if (
-    value.type === "arrow" &&
-    ((value.lineType !== undefined &&
-      value.lineType !== "straight" &&
-      value.lineType !== "curved") ||
-      (value.startBinding !== undefined &&
-      !isArrowBindingValue(value.startBinding)) ||
-      (value.endBinding !== undefined &&
-        !isArrowBindingValue(value.endBinding)))
-  ) {
-    return false;
-  }
-
-  if (
-    value.type === "text" &&
-    (typeof value.text !== "string" ||
-      !isFiniteNumber(value.fontSize) ||
-      typeof value.fontFamily !== "string" ||
-      !["left", "center", "right"].includes(String(value.textAlign)) ||
-      !["top", "middle", "bottom"].includes(String(value.verticalAlign)))
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
-function isArrowBindingValue(value: unknown): boolean {
-  if (value === null) return true;
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.elementId === "string" &&
-    isFiniteNumber(value.focus) &&
-    (value.gap === undefined || isFiniteNumber(value.gap)) &&
-    (value.fixedPoint === undefined ||
-      (Array.isArray(value.fixedPoint) &&
-        value.fixedPoint.length === 2 &&
-        value.fixedPoint.every(isFiniteNumber)))
-  );
-}
 
 function getGroupMemberIds(groupId: string): string[] {
   return scene
@@ -1366,34 +881,4 @@ function getClickSelectionIds(element: Element): string[] {
   if (activeGroup && !stack.includes(activeGroup)) groupDrillPath = [];
   const groupId = stack[groupDrillPath.length];
   return groupId ? getGroupMemberIds(groupId) : [element.id];
-}
-
-type Rect = { minX: number; minY: number; maxX: number; maxY: number };
-function getSelectionBounds(ids: readonly string[]): Rect | null {
-  const elements = ids
-    .map((id) => scene.getElement(id))
-    .filter((e): e is Element => !!e && !e.isDeleted);
-  if (!elements.length) return null;
-  const bounds = elements.map(getElementBounds);
-  return {
-    minX: Math.min(...bounds.map((b) => b.minX)),
-    minY: Math.min(...bounds.map((b) => b.minY)),
-    maxX: Math.max(...bounds.map((b) => b.maxX)),
-    maxY: Math.max(...bounds.map((b) => b.maxY)),
-  };
-}
-function rectHandleAt(b: Rect, p: Point, zoom: number): ResizeHandle | null {
-  const nearL = Math.abs(p.x - b.minX) <= 8 / zoom,
-    nearR = Math.abs(p.x - b.maxX) <= 8 / zoom;
-  const nearT = Math.abs(p.y - b.minY) <= 8 / zoom,
-    nearB = Math.abs(p.y - b.maxY) <= 8 / zoom;
-  if (nearT && nearL) return "nw";
-  if (nearT && nearR) return "ne";
-  if (nearB && nearL) return "sw";
-  if (nearB && nearR) return "se";
-  if (nearT) return "n";
-  if (nearB) return "s";
-  if (nearL) return "w";
-  if (nearR) return "e";
-  return null;
 }
