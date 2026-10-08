@@ -57,6 +57,10 @@
         "sql": "INSERT INTO \"public\".\"account\" (\"id\", \"accountId\", \"providerId\", \"userId\", \"password\", \"createdAt\", \"updatedAt\") SELECT gen_random_uuid()::text, legacy.\"id\", 'credential', legacy.\"id\", legacy.\"password\", now(), now() FROM \"public\".\"user\" AS legacy WHERE legacy.\"password\" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM \"public\".\"account\" AS credential WHERE credential.\"userId\" = legacy.\"id\" AND credential.\"providerId\" = 'credential' AND credential.\"accountId\" = legacy.\"id\" AND credential.\"password\" IS NOT NULL)"
       },
       {
+        "description": "Allow legacy password hashes to be cleared from the user table",
+        "sql": "ALTER TABLE \"public\".\"user\" ALTER COLUMN \"password\" DROP NOT NULL"
+      },
+      {
         "description": "Clear old password hashes after the credential copy",
         "sql": "UPDATE \"public\".\"user\" AS legacy SET \"password\" = NULL WHERE legacy.\"password\" IS NOT NULL AND EXISTS (SELECT 1 FROM \"public\".\"account\" AS credential WHERE credential.\"userId\" = legacy.\"id\" AND credential.\"providerId\" = 'credential' AND credential.\"accountId\" = legacy.\"id\" AND credential.\"password\" = legacy.\"password\")"
       }
