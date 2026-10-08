@@ -68,6 +68,23 @@ export async function updateSceneData(
   });
 }
 
+export async function renameScene(
+  sceneId: string,
+  title: string,
+): Promise<SavedScene> {
+  const result = await apiRequest<{ scene: SavedScene }>(
+    `/scenes/${encodeURIComponent(sceneId)}`,
+    { method: "PATCH", body: JSON.stringify({ title }) },
+  );
+  return result.scene;
+}
+
+export async function deleteScene(sceneId: string): Promise<void> {
+  await apiRequest(`/scenes/${encodeURIComponent(sceneId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function viewportFromSceneData(data: SceneData): Viewport {
   const appState = data.appState;
   const zoomValue =
