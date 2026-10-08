@@ -31,12 +31,11 @@ scenesRouter.post("/", async (req, res) => {
   }
 
   try {
-    const scene = await db
-      .orm!.public!.Scene.create({
-        ownerId: req.userId!,
-        title: parsed.data.title ?? "Untitled",
-        data: parsed.data.data as JsonValue,
-      });
+    const scene = await db.orm!.public!.Scene.create({
+      ownerId: req.userId!,
+      title: parsed.data.title ?? "Untitled",
+      data: parsed.data.data as JsonValue,
+    });
 
     return res.status(201).json({ scene });
   } catch (error) {
