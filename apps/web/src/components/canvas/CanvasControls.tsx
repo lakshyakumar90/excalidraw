@@ -10,16 +10,31 @@ import {
   subscribeViewport,
 } from "@/lib/persistence/viewportStore";
 
+import {
+  TOOL_LABELS,
+  TOOL_SHORTCUTS,
+  TOOL_TYPES,
+} from "@/lib/tools/toolDefinitions";
+
 const subscribeHistory = historyStore.subscribe.bind(historyStore);
 const getHistorySnapshot = historyStore.getSnapshot.bind(historyStore);
 
-function Icon({ name }: { name: "minus" | "plus" | "undo" | "redo" | "help" | "close" }) {
+function Icon({
+  name,
+}: {
+  name: "minus" | "plus" | "undo" | "redo" | "help" | "close";
+}) {
   const paths = {
     minus: <path d="M5 12h14" />,
     plus: <path d="M12 5v14m-7-7h14" />,
     undo: <path d="M9 14 4 9l5-5M4 9h9a6 6 0 0 1 0 12h-2" />,
     redo: <path d="m15 14 5-5-5-5m5 5h-9a6 6 0 0 0 0 12h2" />,
-    help: <><circle cx="12" cy="12" r="9" /><path d="M9.7 9a2.4 2.4 0 1 1 4.1 1.7c-1.1 1-1.8 1.3-1.8 3M12 17h.01" /></>,
+    help: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.7 9a2.4 2.4 0 1 1 4.1 1.7c-1.1 1-1.8 1.3-1.8 3M12 17h.01" />
+      </>
+    ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
   };
 
@@ -75,9 +90,11 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
         return;
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-      )];
+      const focusable = [
+        ...dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ];
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) {
@@ -112,7 +129,10 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
       >
         <header className="flex items-start justify-between gap-5 border-b border-neutral-200 px-6 py-5 sm:px-8">
           <div>
-            <h2 id="help-title" className="text-lg font-semibold tracking-tight">
+            <h2
+              id="help-title"
+              className="text-lg font-semibold tracking-tight"
+            >
               Canvas guide
             </h2>
             <p className="mt-1 text-sm text-neutral-500">
@@ -132,49 +152,71 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
         <div className="min-h-0 overflow-y-auto px-6 py-5 sm:px-8">
           <div className="grid gap-8 md:grid-cols-2">
             <section aria-labelledby="help-tools">
-              <h3 id="help-tools" className="mb-2 text-sm font-semibold">Tools</h3>
-              <ShortcutRow action="Select and move" shortcut="V" />
-              <ShortcutRow action="Text" shortcut="T" />
-              <ShortcutRow action="Hand tool" shortcut="H" />
-              <ShortcutRow action="Rectangle" shortcut="R" />
-              <ShortcutRow action="Ellipse" shortcut="O" />
-              <ShortcutRow action="Diamond" shortcut="D" />
-              <ShortcutRow action="Line" shortcut="L" />
-              <ShortcutRow action="Multi-point line" shortcut="P" />
-              <ShortcutRow action="Arrow" shortcut="A" />
-              <ShortcutRow action="Curve" shortcut="C" />
-              <ShortcutRow action="Pencil" shortcut="F" />
-              <ShortcutRow action="Eraser" shortcut="E" />
+              <h3 id="help-tools" className="mb-2 text-sm font-semibold">
+                Tools
+              </h3>
+              {TOOL_TYPES.map((type) => (
+                <ShortcutRow
+                  key={type}
+                  action={TOOL_LABELS[type]}
+                  shortcut={TOOL_SHORTCUTS[type]}
+                />
+              ))}
             </section>
 
             <div className="space-y-8">
               <section aria-labelledby="help-editing">
-                <h3 id="help-editing" className="mb-2 text-sm font-semibold">Editing</h3>
+                <h3 id="help-editing" className="mb-2 text-sm font-semibold">
+                  Editing
+                </h3>
                 <ShortcutRow action="Undo" shortcut="Ctrl / ⌘ + Z" />
                 <ShortcutRow action="Redo" shortcut="Ctrl / ⌘ + Shift + Z" />
                 <ShortcutRow action="Select all" shortcut="Ctrl / ⌘ + A" />
-                <ShortcutRow action="Copy / paste / cut" shortcut="Ctrl / ⌘ + C / V / X" />
-                <ShortcutRow action="Duplicate selection" shortcut="Ctrl / ⌘ + D" />
-                <ShortcutRow action="Group / ungroup" shortcut="Ctrl / ⌘ + G / Shift+G" />
+                <ShortcutRow
+                  action="Copy / paste / cut"
+                  shortcut="Ctrl / ⌘ + C / V / X"
+                />
+                <ShortcutRow
+                  action="Duplicate selection"
+                  shortcut="Ctrl / ⌘ + D"
+                />
+                <ShortcutRow
+                  action="Group / ungroup"
+                  shortcut="Ctrl / ⌘ + G / Shift+G"
+                />
                 <ShortcutRow action="Delete selection" shortcut="Delete" />
                 <ShortcutRow action="Cancel / clear selection" shortcut="Esc" />
               </section>
 
               <section aria-labelledby="help-navigation">
-                <h3 id="help-navigation" className="mb-2 text-sm font-semibold">Canvas navigation</h3>
-                <ShortcutRow action="Zoom in / out" shortcut="Ctrl / ⌘ + + / −" />
+                <h3 id="help-navigation" className="mb-2 text-sm font-semibold">
+                  Canvas navigation
+                </h3>
+                <ShortcutRow
+                  action="Zoom in / out"
+                  shortcut="Ctrl / ⌘ + + / −"
+                />
                 <ShortcutRow action="Reset zoom" shortcut="Ctrl / ⌘ + 0" />
-                <ShortcutRow action="Pan temporarily" shortcut="Hold Space + drag" />
-                <ShortcutRow action="Move selected elements" shortcut="Arrow keys" />
+                <ShortcutRow
+                  action="Pan temporarily"
+                  shortcut="Hold Space + drag"
+                />
+                <ShortcutRow
+                  action="Move selected elements"
+                  shortcut="Arrow keys"
+                />
                 <p className="pt-3 text-xs leading-5 text-neutral-500">
-                  Use the Hand tool to pan the canvas. With Select active, click an element to select it; Alt-click cycles through overlapping elements. Drag on empty canvas to select multiple elements.
+                  Use the Hand tool to pan the canvas. With Select active, click
+                  an element to select it; Alt-click cycles through overlapping
+                  elements. Drag on empty canvas to select multiple elements.
                 </p>
               </section>
             </div>
           </div>
         </div>
         <footer className="border-t border-neutral-200 px-6 py-3 text-xs text-neutral-500 sm:px-8">
-          Shortcuts work when the canvas is active. Ctrl shortcuts also accept ⌘ on Mac.
+          Shortcuts work when the canvas is active. Ctrl shortcuts also accept ⌘
+          on Mac.
         </footer>
       </div>
     </div>
@@ -205,7 +247,11 @@ export function CanvasControls() {
   return (
     <>
       <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl border border-black/10 bg-white/95 p-1.5 text-neutral-800 shadow-lg backdrop-blur">
-        <div role="group" aria-label="Canvas zoom" className="flex h-9 items-center">
+        <div
+          role="group"
+          aria-label="Canvas zoom"
+          className="flex h-9 items-center"
+        >
           <button
             type="button"
             aria-label="Zoom out"
@@ -216,7 +262,10 @@ export function CanvasControls() {
           >
             <Icon name="minus" />
           </button>
-          <span aria-live="polite" className="min-w-14 px-1 text-center text-xs font-semibold tabular-nums">
+          <span
+            aria-live="polite"
+            className="min-w-14 px-1 text-center text-xs font-semibold tabular-nums"
+          >
             {Math.round(viewport.zoom * 100)}%
           </span>
           <button
@@ -231,7 +280,11 @@ export function CanvasControls() {
           </button>
         </div>
         <span aria-hidden="true" className="h-6 w-px bg-neutral-200" />
-        <div role="group" aria-label="Undo and redo" className="flex h-9 items-center">
+        <div
+          role="group"
+          aria-label="Undo and redo"
+          className="flex h-9 items-center"
+        >
           <button
             type="button"
             aria-label="Undo"
