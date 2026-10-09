@@ -1,5 +1,5 @@
 import { db } from "@repo/db";
-import { authPool } from "./auth.js";
+import { authPool } from "./database.js";
 import { app } from "./app.js";
 
 async function startServer() {

@@ -124,6 +124,17 @@ scenesRouter.delete("/:sceneId", async (req, res) => {
       return res.status(404).json({ message: "Scene not found" });
     }
 
+    const room = await db
+      .orm!.public!.Room.where({ sceneId: existing.id })
+      .first();
+    if (room) {
+      return res
+        .status(409)
+        .json({
+          message: "Delete the scene's room before deleting this scene",
+        });
+    }
+
     await db
       .orm!.public!.Scene.where({ id: existing.id, ownerId: req.userId! })
       .delete();
