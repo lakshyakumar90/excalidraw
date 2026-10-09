@@ -7,6 +7,17 @@ import { username } from "better-auth/plugins";
 import bcrypt from "bcrypt";
 import { authPool } from "@repo/db";
 
+export {
+  assertPresenceTicketConfiguration,
+  getPresenceTicketSecret,
+  issuePresenceTicket,
+  verifyPresenceTicket,
+  PRESENCE_TICKET_AUDIENCE,
+  PRESENCE_TICKET_ISSUER,
+  PRESENCE_TICKET_TTL_SECONDS,
+} from "./presenceTicket.js";
+export type { PresenceTicketClaims } from "./presenceTicket.js";
+
 export const authWebOrigin = process.env.WEB_ORIGIN ?? "http://localhost:3000";
 const port = process.env.PORT ?? "5000";
 const apiOrigin = process.env.BETTER_AUTH_URL ?? `http://localhost:${port}`;

@@ -152,6 +152,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:*
@@ -159,15 +162,24 @@ importers:
       '@types/bcrypt':
         specifier: ^6.0.0
         version: 6.0.0
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.4.1)(vite@8.3.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   packages/backend-common:
     dependencies:
+      '@repo/common':
+        specifier: workspace:*
+        version: link:../common
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -178,12 +190,18 @@ importers:
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.4.1)(vite@8.3.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   packages/common:
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.4.1)(vite@8.3.0(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1))
 
   packages/db:
     dependencies:
