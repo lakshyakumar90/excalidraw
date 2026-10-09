@@ -4,6 +4,7 @@ import { authHandler, authWebOrigin } from "@repo/auth";
 import { requireAuth } from "./middleware.js";
 import { scenesRouter } from "./routes/scenes.js";
 import { roomsRouter } from "./routes/rooms.js";
+import { libraryRouter } from "./routes/library.js";
 
 export const app: Express = express();
 
@@ -28,5 +29,6 @@ app.get("/me", requireAuth, (req, res) => {
 });
 
 app.use("/scenes", requireAuth, scenesRouter);
+app.use("/library", requireAuth, libraryRouter);
 
 app.use("/room", requireAuth, roomsRouter);

@@ -77,3 +77,4 @@ export type {
   RevisionHead,
   SyncDb,
 } from "./sceneSync.js";
+export { libraryRepository } from "./library.js";

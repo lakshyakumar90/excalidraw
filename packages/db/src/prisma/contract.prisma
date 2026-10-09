@@ -12,10 +12,22 @@ model User {
   chats      Chat[]
   membership RoomMember[]
   scenes     Scene[]
+  libraryItems LibraryItem[]
   sessions   Session[]
   accounts   Account[]
   createdAt  TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
+}
+
+model LibraryItem {
+  id String @id @default(cuid(2))
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name String
+  data Jsonb
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
+  @@index([ownerId, updatedAt])
 }
 
 model Room {

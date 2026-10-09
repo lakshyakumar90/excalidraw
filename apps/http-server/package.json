@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@repo/auth": "workspace:*",
+    "@repo/common": "workspace:*",
     "@repo/backend-common": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/redis": "workspace:*",

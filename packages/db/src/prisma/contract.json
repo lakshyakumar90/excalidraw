@@ -28,6 +28,10 @@
       "model": "JoinCodeClaim",
       "namespace": "public"
     },
+    "libraryItem": {
+      "model": "LibraryItem",
+      "namespace": "public"
+    },
     "room": {
       "model": "Room",
       "namespace": "public"
@@ -793,6 +797,94 @@
               "table": "joinCodeClaim"
             }
           },
+          "LibraryItem": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "ownerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "owner": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "ownerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "data": {
+                  "column": "data"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "ownerId": {
+                  "column": "ownerId"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "libraryItem"
+            }
+          },
           "Room": {
             "fields": {
               "adminId": {
@@ -1476,6 +1568,21 @@
                 },
                 "to": {
                   "model": "Chat",
+                  "namespace": "public"
+                }
+              },
+              "libraryItems": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "ownerId"
+                  ]
+                },
+                "to": {
+                  "model": "LibraryItem",
                   "namespace": "public"
                 }
               },
@@ -2282,6 +2389,88 @@
                 }
               ]
             },
+            "libraryItem": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "data": {
+                  "codecId": "pg/jsonb@1",
+                  "nativeType": "jsonb",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "ownerId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "ownerId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "libraryItem"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "ownerId"
+                  ],
+                  "name": "libraryItem_ownerId_idx_e2d0c1ef",
+                  "prefix": "libraryItem_ownerId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "ownerId",
+                    "updatedAt"
+                  ],
+                  "name": "libraryItem_ownerId_updatedAt_idx_f0929af1",
+                  "prefix": "libraryItem_ownerId_updatedAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "room": {
               "columns": {
                 "adminId": {
@@ -2937,10 +3126,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "927cff94348dd565a68e3a832420da893f63aab1e64ba99d3c06b4d4925c4cd0"
+    "storageHash": "1f693455ce1da9cbb06683336e68c5994c69e135914302e4d7a432d83cd61381"
   },
   "execution": {
-    "executionHash": "633065dbcb78a23c01cd3d484a8e58bb12a27e175e19e7906a361d55fb7e3a5b",
+    "executionHash": "877ea987b88e92a4975a288cd1266e120e4450fb0c126d76b5a863124fde4aef",
     "mutations": {
       "defaults": [
         {
@@ -2985,6 +3174,32 @@
             "column": "id",
             "namespace": "public",
             "table": "joinCodeClaim"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "libraryItem"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "updatedAt",
+            "namespace": "public",
+            "table": "libraryItem"
           }
         },
         {

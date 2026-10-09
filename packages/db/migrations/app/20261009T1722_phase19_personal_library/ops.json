@@ -1,0 +1,161 @@
+[
+  {
+    "id": "table.libraryItem",
+    "label": "Create table \"libraryItem\"",
+    "summary": "Creates table \"libraryItem\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "libraryItem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"libraryItem\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"libraryItem\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"libraryItem\"",
+        "sql": "CREATE TABLE \"public\".\"libraryItem\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"data\" jsonb NOT NULL,\n  \"id\" text NOT NULL,\n  \"name\" text NOT NULL,\n  \"ownerId\" text NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"libraryItem\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"libraryItem\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.libraryItem.libraryItem_ownerId_idx_e2d0c1ef",
+    "label": "Create index \"libraryItem_ownerId_idx_e2d0c1ef\" on \"libraryItem\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "libraryItem_ownerId_idx_e2d0c1ef",
+        "table": "libraryItem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"libraryItem_ownerId_idx_e2d0c1ef\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"libraryItem_ownerId_idx_e2d0c1ef\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"libraryItem_ownerId_idx_e2d0c1ef\"",
+        "sql": "CREATE INDEX \"libraryItem_ownerId_idx_e2d0c1ef\" ON \"public\".\"libraryItem\" (\"ownerId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"libraryItem_ownerId_idx_e2d0c1ef\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"libraryItem_ownerId_idx_e2d0c1ef\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.libraryItem.libraryItem_ownerId_updatedAt_idx_f0929af1",
+    "label": "Create index \"libraryItem_ownerId_updatedAt_idx_f0929af1\" on \"libraryItem\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "libraryItem_ownerId_updatedAt_idx_f0929af1",
+        "table": "libraryItem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"libraryItem_ownerId_updatedAt_idx_f0929af1\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"libraryItem_ownerId_updatedAt_idx_f0929af1\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"libraryItem_ownerId_updatedAt_idx_f0929af1\"",
+        "sql": "CREATE INDEX \"libraryItem_ownerId_updatedAt_idx_f0929af1\" ON \"public\".\"libraryItem\" (\"ownerId\", \"updatedAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"libraryItem_ownerId_updatedAt_idx_f0929af1\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"libraryItem_ownerId_updatedAt_idx_f0929af1\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.libraryItem.libraryItem_ownerId_fkey",
+    "label": "Add foreign key \"libraryItem_ownerId_fkey\" on \"libraryItem\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "libraryItem_ownerId_fkey",
+        "table": "libraryItem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"libraryItem_ownerId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "libraryItem_ownerId_fkey",
+          "public",
+          "\"public\".\"libraryItem\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"libraryItem_ownerId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"libraryItem\"\nADD CONSTRAINT \"libraryItem_ownerId_fkey\"\nFOREIGN KEY (\"ownerId\")\nREFERENCES \"public\".\"user\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"libraryItem_ownerId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "libraryItem_ownerId_fkey",
+          "public",
+          "\"public\".\"libraryItem\""
+        ]
+      }
+    ]
+  }
+]
