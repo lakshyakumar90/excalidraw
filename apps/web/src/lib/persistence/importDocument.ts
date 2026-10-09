@@ -6,6 +6,7 @@ import { saveFile } from "./indexedDb";
 import { setCurrentViewport } from "./viewportStore";
 
 const ELEMENT_TYPES = new Set([
+  "frame",
   "rectangle",
   "ellipse",
   "diamond",
@@ -73,7 +74,7 @@ function validateElement(value: unknown): value is Element {
       value.lineType !== "straight" &&
       value.lineType !== "curved") ||
       (value.startBinding !== undefined &&
-      !isArrowBindingValue(value.startBinding)) ||
+        !isArrowBindingValue(value.startBinding)) ||
       (value.endBinding !== undefined &&
         !isArrowBindingValue(value.endBinding)))
   ) {
@@ -134,14 +135,29 @@ export function parseExcalidrawDocument(value: unknown): ImportedDocument {
     }
   }
 
+  const elements = structuredClone(value.elements) as Element[];
+  for (let index = 0; index < elements.length; index++) {
+    const e = elements[index]!;
+    if (e.type === "frame" && (e.frameId || (e.angle ?? 0) !== 0)) {
+      const { name, ...rest } = e;
+      elements[index] = { ...rest, type: "rectangle", frameId: null };
+    }
+  }
+  const frames = new Set(
+    elements.filter((e) => e.type === "frame" && !e.isDeleted).map((e) => e.id),
+  );
+  for (const e of elements)
+    if (e.frameId && !frames.has(e.frameId)) e.frameId = null;
   return {
-    elements: structuredClone(value.elements) as Element[],
+    elements,
     viewport,
     files,
   };
 }
 
-export async function readExcalidrawFile(file: File): Promise<ImportedDocument> {
+export async function readExcalidrawFile(
+  file: File,
+): Promise<ImportedDocument> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text()) as unknown;

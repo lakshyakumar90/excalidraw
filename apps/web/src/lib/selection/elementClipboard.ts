@@ -38,6 +38,7 @@ export function duplicateElements(
       id: elementIdMap.get(element.id)!,
       x: element.x + offsetX,
       y: element.y + offsetY,
+      orderKey: undefined,
       version: 1,
       versionNonce: Math.floor(Math.random() * 2_147_483_647),
       updated: now,
@@ -115,6 +116,7 @@ function isClipboardElement(value: unknown): value is Element {
     typeof value.id !== "string" ||
     typeof value.type !== "string" ||
     ![
+      "frame",
       "rectangle",
       "ellipse",
       "diamond",

@@ -6,6 +6,15 @@ This controller owns canvas selection, transforms, and point editing:
 - Dragging a resize handle resizes one element, with rotation, Shift, and Alt support.
 */
 
+import {
+  findBindingShape,visibleBounds,
+  SnapIndex,
+  frameForElement,
+  selectionClosure,
+  type Guide,
+} from "@repo/engine";
+import { getCurrentViewport } from "@/lib/persistence/viewportStore";
+import { bindArrowToScene } from "./arrowBinding";
 import type { Element, Point } from "@repo/common";
 import {
   elementIntersectsRect,
@@ -93,6 +102,9 @@ type Gesture =
 
 let gesture: Gesture = { kind: "idle" };
 let pointEditingElementId: string | null = null;
+let snapIndex: SnapIndex | null = null;
+let guides: Guide[] = [];
+export const snappingPreference = { enabled: true };
 // groupIds are stored inner-to-outer. This path tracks the outer-to-inner
 // groups entered by double-click.
 let groupDrillPath: string[] = [];
@@ -107,6 +119,11 @@ let previousOverlapClick: {
 } | null = null;
 
 export const selectionController = {
+  cancelGesture() {
+    gesture = { kind: "idle" };
+    guides = [];
+    snapIndex = null;
+  },
   getCursor(point: Point, zoom: number): string {
     if (gesture.kind === "resize") {
       return getResizeCursor(gesture.handle, gesture.original.angle ?? 0);
@@ -119,7 +136,7 @@ export const selectionController = {
     if (gesture.kind === "point") return "grabbing";
 
     if (pointEditingElementId) {
-      const editingElement = scene.getElement(pointEditingElementId);
+      const editingElement = scene.getEffectiveElement(pointEditingElementId);
       if (editingElement && "points" in editingElement) {
         const nearPoint = editingElement.points.some((item) => {
           const world =
@@ -140,7 +157,7 @@ export const selectionController = {
     }
     if (selectedIds.length !== 1) return "default";
 
-    const selectedElement = scene.getElement(selectedIds[0]!);
+    const selectedElement = scene.getEffectiveElement(selectedIds[0]!);
     if (!selectedElement || selectedElement.isDeleted) return "default";
 
     if (selectedElement.type === "line" || selectedElement.type === "arrow") {
@@ -164,8 +181,10 @@ export const selectionController = {
     zoom: number,
     altKey = false,
   ): void {
+    snapIndex = null;
+    guides = [];
     if (pointEditingElementId) {
-      const element = scene.getElement(pointEditingElementId);
+      const element = scene.getEffectiveElement(pointEditingElementId);
       if (element && "points" in element) {
         const nearest = element.points.findIndex((p) => {
           const world =
@@ -195,7 +214,7 @@ export const selectionController = {
         gesture = {
           kind: "group-resize",
           originals: selectedIds
-            .map((id) => scene.getElement(id))
+            .map((id) => scene.getEffectiveElement(id))
             .filter((e): e is Element => !!e && !e.isDeleted)
             .map(cloneElement),
           bounds,
@@ -206,7 +225,7 @@ export const selectionController = {
     }
 
     if (selectedIds.length === 1) {
-      const selectedElement = scene.getElement(selectedIds[0]!);
+      const selectedElement = scene.getEffectiveElement(selectedIds[0]!);
 
       if (selectedElement && !selectedElement.isDeleted) {
         if (
@@ -320,7 +339,7 @@ export const selectionController = {
         ? selectedIds
         : clickSelection;
       const sourceElements = sourceIds
-        .map((id) => scene.getElement(id))
+        .map((id) => scene.getEffectiveElement(id))
         .filter(
           (element): element is Element => !!element && !element.isDeleted,
         )
@@ -338,7 +357,7 @@ export const selectionController = {
 
     if (!shiftKey && wasSelected && selectedIds.length > 1) {
       const elements = selectedIds
-        .map((id) => scene.getElement(id))
+        .map((id) => scene.getEffectiveElement(id))
         .filter(
           (element): element is Element => !!element && !element.isDeleted,
         );
@@ -370,7 +389,7 @@ export const selectionController = {
     }
 
     const elements = [...selectionStore.getSnapshot()]
-      .map((id) => scene.getElement(id))
+      .map((id) => scene.getEffectiveElement(id))
       .filter(
         (element): element is Element =>
           element !== undefined && !element.isDeleted,
@@ -449,8 +468,46 @@ export const selectionController = {
 
     if (gesture.kind !== "move") return;
 
-    const dx = point.x - gesture.start.x;
-    const dy = point.y - gesture.start.y;
+    let dx = point.x - gesture.start.x;
+    let dy = point.y - gesture.start.y;
+    const constrainedAxis = shiftKey
+      ? Math.abs(dx) >= Math.abs(dy)
+        ? "x"
+        : "y"
+      : null;
+    if (constrainedAxis === "x") dy = 0;
+    if (constrainedAxis === "y") dx = 0;
+    guides = [];
+    if (altKey || !snappingPreference.enabled) snapIndex?.reset();
+    if (!altKey && snappingPreference.enabled) {
+      const moving = gesture.elements
+        .map((s) => {
+          const e = scene.getEffectiveElement(s.id);
+          return e ? { ...e, x: s.x + dx, y: s.y + dy } : null;
+        })
+        .filter((e): e is Element => e !== null);
+      snapIndex ??= new SnapIndex(
+        scene.getElements(),
+        new Set(gesture.elements.map((e) => e.id)),
+      );
+      const bounds = moving.map(getElementBounds);
+      if (bounds.length) {
+        const snap = snapIndex.snap(
+          {
+            minX: Math.min(...bounds.map((b) => b.minX)),
+            minY: Math.min(...bounds.map((b) => b.minY)),
+            maxX: Math.max(...bounds.map((b) => b.maxX)),
+            maxY: Math.max(...bounds.map((b) => b.maxY)),
+          },
+          getCurrentViewport().zoom,
+        );
+        if (constrainedAxis !== "y") dx += snap.delta.x;
+        if (constrainedAxis !== "x") dy += snap.delta.y;
+        guides = snap.guides.filter(
+          (g) => !constrainedAxis || g.axis === constrainedAxis,
+        );
+      }
+    }
 
     if (dx === 0 && dy === 0) return;
 
@@ -508,9 +565,18 @@ export const selectionController = {
           maxY: Math.max(gesture.start.y, point.y),
         };
 
-        const intersectingElements = scene
-          .getElements()
-          .filter((element) => elementIntersectsRect(element, rect));
+        const intersectingElements = scene.getElements().filter((element) => {
+          const b = visibleBounds(element, scene.getElements());
+          return (
+            !element.isDeleted &&
+            b &&
+            b.maxX >= rect.minX &&
+            b.minX <= rect.maxX &&
+            b.maxY >= rect.minY &&
+            b.minY <= rect.maxY &&
+            elementIntersectsRect(element, rect)
+          );
+        });
         const marqueeIds = new Set<string>();
         for (const element of intersectingElements) {
           for (const id of getClickSelectionIds(element)) marqueeIds.add(id);
@@ -524,7 +590,72 @@ export const selectionController = {
       }
     }
 
+    if (gesture.kind === "point") {
+      const e = scene.getEffectiveElement(gesture.elementId);
+      if (e?.type === "arrow") {
+        const bound = bindArrowToScene(e, getCurrentViewport().zoom);
+        scene.mutateElement(e.id, bound);
+      }
+    }
+    if (gesture.kind === "move") {
+      for (const item of gesture.elements) {
+        const e = scene.getEffectiveElement(item.id);
+        if (e?.type === "arrow") {
+          const bound = bindArrowToScene(e, getCurrentViewport().zoom);
+          scene.mutateElement(e.id, bound);
+        }
+      }
+    }
+    if (gesture.kind === "move") {
+      for (const item of gesture.elements) {
+        const e = scene.getEffectiveElement(item.id);
+        if (
+          e &&
+          e.type !== "frame" &&
+          !gesture.elements.some((p) => p.id === e.frameId)
+        ) {
+          const frameId = frameForElement(e, scene.getElements());
+          if (frameId !== (e.frameId ?? null))
+            scene.mutateElement(e.id, { frameId });
+        }
+      }
+    }
+    guides = [];
+    snapIndex = null;
     gesture = { kind: "idle" };
+  },
+
+  drawGuides(
+    context: CanvasRenderingContext2D,
+    viewport: { scrollX: number; scrollY: number; zoom: number },
+    width: number,
+    height: number,
+  ) {
+    context.save();
+    context.strokeStyle = "#7048e8";
+    if(gesture.kind==="point"){
+      const arrow=scene.getEffectiveElement(gesture.elementId);
+      if(arrow?.type==="arrow"&&(gesture.pointIndex===0||gesture.pointIndex===arrow.points.length-1)){
+        const point=arrow.points[gesture.pointIndex];const candidate=point?findBindingShape(scene.getElements(),getLinearPointWorldPosition(arrow,point),viewport.zoom):undefined;
+        if(candidate){context.save();const w=(candidate.width??0)*viewport.zoom,h=(candidate.height??0)*viewport.zoom;context.translate(candidate.x*viewport.zoom+viewport.scrollX+w/2,candidate.y*viewport.zoom+viewport.scrollY+h/2);context.rotate(candidate.angle??0);context.lineWidth=2;context.strokeRect(-w/2,-h/2,w,h);context.restore();}
+      }
+    }
+    context.lineWidth = 1;
+    context.setLineDash([4, 3]);
+    for (const g of guides) {
+      context.beginPath();
+      if (g.axis === "x") {
+        const x = g.position * viewport.zoom + viewport.scrollX;
+        context.moveTo(x, 0);
+        context.lineTo(x, height);
+      } else {
+        const y = g.position * viewport.zoom + viewport.scrollY;
+        context.moveTo(0, y);
+        context.lineTo(width, y);
+      }
+      context.stroke();
+    }
+    context.restore();
   },
 
   getMarquee(): MarqueePreview | null {
@@ -538,7 +669,7 @@ export const selectionController = {
 
   getPointEditingElement(): Element | null {
     const element = pointEditingElementId
-      ? scene.getElement(pointEditingElementId)
+      ? scene.getEffectiveElement(pointEditingElementId)
       : undefined;
     return element && !element.isDeleted ? element : null;
   },
@@ -601,14 +732,14 @@ export const selectionController = {
   isCompleteGroupSelection(): boolean {
     const selectedIds = new Set(
       [...selectionStore.getSnapshot()].filter((id) => {
-        const element = scene.getElement(id);
+        const element = scene.getEffectiveElement(id);
         return element !== undefined && !element.isDeleted;
       }),
     );
     if (selectedIds.size < 2) return false;
 
     for (const groupId of [...selectedIds].flatMap(
-      (id) => scene.getElement(id)?.groupIds ?? [],
+      (id) => scene.getEffectiveElement(id)?.groupIds ?? [],
     )) {
       const members = getGroupMemberIds(groupId);
       if (
@@ -639,7 +770,7 @@ export const selectionController = {
 
   canUngroupSelection(): boolean {
     return [...selectionStore.getSnapshot()].some((id) => {
-      const element = scene.getElement(id);
+      const element = scene.getEffectiveElement(id);
       return (
         !!element && !element.isDeleted && (element.groupIds?.length ?? 0) > 0
       );
@@ -656,7 +787,7 @@ export const selectionController = {
 
   groupSelectionWithoutCapture(): boolean {
     const elements = [...selectionStore.getSnapshot()]
-      .map((id) => scene.getElement(id))
+      .map((id) => scene.getEffectiveElement(id))
       .filter((element): element is Element => !!element && !element.isDeleted);
     if (elements.length < 2) return false;
 
@@ -685,7 +816,7 @@ export const selectionController = {
 
   ungroupSelectionWithoutCapture(): boolean {
     const selectedElements = [...selectionStore.getSnapshot()]
-      .map((id) => scene.getElement(id))
+      .map((id) => scene.getEffectiveElement(id))
       .filter((element): element is Element => !!element && !element.isDeleted);
     const groupIds = new Set<string>();
     for (const element of selectedElements) {
@@ -723,8 +854,12 @@ export const selectionController = {
   },
 
   duplicateSelectionWithoutCapture(offset = 10): boolean {
-    const elements = [...selectionStore.getSnapshot()]
-      .map((id) => scene.getElement(id))
+    const elements = selectionClosure(
+      scene.getElements(),
+      selectionStore.getSnapshot(),
+    )
+      .map((e) => e.id)
+      .map((id) => scene.getEffectiveElement(id))
       .filter((element): element is Element => !!element && !element.isDeleted)
       .map(cloneElement);
     if (elements.length === 0) return false;
@@ -801,15 +936,22 @@ export const selectionController = {
     const { changes } = historyStore.commitUpdate(() => {
       const selectedIds = new Set(selectionStore.getSnapshot());
       const elementsToDelete = new Set(selectedIds);
+      for (const child of scene.getElements())
+        if (
+          child.frameId &&
+          selectedIds.has(child.frameId) &&
+          !selectedIds.has(child.id)
+        )
+          scene.mutateElement(child.id, { frameId: null });
       for (const id of selectedIds) {
-        const element = scene.getElement(id);
+        const element = scene.getEffectiveElement(id);
         if (!element || element.isDeleted) continue;
         for (const boundId of element.boundElements ?? []) {
-          const boundElement = scene.getElement(boundId);
+          const boundElement = scene.getEffectiveElement(boundId);
           if (boundElement?.type === "text") elementsToDelete.add(boundId);
         }
         if (element.type === "text" && element.containerId) {
-          const container = scene.getElement(element.containerId);
+          const container = scene.getEffectiveElement(element.containerId);
           if (container) {
             scene.mutateElement(container.id, {
               boundElements: (container.boundElements ?? []).filter(
@@ -821,7 +963,7 @@ export const selectionController = {
         if (element.type === "arrow") {
           for (const binding of [element.startBinding, element.endBinding]) {
             const target = binding
-              ? scene.getElement(binding.elementId)
+              ? scene.getEffectiveElement(binding.elementId)
               : undefined;
             if (
               target &&
@@ -843,7 +985,7 @@ export const selectionController = {
           element.type === "diamond"
         ) {
           for (const boundId of element.boundElements ?? []) {
-            const arrow = scene.getElement(boundId);
+            const arrow = scene.getEffectiveElement(boundId);
             if (arrow?.type !== "arrow") continue;
             scene.mutateElement(arrow.id, {
               ...(arrow.startBinding?.elementId === element.id
@@ -867,7 +1009,7 @@ export const selectionController = {
   nudgeSelection(dx: number, dy: number): void {
     const { changes: nudgeChanges } = historyStore.commitUpdate(() => {
       const selectedElements = [...selectionStore.getSnapshot()]
-        .map((id) => scene.getElement(id))
+        .map((id) => scene.getEffectiveElement(id))
         .filter(
           (element): element is Element => !!element && !element.isDeleted,
         );

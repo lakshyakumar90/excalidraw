@@ -22,6 +22,11 @@ function getBoundMovementElements(element: Element): Element[] {
     }
   }
 
+  if (element.type === "frame") {
+    for (const child of scene.getElements())
+      if (child.frameId === element.id && !child.isDeleted)
+        related.set(child.id, child);
+  }
   return [...related.values()];
 }
 
