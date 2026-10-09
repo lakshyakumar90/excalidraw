@@ -10,24 +10,18 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "better-auth": "1.7.7",
-    "bcrypt": "^6.0.0",
+    "@repo/auth": "workspace:*",
     "cors": "2.8.5",
-    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "pg": "8.23.1",
     "@repo/db": "workspace:*",
     "@repo/validations": "workspace:*",
     "zod": "^4.6.4"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@types/bcrypt": "^6.0.0",
     "@types/cors": "2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "26.4.1",
-    "@types/pg": "8.23.1",
-    "auth": "1.7.7",
     "tsx": "^4.23.13"
   },
   "keywords": [],

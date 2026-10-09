@@ -1,7 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
-import { toNodeHandler } from "better-auth/node";
-import { auth, authWebOrigin } from "./auth.js";
+import { authHandler, authWebOrigin } from "@repo/auth";
 import { requireAuth } from "./middleware.js";
 import { scenesRouter } from "./routes/scenes.js";
 import { roomsRouter } from "./routes/rooms.js";
@@ -16,8 +15,8 @@ app.use(
 );
 
 // Better Auth must receive the raw request body, so mount it before express.json().
-app.all("/api/auth", toNodeHandler(auth));
-app.all("/api/auth/*splat", toNodeHandler(auth));
+app.all("/api/auth", authHandler);
+app.all("/api/auth/*splat", authHandler);
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/health", (_req, res) => {
