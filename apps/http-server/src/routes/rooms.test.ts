@@ -1,36 +1,39 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import express from "express";
-import { authPool } from "../database.js";
+import { db } from "@repo/db";
 import { roomsRouter } from "./rooms.js";
 
-test("room endpoints reject unrelated users and do not accept an invitation for another email", async () => {
-  const queryDescriptor = Object.getOwnPropertyDescriptor(authPool, "query");
-  const connectDescriptor = Object.getOwnPropertyDescriptor(
-    authPool,
-    "connect",
+test("room ownership and invitation email are enforced", async () => {
+  const ormDescriptor = Object.getOwnPropertyDescriptor(db, "orm");
+  const transactionDescriptor = Object.getOwnPropertyDescriptor(
+    db,
+    "transaction",
   );
-  Object.defineProperty(authPool, "query", {
-    configurable: true,
-    value: async (sql: string, values: unknown[]) => {
-      if (sql.includes('UPDATE "scene"')) return { rowCount: 0, rows: [] };
-      if (sql.includes('SELECT "id" FROM "room"'))
-        return {
-          rowCount: values[1] === "alice" ? 1 : 0,
-          rows: values[1] === "alice" ? [{ id: 1 }] : [],
-        };
-      return { rowCount: 0, rows: [] };
-    },
-  });
-  Object.defineProperty(authPool, "connect", {
-    configurable: true,
-    value: async () => ({
-      query: async (sql: string) => {
-        if (sql.includes('SELECT i."id"')) return { rowCount: 0, rows: [] };
-        return { rowCount: 0, rows: [] };
+  const orm = {
+    public: {
+      Room: {
+        where: ({ id, adminId }: { id?: number; adminId?: string }) => ({
+          first: async () =>
+            id === 1 && (adminId === undefined || adminId === "alice")
+              ? { id: 1, adminId: "alice", slug: "Private", sceneId: "scene-1" }
+              : null,
+        }),
       },
-      release: () => {},
-    }),
+      RoomMember: { where: () => ({ first: async () => null }) },
+      Scene: { where: () => ({ first: async () => null }) },
+      Invite: {
+        where: () => ({ first: async () => null }),
+        create: async () => ({}),
+      },
+      User: { where: () => ({ first: async () => null }) },
+    },
+  };
+  Object.defineProperty(db, "orm", { configurable: true, value: orm });
+  Object.defineProperty(db, "transaction", {
+    configurable: true,
+    value: async (callback: (tx: { orm: typeof orm }) => Promise<unknown>) =>
+      callback({ orm }),
   });
   const app = express();
   app.use(express.json());
@@ -53,15 +56,19 @@ test("room endpoints reject unrelated users and do not accept an invitation for 
         body: JSON.stringify({ email: "friend@example.com" }),
       });
     assert.equal((await invite("bob")).status, 404);
-    const create = await fetch(`${base}/room`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Private room",
-        sceneId: "another-users-scene",
-      }),
-    });
-    assert.equal(create.status, 404);
+    assert.equal(
+      (
+        await fetch(`${base}/room`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "Private",
+            sceneId: "someone-elses-scene",
+          }),
+        })
+      ).status,
+      404,
+    );
     const created = await invite("alice");
     assert.equal(created.status, 201);
     const { code } = (await created.json()) as { code: string };
@@ -71,21 +78,24 @@ test("room endpoints reject unrelated users and do not accept an invitation for 
         .status,
       404,
     );
-    const update = await fetch(`${base}/room/1/scene`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: { elements: [] } }),
-    });
-    assert.equal(update.status, 404);
+    assert.equal(
+      (
+        await fetch(`${base}/room/1/scene`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: { elements: [] } }),
+        })
+      ).status,
+      404,
+    );
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
-    if (queryDescriptor)
-      Object.defineProperty(authPool, "query", queryDescriptor);
-    else Reflect.deleteProperty(authPool, "query");
-    if (connectDescriptor)
-      Object.defineProperty(authPool, "connect", connectDescriptor);
-    else Reflect.deleteProperty(authPool, "connect");
+    if (ormDescriptor) Object.defineProperty(db, "orm", ormDescriptor);
+    else Reflect.deleteProperty(db, "orm");
+    if (transactionDescriptor)
+      Object.defineProperty(db, "transaction", transactionDescriptor);
+    else Reflect.deleteProperty(db, "transaction");
   }
 });
