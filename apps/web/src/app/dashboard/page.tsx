@@ -20,12 +20,11 @@ export default function DashboardPage() {
     if (target !== "/dashboard") router.replace(target);
   }, [router, session?.user]);
   return (
-    <main className="min-h-screen bg-[#faf9f6] px-5 py-10 text-neutral-900">
+    <main className="min-h-dvh bg-[#faf9f6] px-4 py-6 sm:px-6 sm:py-10 text-neutral-900">
       <div className="mx-auto w-full max-w-4xl">
-        <header className="mb-10 flex items-center justify-between gap-4">
+        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-violet-700">Excalidraw</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
               Your scenes
             </h1>
           </div>

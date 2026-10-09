@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import {
@@ -54,6 +54,13 @@ function ToolButton({
 
 export function Toolbar() {
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const close = (event: Event) => {
+      if ((event as CustomEvent).detail !== "tools") setExpanded(false);
+    };
+    window.addEventListener("editor-panel-open", close);
+    return () => window.removeEventListener("editor-panel-open", close);
+  }, []);
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
@@ -63,10 +70,15 @@ export function Toolbar() {
   return (
     <>
       <button
-        className="mobile-tools-toggle fixed left-1/2 top-2 z-[60] min-h-11 -translate-x-1/2 rounded-lg border bg-white px-4 text-sm shadow-sm"
+        className="mobile-tools-toggle fixed left-3 top-2 z-[60] min-h-11 rounded-lg border bg-white px-4 text-sm shadow-sm"
         aria-expanded={expanded}
         aria-controls="drawing-tools"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => {
+          setExpanded((v) => !v);
+          window.dispatchEvent(
+            new CustomEvent("editor-panel-open", { detail: "tools" }),
+          );
+        }}
       >
         {expanded ? "Close tools" : `Tools · ${TOOL_LABELS[activeTool]}`}
       </button>

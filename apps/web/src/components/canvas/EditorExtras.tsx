@@ -19,6 +19,11 @@ import {
   changeLibraryItem,
   insertStamp,
 } from "@/lib/persistence/library";
+import {
+  subscribeSnapPreference,
+  readSnapPreference,
+  writeSnapPreference,
+} from "@/lib/styles/snappingPreference";
 import { toolManager } from "@/lib/tools/toolManager";
 
 const actions: LayoutAction[] = [
@@ -56,12 +61,21 @@ export function EditorExtras({
     [nextOffset, setNextOffset] = useState<number | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [snap, setSnap] = useState(true);
+    [notice, setNotice] = useState("");
+  const snap = useSyncExternalStore(
+    subscribeSnapPreference,
+    readSnapPreference,
+    () => true,
+  );
   const [renaming, setRenaming] = useState<string | null>(null),
     [renameName, setRenameName] = useState("");
+  useEffect(() => {
+    snappingPreference.enabled = snap;
+  }, [snap]);
   const permission = useRef(readOnly);
-  permission.current = readOnly;
+  useEffect(() => {
+    permission.current = readOnly;
+  }, [readOnly]);
   const trigger = useRef<HTMLButtonElement | null>(null),
     input = useRef<HTMLInputElement | null>(null);
   const elements = scene.getElements().filter((e) => !e.isDeleted);
@@ -83,14 +97,26 @@ export function EditorExtras({
     if (button) trigger.current = button;
     setError("");
     setPanel(value);
+    if (value)
+      window.dispatchEvent(
+        new CustomEvent("editor-panel-open", { detail: "extras" }),
+      );
   };
+  useEffect(() => {
+    const closePanel = (event: Event) => {
+      if (
+        matchMedia("(max-width:1199px)").matches &&
+        (event as CustomEvent).detail !== "extras"
+      )
+        setPanel(null);
+    };
+    window.addEventListener("editor-panel-open", closePanel);
+    return () => window.removeEventListener("editor-panel-open", closePanel);
+  }, []);
   useEffect(() => {
     if (panel === "search") input.current?.focus();
   }, [panel]);
   useEffect(() => {
-    const value = localStorage.getItem("editor-object-snap") !== "false";
-    setSnap(value);
-    snappingPreference.enabled = value;
     const key = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest("input,textarea,[contenteditable=true]")) {
@@ -99,7 +125,7 @@ export function EditorExtras({
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
-        setPanel("search");
+        open("search");
       }
       if (e.key === "Escape") {
         setZen(false);
@@ -116,7 +142,7 @@ export function EditorExtras({
   }, []);
   useEffect(() => {
     document.documentElement.classList.toggle("editor-zen", zen);
-    if (zen) setPanel(null);
+
     return () => document.documentElement.classList.remove("editor-zen");
   }, [zen]);
   useEffect(
@@ -150,8 +176,34 @@ export function EditorExtras({
     }
   }
   useEffect(() => {
-    if (panel === "library") void run(() => refresh());
+    if (panel !== "library") return;
+    let cancelled = false;
+    queueMicrotask(async () => {
+      if (cancelled) return;
+      setBusy(true);
+      setError("");
+      try {
+        const response = await listLibrary(signedIn, 0);
+        if (!cancelled) {
+          setItems(response.items);
+          setNextOffset(response.nextOffset);
+        }
+      } catch (reason) {
+        if (!cancelled)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load your library. Try again.",
+          );
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [panel, signedIn]);
+
   const jump = (id: string) => {
     const e = scene.getElement(id);
     if (!e) return;
@@ -211,7 +263,13 @@ export function EditorExtras({
         >
           Elements
         </button>
-        <button className={button} onClick={() => setZen(true)}>
+        <button
+          className={button}
+          onClick={() => {
+            setPanel(null);
+            setZen(true);
+          }}
+        >
           Zen
         </button>
         {readOnly && (
@@ -284,7 +342,7 @@ export function EditorExtras({
                   type="checkbox"
                   checked={snap}
                   onChange={(e) => {
-                    setSnap(e.target.checked);
+                    writeSnapPreference(e.target.checked);
                     snappingPreference.enabled = e.target.checked;
                     localStorage.setItem(
                       "editor-object-snap",

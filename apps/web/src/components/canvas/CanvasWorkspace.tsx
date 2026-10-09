@@ -63,7 +63,7 @@ export function CanvasWorkspace({
     }
   }
   return (
-    <main className="fixed inset-0 overflow-hidden bg-[#faf9f6]">
+    <main className="editor-workspace fixed inset-0 overflow-hidden bg-[#faf9f6]">
       <Canvas savedScene={savedScene} readOnly={readOnly} />
       <LaserOverlay />
       <EditorExtras readOnly={readOnly} roomId={savedScene?.roomSync?.roomId} />
