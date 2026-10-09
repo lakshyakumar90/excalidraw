@@ -120,11 +120,14 @@ One shared merge service (`packages/backend-common`, queries in
 old whole-scene room autosave path is retired. Each accepted commit:
 authorizes editor role (viewers rejected, rechecked per mutation),
 reconciles only changed records against the latest stored scene, prunes
-tombstones, bumps `sync.revision`, appends exactly one `SceneRevision` row. `@@unique([sceneId, revision])`
+tombstones, and appends exactly one `SceneRevision` row (the durable
+`sync.revision` lives on the row; the JSON copy mirrors it for portable
+snapshots). `@@unique([sceneId, revision])`
 makes concurrent appends atomic — losers get a 23505 conflict and retry
 within a bound (≤ 32 attempts with backoff) — because the ORM's conditional
 update is read-then-write and cannot serialize writers (verified
-empirically via SQL logging).
+empirically via SQL logging). The `Scene.syncRevision` column stays reserved
+infrastructure and is not on the write path.
 Read-modify-write without CAS is banned: read-committed alone and
 per-process mutexes cannot coordinate the separate HTTP/WS services.
 Duplicate mutation IDs and replays are idempotent with no version increment.

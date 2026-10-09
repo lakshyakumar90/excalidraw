@@ -9,6 +9,9 @@ import { getRoom, saveRoomScene } from "@/lib/api/rooms";
 import { viewportFromSceneData } from "@/lib/api/scenes";
 import { cacheSavedSceneFiles } from "@/lib/persistence/savedScene";
 
+// Rooms are created at runtime; no room IDs are generated at build time.
+export const dynamicParams = true;
+
 type Room = Awaited<ReturnType<typeof getRoom>>;
 export default function RoomCanvasPage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -34,6 +37,7 @@ export default function RoomCanvasPage() {
   if (room?.scene && room.role !== "viewer") {
     const data = room.scene.data as {
       elements: Element[];
+      files?: Record<string, unknown>;
       sync?: { tombstones?: TombstoneMap; revision?: number };
     };
     const httpScene = {
@@ -41,6 +45,7 @@ export default function RoomCanvasPage() {
       tombstones: { ...(data.sync?.tombstones ?? {}) } as TombstoneMap,
       revision:
         typeof data.sync?.revision === "number" ? data.sync.revision : 0,
+      knownFileIds: Object.keys(data.files ?? {}),
     };
     return (
       <>
