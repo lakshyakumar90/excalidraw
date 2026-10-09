@@ -141,6 +141,32 @@ export async function startPresenceServer(
         if (event.origin === options.roomRedis?.instanceId) return;
         const sceneId = event.sceneId;
         if (
+          event.type === "room.access.changed" &&
+          Number.isSafeInteger(event.roomId) &&
+          typeof event.userId === "string" &&
+          (event.role === null ||
+            event.role === "owner" ||
+            event.role === "editor" ||
+            event.role === "viewer")
+        ) {
+          const room = rooms.get(Number(event.roomId));
+          for (const connection of room?.values() ?? []) {
+            if (connection.userId !== event.userId) continue;
+            sendToConnection(connection, {
+              type: "room.access.changed",
+              role: event.role,
+            });
+            if (event.role === null) {
+              connection.role = "viewer";
+              connection.ws.close(
+                WS_CLOSE_MEMBERSHIP_REVOKED,
+                "Room access revoked",
+              );
+            } else {
+              connection.role = event.role;
+            }
+          }
+        } else if (
           event.type === "room.persisted" &&
           typeof sceneId === "string" &&
           Number.isSafeInteger(event.revision)
@@ -208,7 +234,7 @@ export async function startPresenceServer(
     });
   };
 
-  async function currentRole(connection: RoomConnection): Promise<RoomRole> {
+  async function currentRole(connection: RoomConnection): Promise<RoomRole | null> {
     if (!options.getRole) return connection.role;
     try {
       const role = await options.getRole(connection.roomId, connection.userId);
@@ -216,10 +242,15 @@ export async function startPresenceServer(
         connection.role = role;
         return role;
       }
+      connection.ws.close(WS_CLOSE_MEMBERSHIP_REVOKED, "Room access revoked");
     } catch (error) {
       console.error("Presence role recheck failed:", error);
+      connection.ws.close(
+        WS_CLOSE_MEMBERSHIP_REVOKED,
+        "Room authorization unavailable",
+      );
     }
-    return connection.role;
+    return null;
   }
 
   async function handleCollabMessage(
@@ -514,6 +545,7 @@ export async function startPresenceServer(
       ws,
       isAlive: true,
       selection: [],
+      allMessageTimestamps: [],
       messageTimestamps: [],
       commitTimestamps: [],
     };
@@ -556,6 +588,17 @@ export async function startPresenceServer(
       // Cleanup happens on "close"; prevent unhandled error crashes.
     });
     ws.on("message", (data, isBinary) => {
+      const total = checkRateLimit(
+        connection.allMessageTimestamps ?? [],
+        Date.now(),
+        120,
+        1_000,
+      );
+      connection.allMessageTimestamps = total.timestamps;
+      if (!total.allowed) {
+        sendError(connection, "Message rate limit exceeded");
+        return;
+      }
       if (isBinary) {
         sendError(connection, "Binary messages are not supported");
         return;
@@ -730,8 +773,15 @@ export async function startPresenceServer(
               connection.userId,
             );
           } catch (error) {
-            // Transient lookup failures must not evict live participants.
             console.error("Presence membership recheck failed:", error);
+            try {
+              connection.ws.close(
+                WS_CLOSE_MEMBERSHIP_REVOKED,
+                "Room authorization unavailable",
+              );
+            } catch {
+              // The following heartbeat also removes dead sockets.
+            }
             continue;
           }
           if (!allowed) {
@@ -756,8 +806,17 @@ export async function startPresenceServer(
                 connection.userId,
               );
               if (role) connection.role = role;
+              else
+                connection.ws.close(
+                  WS_CLOSE_MEMBERSHIP_REVOKED,
+                  "Room access revoked",
+                );
             } catch (error) {
               console.error("Presence role refresh failed:", error);
+              connection.ws.close(
+                WS_CLOSE_MEMBERSHIP_REVOKED,
+                "Room authorization unavailable",
+              );
             }
           }
         }

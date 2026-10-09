@@ -7,6 +7,7 @@ import type {
   PresenceParticipant,
   PresencePointer,
   PresenceViewport,
+  RoomRole,
   ServerToClientCollabMessage,
   ServerToClientPresenceMessage,
 } from "@repo/common";
@@ -22,7 +23,7 @@ import type {
 
 export const OPEN_READY_STATE = 1;
 
-export type RoomRole = "owner" | "editor" | "viewer";
+export type { RoomRole };
 
 export type ServerToRoomMessage =
   | ServerToClientPresenceMessage
@@ -51,6 +52,7 @@ export interface RoomConnection {
   pointer?: PresencePointer;
   viewport?: PresenceViewport;
   selection: string[];
+  allMessageTimestamps?: number[];
   messageTimestamps: number[];
   commitTimestamps: number[];
 }

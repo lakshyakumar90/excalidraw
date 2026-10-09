@@ -9,7 +9,7 @@ import { PRESENCE_TICKET_PROTOCOL_PREFIX } from "@repo/common";
 /** `ws` ping interval (~20s) and the expected pong deadline. */
 export const WS_HEARTBEAT_INTERVAL_MS = 20_000;
 /** Re-check room membership on this interval so revoked users lose access. */
-export const WS_MEMBERSHIP_RECHECK_MS = 60_000;
+export const WS_MEMBERSHIP_RECHECK_MS = 5_000;
 /** Modest maximum WebSocket payload: presence frames are tiny JSON. */
 export const WS_MAX_PAYLOAD_BYTES = 8 * 1024;
 /** Sliding-window rate limit per connection (messages per window). */
