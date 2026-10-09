@@ -251,6 +251,9 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
         <div
           role="group"
           aria-label="Canvas zoom"
+          onClick={() =>
+            window.dispatchEvent(new Event("canvas-user-interaction"))
+          }
           className="flex h-9 items-center"
         >
           <button
@@ -280,33 +283,37 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
             <Icon name="plus" />
           </button>
         </div>
-        {!readOnly && <span aria-hidden="true" className="h-6 w-px bg-neutral-200" />}
-        {!readOnly && <div
-          role="group"
-          aria-label="Undo and redo"
-          className="flex h-9 items-center"
-        >
-          <button
-            type="button"
-            aria-label="Undo"
-            title="Undo (Ctrl/⌘+Z)"
-            disabled={!history.canUndo}
-            onClick={() => commitUndoRedo(historyStore.undo(), "undo")}
-            className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
+        {!readOnly && (
+          <span aria-hidden="true" className="h-6 w-px bg-neutral-200" />
+        )}
+        {!readOnly && (
+          <div
+            role="group"
+            aria-label="Undo and redo"
+            className="flex h-9 items-center"
           >
-            <Icon name="undo" />
-          </button>
-          <button
-            type="button"
-            aria-label="Redo"
-            title="Redo (Ctrl/⌘+Shift+Z)"
-            disabled={!history.canRedo}
-            onClick={() => commitUndoRedo(historyStore.redo(), "redo")}
-            className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
-          >
-            <Icon name="redo" />
-          </button>
-        </div>}
+            <button
+              type="button"
+              aria-label="Undo"
+              title="Undo (Ctrl/⌘+Z)"
+              disabled={!history.canUndo}
+              onClick={() => commitUndoRedo(historyStore.undo(), "undo")}
+              className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
+            >
+              <Icon name="undo" />
+            </button>
+            <button
+              type="button"
+              aria-label="Redo"
+              title="Redo (Ctrl/⌘+Shift+Z)"
+              disabled={!history.canRedo}
+              onClick={() => commitUndoRedo(historyStore.redo(), "redo")}
+              className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
+            >
+              <Icon name="redo" />
+            </button>
+          </div>
+        )}
       </div>
 
       <button

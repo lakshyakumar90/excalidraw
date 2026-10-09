@@ -42,3 +42,54 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Editor extensions: keep the work surface clear on compact screens. */
+.editor-zen [data-editor-chrome] {
+  display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (max-width: 640px) {
+  .editor-tool-strip {
+    top: max(0.5rem, env(safe-area-inset-top));
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    max-width: calc(100vw - 1rem);
+  }
+  .editor-extra-actions {
+    bottom: 5rem;
+    right: 0.5rem;
+    left: 0.5rem;
+    justify-content: center;
+  }
+  .editor-extra-panel {
+    bottom: 9rem;
+    right: 0.5rem;
+    max-height: calc(100dvh - 15rem);
+  }
+}
+
+.mobile-tools-toggle {
+  display: none;
+}
+@media (max-width: 640px) {
+  .mobile-tools-toggle {
+    display: block;
+  }
+  .editor-tool-strip:not([data-expanded="true"]) {
+    display: none;
+  }
+  .editor-tool-strip[data-expanded="true"] {
+    top: 3.8rem;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}

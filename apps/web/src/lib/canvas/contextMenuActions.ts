@@ -1,3 +1,5 @@
+import { applyLayout } from "./layoutActions";
+import type { LayoutAction } from "@repo/engine";
 import type { Point } from "@repo/common";
 import type { CanvasContextMenuAction } from "@/components/canvas/CanvasContextMenu";
 import { selectionController } from "@/lib/selection/selectionController";
@@ -10,6 +12,10 @@ export function runContextMenuAction(
   action: CanvasContextMenuAction,
   scenePoint: Point,
 ): void {
+  if (action.startsWith("align-") || action.startsWith("distribute-")) {
+    applyLayout(action.slice(action.indexOf("-") + 1) as LayoutAction);
+    return;
+  }
   switch (action) {
     case "paste":
       void selectionController.pasteFromClipboard(scenePoint);

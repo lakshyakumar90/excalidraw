@@ -1,5 +1,9 @@
 import type { Element, Viewport } from "@repo/common";
-import { getElementCorners } from "@repo/engine";
+import {
+  visibleBounds,
+  projectBindings,
+  getElementCorners,
+} from "@repo/engine";
 import type { MarqueePreview } from "@/lib/selection/selectionController";
 import {
   getLinearEndpointHandles,
@@ -9,7 +13,10 @@ import {
   getResizeHandles,
 } from "@/lib/selection/handles";
 
-function getPathBoundary(points: readonly { x: number; y: number }[], padding: number) {
+function getPathBoundary(
+  points: readonly { x: number; y: number }[],
+  padding: number,
+) {
   if (points.length < 2) return [];
 
   const offsetSide = (direction: 1 | -1) =>
@@ -33,7 +40,10 @@ function drawElementSelectionOutline(
   zoom: number,
 ): void {
   if (element.type === "line" || element.type === "arrow") {
-    const boundary = getPathBoundary(getLinearPathWorldPoints(element), 4 / zoom);
+    const boundary = getPathBoundary(
+      getLinearPathWorldPoints(element),
+      4 / zoom,
+    );
     const first = boundary[0];
     if (!first) return;
     context.beginPath();
@@ -138,9 +148,30 @@ export function drawSelectionOverlay(
   context.setLineDash([5 / viewport.zoom, 4 / viewport.zoom]);
 
   // Draw an outline around each selected element's rotated corners.
-  const activeElements = (selectedElements ?? []).filter(
-    (element) => !element.isDeleted,
+  const projected = new Map(
+    projectBindings(sceneElements).map((e) => [e.id, e]),
   );
+  const activeElements = (selectedElements ?? [])
+    .map((e) => projected.get(e.id) ?? e)
+    .filter((e) => !e.isDeleted && visibleBounds(e, sceneElements));
+  const clipFrame = (element: Element) => {
+    const f = sceneElements.find(
+      (e) => e.id === element.frameId && e.type === "frame" && !e.isDeleted,
+    );
+    if (f) {
+      context.beginPath();
+      context.rect(f.x, f.y, f.width ?? 0, f.height ?? 0);
+      context.clip();
+    }
+  };
+  const outline = (element: Element) => {
+    context.save();
+    clipFrame(element);
+    drawElementSelectionOutline(context, element, viewport.zoom);
+    context.restore();
+  };
+  context.save();
+  if (activeElements.length === 1) clipFrame(activeElements[0]!);
 
   const drawConnectionPoint = (point: { x: number; y: number }) => {
     context.beginPath();
@@ -164,7 +195,9 @@ export function drawSelectionOverlay(
         );
         if (!arrow || arrow.type !== "arrow") continue;
         if (arrow.startBinding?.elementId === element.id && arrow.points[0]) {
-          drawConnectionPoint(getLinearPointWorldPosition(arrow, arrow.points[0]));
+          drawConnectionPoint(
+            getLinearPointWorldPosition(arrow, arrow.points[0]),
+          );
         }
         const end = arrow.points[arrow.points.length - 1];
         if (arrow.endBinding?.elementId === element.id && end) {
@@ -190,7 +223,13 @@ export function drawSelectionOverlay(
   context.lineWidth = 1 / viewport.zoom;
   context.strokeStyle = "#4c7dff";
   if (activeElements.length > 1) {
-    const corners = activeElements.flatMap(getElementCorners);
+    const corners = activeElements.flatMap((e) => {
+      const b = visibleBounds(e, sceneElements)!;
+      return [
+        { x: b.minX, y: b.minY },
+        { x: b.maxX, y: b.maxY },
+      ];
+    });
     const xs = corners.map((p) => p.x),
       ys = corners.map((p) => p.y);
     const minX = Math.min(...xs),
@@ -203,7 +242,7 @@ export function drawSelectionOverlay(
     if (!isCompleteGroupSelection) {
       context.setLineDash([]);
       for (const element of activeElements) {
-        drawElementSelectionOutline(context, element, viewport.zoom);
+        outline(element);
       }
       context.setLineDash([5 / viewport.zoom, 4 / viewport.zoom]);
     }
@@ -236,7 +275,7 @@ export function drawSelectionOverlay(
   for (const element of activeElements.length > 1 ? [] : activeElements) {
     if (element.isDeleted) continue;
     context.setLineDash([]);
-    drawElementSelectionOutline(context, element, viewport.zoom);
+    outline(element);
   }
 
   // Show rotated handles for one element; multi-selection uses the shared box above.
@@ -273,7 +312,13 @@ export function drawSelectionOverlay(
         const bendHandle = getLinearBendHandlePoint(element);
         if (bendHandle) {
           context.beginPath();
-          context.arc(bendHandle.x, bendHandle.y, handleSize / 2, 0, Math.PI * 2);
+          context.arc(
+            bendHandle.x,
+            bendHandle.y,
+            handleSize / 2,
+            0,
+            Math.PI * 2,
+          );
           context.fill();
           context.stroke();
         }
@@ -300,6 +345,7 @@ export function drawSelectionOverlay(
     }
   }
 
+  context.restore();
   // Show a temporary rectangle while dragging on empty canvas.
   if (marquee) {
     const x = Math.min(marquee.start.x, marquee.current.x);

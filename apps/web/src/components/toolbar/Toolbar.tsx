@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import {
@@ -33,8 +33,9 @@ function ToolButton({
       aria-label={label}
       aria-keyshortcuts={TOOL_SHORTCUTS[type]}
       aria-pressed={active}
+      tabIndex={active ? 0 : -1}
       className={[
-        "group relative grid h-10 w-10 shrink-0 place-items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
+        "group relative grid h-11 w-11 shrink-0 place-items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
         active
           ? "bg-neutral-900 text-white"
           : "text-neutral-700 hover:bg-neutral-100",
@@ -52,6 +53,7 @@ function ToolButton({
 }
 
 export function Toolbar() {
+  const [expanded, setExpanded] = useState(false);
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
@@ -60,17 +62,55 @@ export function Toolbar() {
 
   return (
     <>
+      <button
+        className="mobile-tools-toggle fixed left-1/2 top-2 z-[60] min-h-11 -translate-x-1/2 rounded-lg border bg-white px-4 text-sm shadow-sm"
+        aria-expanded={expanded}
+        aria-controls="drawing-tools"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? "Close tools" : `Tools · ${TOOL_LABELS[activeTool]}`}
+      </button>
       <div
+        id="drawing-tools"
+        data-expanded={expanded}
         role="toolbar"
         aria-label="Drawing tools"
-        className="fixed left-1/2 top-4 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur"
+        onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+            return;
+          event.preventDefault();
+          const buttons = Array.from(
+            event.currentTarget.querySelectorAll<HTMLButtonElement>(
+              "button[aria-pressed]",
+            ),
+          );
+          const index = buttons.indexOf(
+            document.activeElement as HTMLButtonElement,
+          );
+          const next =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? buttons.length - 1
+                : (index +
+                    (event.key === "ArrowRight" ? 1 : -1) +
+                    buttons.length) %
+                  buttons.length;
+          buttons.forEach((b, i) => (b.tabIndex = i === next ? 0 : -1));
+          buttons[next]?.focus();
+        }}
+        className="editor-tool-strip fixed left-1/2 top-4 z-50 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur"
       >
         {TOOL_TYPES.map((type) => (
           <ToolButton
             key={type}
             type={type}
             active={activeTool === type}
-            onClick={() => toolManager.setActiveTool(type)}
+            onClick={() => {
+              window.dispatchEvent(new Event("canvas-user-interaction"));
+              toolManager.setActiveTool(type);
+              setExpanded(false);
+            }}
           />
         ))}
         <span

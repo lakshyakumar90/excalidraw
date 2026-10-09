@@ -115,6 +115,13 @@ const Z_ORDER_ACTIONS = [
 
 export function StylePanel() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  useEffect(() => {
+    const query = matchMedia("(max-width:640px)");
+    const update = () => setIsCollapsed(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const activeTool = useSyncExternalStore(
     toolManager.subscribe,
     toolManager.getActiveTool.bind(toolManager),
@@ -237,7 +244,7 @@ export function StylePanel() {
           aria-controls="style-panel-content"
           title={isCollapsed ? "Expand style panel" : "Collapse style panel"}
           onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <svg
             aria-hidden="true"
@@ -305,7 +312,7 @@ export function StylePanel() {
                         : "transparent",
                     )
                   }
-              className="rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   {style.backgroundColor === "transparent"
                     ? "Transparent"
@@ -324,53 +331,154 @@ export function StylePanel() {
               value={style.fillStyle}
               onChange={(value) => update("fillStyle", value)}
               options={[
-                { value: "none", label: "No fill", mark: <span className="h-4 w-4 rounded border border-neutral-400" /> },
-                { value: "hachure", label: "Hachure fill", mark: <span className="text-sm">▨</span> },
-                { value: "cross-hatch", label: "Cross-hatch fill", mark: <span className="text-sm">▦</span> },
-                { value: "solid", label: "Solid fill", mark: <span className="h-3.5 w-3.5 rounded-sm bg-current" /> },
+                {
+                  value: "none",
+                  label: "No fill",
+                  mark: (
+                    <span className="h-4 w-4 rounded border border-neutral-400" />
+                  ),
+                },
+                {
+                  value: "hachure",
+                  label: "Hachure fill",
+                  mark: <span className="text-sm">▨</span>,
+                },
+                {
+                  value: "cross-hatch",
+                  label: "Cross-hatch fill",
+                  mark: <span className="text-sm">▦</span>,
+                },
+                {
+                  value: "solid",
+                  label: "Solid fill",
+                  mark: <span className="h-3.5 w-3.5 rounded-sm bg-current" />,
+                },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">Stroke width</p>
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+              Stroke width
+            </p>
             <ChoiceGroup
               label="Stroke width"
               value={style.strokeWidth}
               onChange={(value) => update("strokeWidth", value)}
               options={[
-                { value: 1, label: "Thin", mark: <span className="h-px w-4 bg-current" /> },
-                { value: 2, label: "Medium", mark: <span className="h-0.5 w-4 bg-current" /> },
-                { value: 4, label: "Bold", mark: <span className="h-1 w-4 bg-current" /> },
+                {
+                  value: 1,
+                  label: "Thin",
+                  mark: <span className="h-px w-4 bg-current" />,
+                },
+                {
+                  value: 2,
+                  label: "Medium",
+                  mark: <span className="h-0.5 w-4 bg-current" />,
+                },
+                {
+                  value: 4,
+                  label: "Bold",
+                  mark: <span className="h-1 w-4 bg-current" />,
+                },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">Stroke style</p>
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+              Stroke style
+            </p>
             <ChoiceGroup
               label="Stroke style"
               value={style.strokeStyle}
               onChange={(value) => update("strokeStyle", value)}
               options={[
-                { value: "solid", label: "Solid line", mark: <span className="h-0.5 w-5 bg-current" /> },
-                { value: "dashed", label: "Dashed line", mark: <span className="w-5 border-t-2 border-dashed border-current" /> },
-                { value: "dotted", label: "Dotted line", mark: <span className="w-5 border-t-2 border-dotted border-current" /> },
+                {
+                  value: "solid",
+                  label: "Solid line",
+                  mark: <span className="h-0.5 w-5 bg-current" />,
+                },
+                {
+                  value: "dashed",
+                  label: "Dashed line",
+                  mark: (
+                    <span className="w-5 border-t-2 border-dashed border-current" />
+                  ),
+                },
+                {
+                  value: "dotted",
+                  label: "Dotted line",
+                  mark: (
+                    <span className="w-5 border-t-2 border-dotted border-current" />
+                  ),
+                },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">Sloppiness</p>
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+              Sloppiness
+            </p>
             <ChoiceGroup
               label="Sloppiness"
               value={style.roughness}
               onChange={(value) => update("roughness", value)}
               options={[
-                { value: 0, label: "Architect", mark: <span className="text-[10px]">Low</span> },
-                { value: 1, label: "Artist", mark: <span className="text-[10px]">Mid</span> },
-                { value: 2, label: "Cartoonist", mark: <span className="text-[10px]">High</span> },
+                {
+                  value: 0,
+                  label: "Architect",
+                  mark: <span className="text-[10px]">Low</span>,
+                },
+                {
+                  value: 1,
+                  label: "Artist",
+                  mark: <span className="text-[10px]">Mid</span>,
+                },
+                {
+                  value: 2,
+                  label: "Cartoonist",
+                  mark: <span className="text-[10px]">High</span>,
+                },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">Edges</p>
+            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+              Edges
+            </p>
             <ChoiceGroup
               label="Edges"
               value={style.edgeStyle}
               onChange={(value) => update("edgeStyle", value)}
               options={[
-                { value: "sharp", label: "Sharp edges", mark: <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none"><path d="M3 13V3h10" stroke="currentColor" strokeWidth="1.8" /></svg> },
-                { value: "rounded", label: "Rounded edges", mark: <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none"><path d="M3 13V7a4 4 0 0 1 4-4h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+                {
+                  value: "sharp",
+                  label: "Sharp edges",
+                  mark: (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 16 16"
+                      className="h-4 w-4"
+                      fill="none"
+                    >
+                      <path
+                        d="M3 13V3h10"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                      />
+                    </svg>
+                  ),
+                },
+                {
+                  value: "rounded",
+                  label: "Rounded edges",
+                  mark: (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 16 16"
+                      className="h-4 w-4"
+                      fill="none"
+                    >
+                      <path
+                        d="M3 13V7a4 4 0 0 1 4-4h6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  ),
+                },
               ]}
             />
             <Field label="Opacity">
@@ -387,7 +495,7 @@ export function StylePanel() {
                   }
                   className="min-w-0 flex-1 accent-indigo-400"
                 />
-                  <span className="w-9 text-right text-xs tabular-nums text-neutral-500">
+                <span className="w-9 text-right text-xs tabular-nums text-neutral-500">
                   {style.opacity}%
                 </span>
               </div>
@@ -408,12 +516,12 @@ export function StylePanel() {
                   type="button"
                   aria-label={label}
                   onClick={() => {
-                    const { changes: orderChanges } = historyStore.commitUpdate(() =>
-                      scene.reorderElements(selectedIds, action),
+                    const { changes: orderChanges } = historyStore.commitUpdate(
+                      () => scene.reorderElements(selectedIds, action),
                     );
                     commitHistoryEntry(orderChanges, "local");
                   }}
-              className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 px-2 text-xs font-medium text-neutral-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 px-2 text-xs font-medium text-neutral-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   {label}
                 </button>

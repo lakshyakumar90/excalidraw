@@ -14,6 +14,9 @@ import type {
   PreviewWireElement,
 } from "@repo/common";
 import {
+  SnapIndex,
+  findBindingShape,
+  touchViewport,
   createRenderState,
   createElementBitmapCache,
   createTextElement,
@@ -24,6 +27,7 @@ import {
   viewportToScene,
   zoomAtPoint,
 } from "@repo/engine";
+import { startLaser, moveLaser } from "@/lib/presence/laser";
 import { toolManager } from "@/lib/tools/toolManager";
 import { getCanvasPresencePublisher } from "@/lib/presence/presencePublisher";
 import {
@@ -36,6 +40,7 @@ import { subscribeRoomFilesAvailable } from "@/lib/sync/roomFiles";
 import { toPreviewElement } from "@/lib/sync/previewGeometry";
 import { commitHistoryEntry } from "@/lib/sync/commits";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
+import { snappingPreference } from "@/lib/selection/selectionController";
 import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
 import { selectionStore } from "@/lib/selection/selectionStore";
@@ -198,7 +203,7 @@ export function Canvas({
       renderState,
       {
         renderStatic: () => {
-          const elements = scene.getElements();
+          const elements = scene.getRenderableElements();
           visibleElementCountRef.current = renderStatic(
             {
               context: staticContext,
@@ -253,6 +258,57 @@ export function Canvas({
             selectionController.getPointEditingElement(),
             selectionController.isCompleteGroupSelection(),
             scene.getElements(),
+          );
+          interactiveContext.save();
+          interactiveContext.strokeStyle = "#8b5cf6";
+          interactiveContext.lineWidth = 1;
+          interactiveContext.setLineDash([4, 4]);
+          for (const g of creationGuides) {
+            const v = viewportRef.current;
+            interactiveContext.beginPath();
+            if (g.axis === "x") {
+              const x = g.position * v.zoom + v.scrollX;
+              interactiveContext.moveTo(x, 0);
+              interactiveContext.lineTo(x, height);
+            } else {
+              const y = g.position * v.zoom + v.scrollY;
+              interactiveContext.moveTo(0, y);
+              interactiveContext.lineTo(width, y);
+            }
+            interactiveContext.stroke();
+          }
+          const arrowPreview = toolManager.getPreviewElement();
+          if (arrowPreview?.type === "arrow") {
+            const ids = new Set<string>();
+            for (const p of [
+              arrowPreview.points[0],
+              arrowPreview.points.at(-1),
+            ]) {
+              if (!p) continue;
+              const candidate = findBindingShape(
+                scene.getElements(),
+                { x: arrowPreview.x + p.x, y: arrowPreview.y + p.y },
+                viewportRef.current.zoom,
+              );
+              if (candidate && !ids.has(candidate.id)) {
+                ids.add(candidate.id);
+                const v = viewportRef.current;
+                interactiveContext.setLineDash([]);
+                interactiveContext.strokeRect(
+                  candidate.x * v.zoom + v.scrollX,
+                  candidate.y * v.zoom + v.scrollY,
+                  (candidate.width ?? 0) * v.zoom,
+                  (candidate.height ?? 0) * v.zoom,
+                );
+              }
+            }
+          }
+          interactiveContext.restore();
+          selectionController.drawGuides(
+            interactiveContext,
+            viewportRef.current,
+            window.innerWidth,
+            window.innerHeight,
           );
           drawEraserTrail(
             interactiveContext,
@@ -384,7 +440,12 @@ export function Canvas({
       }
     };
 
+    let observedTool = toolManager.getActiveTool();
     const unsubscribeToolManager = toolManager.subscribe(() => {
+      if (observedTool !== toolManager.getActiveTool()) {
+        observedTool = toolManager.getActiveTool();
+        resetGesture();
+      }
       if (toolManager.getActiveTool() !== "eraser") {
         eraserCursor = null;
         if (eraserMarkedIds.size > 0) {
@@ -484,8 +545,35 @@ export function Canvas({
       }
     };
 
+    let creationSnap: SnapIndex | null = null;
+    let creationGuides: { axis: "x" | "y"; position: number }[] = [];
+    const snapCreation = (point: Point, event: PointerEvent) => {
+      creationGuides = [];
+      if (
+        !scene.isCapturing() ||
+        !snappingPreference.enabled ||
+        event.altKey ||
+        event.shiftKey ||
+        !["rectangle", "ellipse", "diamond", "frame"].includes(
+          toolManager.getActiveTool(),
+        )
+      )
+        return point;
+      creationSnap ??= new SnapIndex(scene.getElements(), new Set());
+      const snap = creationSnap.snap(
+        { minX: point.x, maxX: point.x, minY: point.y, maxY: point.y },
+        viewportRef.current.zoom,
+      );
+      creationGuides = snap.guides;
+      return { x: point.x + snap.delta.x, y: point.y + snap.delta.y };
+    };
     const handlePointerMove = (event: PointerEvent) => {
       const point = getPointerPosition(event);
+      if (toolManager.getActiveTool() === "laser") {
+        if (event.buttons & 1)
+          moveLaser(viewportToScene(point, viewportRef.current));
+        return;
+      }
 
       pointerRef.current = point;
       scenePointerRef.current = viewportToScene(point, viewportRef.current);
@@ -579,7 +667,7 @@ export function Canvas({
             }))
           : undefined;
 
-      toolManager.onPointerMove(scenePoint, {
+      toolManager.onPointerMove(snapCreation(scenePoint, event), {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
@@ -589,6 +677,17 @@ export function Canvas({
     };
 
     const handlePointerDown = (event: PointerEvent) => {
+      creationSnap = null;
+      creationGuides = [];
+      window.dispatchEvent(new Event("canvas-user-interaction"));
+      if (toolManager.getActiveTool() === "laser") {
+        startLaser();
+        moveLaser(
+          viewportToScene(getPointerPosition(event), viewportRef.current),
+        );
+        interactiveCanvas.setPointerCapture(event.pointerId);
+        return;
+      }
       if (textEditorRef.current) {
         commitTextElement(textEditorRef.current);
         textEditorRef.current = null;
@@ -657,6 +756,13 @@ export function Canvas({
       }
 
       if (readOnly) {
+        if (event.pointerType === "touch") {
+          event.preventDefault();
+          isPanningRef.current = true;
+          lastPointerRef.current = getPointerPosition(event);
+          interactiveCanvas.setPointerCapture(event.pointerId);
+          return;
+        }
         event.preventDefault();
         const point = viewportToScene(
           getPointerPosition(event),
@@ -743,7 +849,7 @@ export function Canvas({
 
       historyStore.startCapture();
       beginGesturePreview();
-      toolManager.onPointerDown(scenePoint, {
+      toolManager.onPointerDown(snapCreation(scenePoint, event), {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
@@ -754,6 +860,11 @@ export function Canvas({
     };
 
     const handlePointerUp = (event: PointerEvent) => {
+      if (toolManager.getActiveTool() === "laser") {
+        if (interactiveCanvas.hasPointerCapture(event.pointerId))
+          interactiveCanvas.releasePointerCapture(event.pointerId);
+        return;
+      }
       endGesturePreview();
       if (eyedropperPointerIdRef.current === event.pointerId) {
         eyedropperPointerIdRef.current = null;
@@ -831,12 +942,14 @@ export function Canvas({
         return;
       }
 
-      toolManager.onPointerUp(scenePoint, {
+      toolManager.onPointerUp(snapCreation(scenePoint, event), {
         shiftKey: event.shiftKey,
         button: event.button,
         pointerId: event.pointerId,
         pressure: event.pressure,
       });
+      creationSnap = null;
+      creationGuides = [];
       commitHistoryEntry(historyStore.endCapture(), "local");
 
       if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
@@ -948,6 +1061,7 @@ export function Canvas({
       },
     });
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !textEditorRef.current) resetGesture();
       if (!readOnly) {
         editorKeyDown(event);
         return;
@@ -1014,6 +1128,110 @@ export function Canvas({
     imageCache.sync();
 
     window.addEventListener("resize", resizeCanvas);
+    const contacts = new Map<number, Point>();
+    let penActive = false,
+      navigating = false;
+    let touchStart: Point[] = [],
+      touchBase = viewportRef.current;
+    const resetGesture = () => {
+      creationSnap = null;
+      creationGuides = [];
+      contacts.clear();
+      navigating = false;
+      penActive = false;
+      historyStore.cancelCapture();
+      toolManager.cancel();
+      selectionController.cancelGesture();
+      endGesturePreview();
+      isPanningRef.current = false;
+      renderLoop.invalidateAll();
+    };
+    const lostCapture = (event: PointerEvent) => {
+      if (event.buttons || scene.isCapturing()) resetGesture();
+    };
+    const visibility = () => {
+      if (document.hidden) resetGesture();
+    };
+    const touchDown = (event: PointerEvent) => {
+      if (event.pointerType === "pen") {
+        if (contacts.size) resetGesture();
+        penActive = true;
+      }
+      if (event.pointerType !== "touch") return;
+      if (penActive) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      contacts.set(event.pointerId, getPointerPosition(event));
+      if (contacts.size >= 2) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        historyStore.cancelCapture();
+        toolManager.cancel();
+        selectionController.cancelGesture();
+        endGesturePreview();
+        isPanningRef.current = false;
+        navigating = true;
+        touchStart = [...contacts.values()].slice(0, 2);
+        touchBase = { ...viewportRef.current };
+        interactiveCanvas.setPointerCapture(event.pointerId);
+        renderLoop.invalidateAll();
+      }
+    };
+    const touchMove = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      if (penActive) {
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (contacts.has(event.pointerId))
+        contacts.set(event.pointerId, getPointerPosition(event));
+      if (!navigating) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (contacts.size >= 2) {
+        viewportRef.current = touchViewport(
+          touchStart,
+          [...contacts.values()].slice(0, 2),
+          touchBase,
+        );
+        setCurrentViewport(viewportRef.current);
+        renderLoop.invalidateAll();
+      }
+    };
+    const touchEnd = (event: PointerEvent) => {
+      if (event.pointerType === "touch" && penActive) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (event.pointerType === "pen") penActive = false;
+      contacts.delete(event.pointerId);
+      if (event.pointerType === "touch" && navigating) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (interactiveCanvas.hasPointerCapture(event.pointerId))
+          interactiveCanvas.releasePointerCapture(event.pointerId);
+        if (!contacts.size) navigating = false;
+      }
+      if (event.type === "pointercancel") {
+        contacts.clear();
+        navigating = false;
+        penActive = false;
+        historyStore.cancelCapture();
+        toolManager.cancel();
+        selectionController.cancelGesture();
+        endGesturePreview();
+        renderLoop.invalidateAll();
+      }
+    };
+    interactiveCanvas.addEventListener("lostpointercapture", lostCapture);
+    document.addEventListener("visibilitychange", visibility);
+    interactiveCanvas.addEventListener("pointerdown", touchDown, true);
+    interactiveCanvas.addEventListener("pointermove", touchMove, true);
+    interactiveCanvas.addEventListener("pointerup", touchEnd, true);
+    interactiveCanvas.addEventListener("pointercancel", touchEnd, true);
     interactiveCanvas.addEventListener("pointerdown", handlePointerDown);
     interactiveCanvas.addEventListener("contextmenu", handleContextMenu);
     interactiveCanvas.addEventListener("dblclick", guardedDoubleClick);
@@ -1040,6 +1258,13 @@ export function Canvas({
       imageCache.dispose();
       bitmapCache.clear();
       window.removeEventListener("resize", resizeCanvas);
+      resetGesture();
+      interactiveCanvas.removeEventListener("lostpointercapture", lostCapture);
+      document.removeEventListener("visibilitychange", visibility);
+      interactiveCanvas.removeEventListener("pointerdown", touchDown, true);
+      interactiveCanvas.removeEventListener("pointermove", touchMove, true);
+      interactiveCanvas.removeEventListener("pointerup", touchEnd, true);
+      interactiveCanvas.removeEventListener("pointercancel", touchEnd, true);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
       interactiveCanvas.removeEventListener("contextmenu", handleContextMenu);
       interactiveCanvas.removeEventListener("dblclick", guardedDoubleClick);
@@ -1064,6 +1289,7 @@ export function Canvas({
       className="fixed inset-0 overflow-hidden"
       style={{ visibility: persistenceReady ? "visible" : "hidden" }}
       aria-busy={!persistenceReady}
+      aria-label="Drawing canvas. Choose a tool to draw. Use the Elements panel to navigate the drawing with a keyboard."
       onDragOver={(event) => {
         if (!readOnly && event.dataTransfer.types.includes("Files"))
           event.preventDefault();
