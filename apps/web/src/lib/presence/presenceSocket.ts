@@ -1,19 +1,26 @@
 import {
+  COLLAB_WS_PROTOCOL,
   PRESENCE_TICKET_PROTOCOL_PREFIX,
   PRESENCE_WS_PROTOCOL,
+  isServerCollabMessage,
   isServerPresenceMessage,
+  type ClientToServerCollabMessage,
   type ClientToServerPresenceMessage,
+  type ServerToClientCollabMessage,
   type ServerToClientPresenceMessage,
 } from "@repo/common";
 
 /**
- * Presence-only WebSocket connection (Phase 14).
+ * Room WebSocket connection (presence + element sync share one socket).
  *
  * Uses the browser's native WebSocket API. Authentication travels in
- * `Sec-WebSocket-Protocol` as `auth.<ticket>` next to the stable protocol;
- * only the stable protocol is negotiated. A fresh ticket is fetched on every
- * (re)connect, and tickets are never persisted. No element data is sent here.
+ * `Sec-WebSocket-Protocol` as `auth.<ticket>` next to the negotiated
+ * protocol; a fresh ticket is fetched on every (re)connect, and tickets are
+ * never persisted. Element traffic uses the collaboration protocol; the
+ * durable outbox above this layer retries committed edits.
  */
+
+export type RoomMessage = ClientToServerPresenceMessage | ClientToServerCollabMessage;
 
 export type PresenceConnectionStatus =
   | "connecting"
@@ -60,6 +67,7 @@ export function authFailureMessage(error: unknown, fallback: string): string {
 export interface PresenceSocketEvents {
   getTicket: () => Promise<string>;
   onMessage: (message: ServerToClientPresenceMessage) => void;
+  onCollabMessage: (message: ServerToClientCollabMessage) => void;
   onStatus: (status: PresenceConnectionStatus, detail: string | null) => void;
 }
 
@@ -89,10 +97,20 @@ export class PresenceConnection {
     void this.open();
   }
 
-  send(message: ClientToServerPresenceMessage): void {
+  send(message: RoomMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     }
+  }
+
+  /** True while the socket is open (queued work still needs the outbox). */
+  get isOpen(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /** Which protocol the server negotiated for this socket, if any. */
+  get protocol(): string {
+    return this.ws?.protocol ?? "";
   }
 
   close(): void {
@@ -140,6 +158,7 @@ export class PresenceConnection {
     const ws = new WebSocket(
       `${this.baseUrl}/room/${encodeURIComponent(this.roomId)}`,
       [
+        COLLAB_WS_PROTOCOL,
         PRESENCE_WS_PROTOCOL,
         `${PRESENCE_TICKET_PROTOCOL_PREFIX}${ticket}`,
       ],
@@ -166,6 +185,10 @@ export class PresenceConnection {
       }
       if (isServerPresenceMessage(parsed)) {
         this.events.onMessage(parsed);
+        return;
+      }
+      if (isServerCollabMessage(parsed)) {
+        this.events.onCollabMessage(parsed);
       }
     };
     ws.onclose = (event) => {

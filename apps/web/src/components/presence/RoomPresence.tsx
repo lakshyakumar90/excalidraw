@@ -1,19 +1,36 @@
 "use client";
 
-import { usePresence } from "@/hooks/presence/usePresence";
+import { useMemo } from "react";
+import type { Element, TombstoneMap } from "@repo/common";
+import { useRoomSync } from "@/hooks/sync/useRoomSync";
 import { setCurrentViewport } from "@/lib/persistence/viewportStore";
 import { computeJumpViewport } from "@/lib/presence/viewportJump";
 import { PresenceAvatars } from "@/components/presence/PresenceAvatars";
 import { PresenceCursors } from "@/components/presence/PresenceCursors";
 import { PresenceStatus } from "@/components/presence/PresenceStatus";
+import { SyncStatus } from "@/components/presence/SyncStatus";
 
 /**
- * Room presence overlay: live cursors, participant avatars with viewport
- * jump, and the presence connection indicator. Mounted keyed by room so a
- * room change always starts a fresh channel.
+ * Room presence + sync overlay: live cursors, participant avatars with
+ * viewport jump, the presence connection indicator, and the save/sync
+ * indicator. Mounted keyed by room so a room change always starts fresh.
  */
-export function RoomPresence({ roomId }: { roomId: string }) {
-  const { status, detail, participants, selfUserId } = usePresence(roomId);
+export function RoomPresence({
+  roomId,
+  sceneId,
+  httpScene,
+}: {
+  roomId: string;
+  sceneId: string;
+  httpScene: {
+    elements: Element[];
+    tombstones: TombstoneMap;
+    revision: number;
+  } | null;
+}) {
+  const syncHttpScene = useMemo(() => httpScene, [httpScene]);
+  const sync = useRoomSync({ roomId, sceneId, httpScene: syncHttpScene });
+  const { status, detail, participants, selfUserId } = sync;
 
   const handleJump = (connectionId: string) => {
     const target = participants.find(
@@ -37,6 +54,7 @@ export function RoomPresence({ roomId }: { roomId: string }) {
         onJump={handleJump}
       />
       <PresenceStatus status={status} detail={detail} />
+      <SyncStatus sync={sync} />
     </>
   );
 }

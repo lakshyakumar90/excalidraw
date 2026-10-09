@@ -25,21 +25,25 @@ export function useCanvasPersistence(
     const document = savedScene ? Promise.resolve(savedScene) : loadScene();
 
     function startSaving() {
-      // Defer while a gesture capture is active so transient mid-drag
-      // geometry never persists; the ending commit reschedules.
-      const shouldDefer = () => scene.isCapturing();
-      autosave = savedScene
-        ? startAutosave(
-            scene,
-            () => viewportRef.current,
-            async (elements, viewport) => {
-              const data = await buildSavedSceneData(elements, viewport);
-              if (savedScene.saveData) await savedScene.saveData(data);
-              else await updateSceneData(savedScene.id, data);
-            },
-            shouldDefer,
-          )
-        : startAutosave(scene, () => viewportRef.current, undefined, shouldDefer);
+      // Room sync mode retires the whole-scene autosave loop: RoomSync owns
+      // the draft, the outbox, and durability. Personal/guest canvases keep it.
+      if (!savedScene?.roomSync) {
+        // Defer while a gesture capture is active so transient mid-drag
+        // geometry never persists; the ending commit reschedules.
+        const shouldDefer = () => scene.isCapturing();
+        autosave = savedScene
+          ? startAutosave(
+              scene,
+              () => viewportRef.current,
+              async (elements, viewport) => {
+                const data = await buildSavedSceneData(elements, viewport);
+                if (savedScene.saveData) await savedScene.saveData(data);
+                else await updateSceneData(savedScene.id, data);
+              },
+              shouldDefer,
+            )
+          : startAutosave(scene, () => viewportRef.current, undefined, shouldDefer);
+      }
       autosaveRef.current = autosave;
       setReadyFor(savedScene);
     }
@@ -48,9 +52,12 @@ export function useCanvasPersistence(
       .then((saved) => {
         if (cancelled) return;
         if (saved) {
-          scene.replaceAll(saved.elements);
-          selectionStore.clear();
-          scene.markClean();
+          if (!savedScene?.roomSync) {
+            // RoomSync owns initial room content (draft merged over HTTP).
+            scene.replaceAll(saved.elements);
+            selectionStore.clear();
+            scene.markClean();
+          }
           const restored = saved.viewport;
           if (
             Number.isFinite(restored.scrollX) &&

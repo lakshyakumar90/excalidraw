@@ -111,6 +111,11 @@ export class Scene {
     return this.pendingChanges !== null;
   }
 
+  /** IDs touched by the active capture (for deferring remote geometry). */
+  getCapturedIds(): string[] {
+    return this.pendingChanges ? [...this.pendingChanges.keys()] : [];
+  }
+
   /** Returns deltas only for changed elements; it never snapshots the scene. */
   endCapture(): SceneElementChange[] {
     const pending = this.pendingChanges;
@@ -151,6 +156,9 @@ export class Scene {
         after: afterElement ? { ...cloneElement(afterElement) } : null,
       });
     }
+    // Capture end always notifies so sync can flush deferred remote geometry
+    // on both commit and cancel paths (commitChanges notifies again itself).
+    this.notify();
     return changes;
   }
 

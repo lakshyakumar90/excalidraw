@@ -1,9 +1,11 @@
 import type { Element, Viewport } from "@repo/common";
 
 const DATABASE_NAME = "excalidraw-local";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const SCENE_STORE = "scene";
 const FILE_STORE = "files";
+export const ROOM_DRAFT_STORE = "roomDrafts";
+export const SYNC_OUTBOX_STORE = "syncOutbox";
 
 export interface PersistedScene {
   id: "current";
@@ -21,6 +23,28 @@ export interface PersistedFile {
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 
+/** Shared handle for room draft/outbox stores (same database, v2). */
+export function getStorageDatabase(): Promise<IDBDatabase> {
+  return getDatabase();
+}
+
+export async function runStorageTransaction<T>(
+  stores: string[],
+  mode: IDBTransactionMode,
+  run: (transaction: IDBTransaction) => Promise<T> | T,
+): Promise<T> {
+  const database = await getDatabase();
+  const transaction = database.transaction(stores, mode);
+  const done = transactionDone(transaction);
+  const result = await run(transaction);
+  await done;
+  return result;
+}
+
+export function readStorageRequest<T>(request: IDBRequest<T>): Promise<T> {
+  return requestResult(request);
+}
+
 function getDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === "undefined") {
     return Promise.reject(new Error("IndexedDB is unavailable in this browser"));
@@ -36,6 +60,17 @@ function getDatabase(): Promise<IDBDatabase> {
       }
       if (!database.objectStoreNames.contains(FILE_STORE)) {
         database.createObjectStore(FILE_STORE, { keyPath: "id" });
+      }
+      // Version 2 adds room-scoped drafts and the committed-edit outbox.
+      // The guest `current` scene and files are never migrated or touched.
+      if (!database.objectStoreNames.contains(ROOM_DRAFT_STORE)) {
+        database.createObjectStore(ROOM_DRAFT_STORE, { keyPath: "key" });
+      }
+      if (!database.objectStoreNames.contains(SYNC_OUTBOX_STORE)) {
+        const outbox = database.createObjectStore(SYNC_OUTBOX_STORE, {
+          keyPath: "mutationId",
+        });
+        outbox.createIndex("by-room", "roomKey", { unique: false });
       }
     };
     request.onsuccess = () => {
