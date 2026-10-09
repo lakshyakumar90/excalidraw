@@ -28,6 +28,7 @@ model Room {
   sceneId   String?      @unique
   scene     Scene?       @relation(fields: [sceneId], references: [id], onDelete: Cascade)
   invites   Invite[]
+  joinCodes JoinCode[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -88,13 +89,62 @@ model Invite {
   id        String   @id @default(cuid(2))
   codeHash  String   @unique
   email     String
+  role      RoomRole @default(editor)
   roomId    Int
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   expiresAt TimestamptzString
   usedAt    TimestamptzString?
+  revokedAt TimestamptzString?
+  sentAt    TimestamptzString?
+  deliveryError String?
   createdAt TimestamptzString @default(now())
+  claim     InviteClaim?
 
   @@index([roomId, email])
+}
+
+enum RoomAccessClaimAction {
+  accepted
+  revoked
+}
+
+// The unique credential relation serializes accept versus revoke. Both the
+// claim row and membership change are committed in the same transaction.
+model InviteClaim {
+  id        String                 @id @default(cuid(2))
+  inviteId  String                 @unique
+  invite    Invite                 @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  actorId   String
+  action    RoomAccessClaimAction
+  createdAt TimestamptzString      @default(now())
+
+  @@index([actorId, createdAt])
+}
+
+model JoinCode {
+  id        String            @id @default(cuid(2))
+  codeHash  String            @unique
+  roomId    Int
+  room      Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  role      RoomRole          @default(editor)
+  expiresAt TimestamptzString
+  revokedAt TimestamptzString?
+  createdAt TimestamptzString @default(now())
+  claim     JoinCodeClaim?
+
+  @@index([roomId, createdAt])
+  @@index([expiresAt])
+}
+
+model JoinCodeClaim {
+  id        String                 @id @default(cuid(2))
+  joinCodeId String                @unique
+  joinCode  JoinCode               @relation(fields: [joinCodeId], references: [id], onDelete: Cascade)
+  actorId   String
+  action    RoomAccessClaimAction
+  createdAt TimestamptzString      @default(now())
+
+  @@index([actorId, createdAt])
 }
 
 model Session {

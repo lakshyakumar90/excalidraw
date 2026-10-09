@@ -43,6 +43,24 @@ export async function connectApplicationDatabase() {
 }
 
 export {
+  acceptEmailRoomInvite,
+  acceptRoomJoinCode,
+  changeRoomMemberRole,
+  createOrGetSceneRoom,
+  createRoomInvite,
+  createRoomJoinCode,
+  findRoomMember,
+  listRoomInvites,
+  listRoomJoinCodes,
+  markInviteSent,
+  roomOwnedBy,
+  recordInviteDelivery,
+  removeRoomMember,
+  revokeEmailRoomInvite,
+  revokeRoomJoinCode,
+} from "./roomAccess.js";
+export type { RoomMemberRole, CredentialClaimAction } from "./roomAccess.js";
+export {
   getRoomSceneAccess,
   hasSyncHistory,
   insertSceneRevision,

@@ -16,6 +16,18 @@
       "model": "Invite",
       "namespace": "public"
     },
+    "inviteClaim": {
+      "model": "InviteClaim",
+      "namespace": "public"
+    },
+    "joinCode": {
+      "model": "JoinCode",
+      "namespace": "public"
+    },
+    "joinCodeClaim": {
+      "model": "JoinCodeClaim",
+      "namespace": "public"
+    },
     "room": {
       "model": "Room",
       "namespace": "public"
@@ -49,6 +61,19 @@
     "namespaces": {
       "public": {
         "enum": {
+          "RoomAccessClaimAction": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "accepted",
+                "value": "accepted"
+              },
+              {
+                "name": "revoked",
+                "value": "revoked"
+              }
+            ]
+          },
           "RoomRole": {
             "codecId": "pg/text@1",
             "members": [
@@ -336,6 +361,13 @@
                   "kind": "scalar"
                 }
               },
+              "deliveryError": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "email": {
                 "nullable": false,
                 "type": {
@@ -357,10 +389,37 @@
                   "kind": "scalar"
                 }
               },
+              "revokedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "RoomRole",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
               "roomId": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "sentAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
                   "kind": "scalar"
                 }
               },
@@ -373,6 +432,22 @@
               }
             },
             "relations": {
+              "claim": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "inviteId"
+                  ]
+                },
+                "to": {
+                  "model": "InviteClaim",
+                  "namespace": "public"
+                }
+              },
               "room": {
                 "cardinality": "N:1",
                 "nullable": false,
@@ -398,6 +473,9 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
+                "deliveryError": {
+                  "column": "deliveryError"
+                },
                 "email": {
                   "column": "email"
                 },
@@ -407,8 +485,17 @@
                 "id": {
                   "column": "id"
                 },
+                "revokedAt": {
+                  "column": "revokedAt"
+                },
+                "role": {
+                  "column": "role"
+                },
                 "roomId": {
                   "column": "roomId"
+                },
+                "sentAt": {
+                  "column": "sentAt"
                 },
                 "usedAt": {
                   "column": "usedAt"
@@ -416,6 +503,294 @@
               },
               "namespaceId": "public",
               "table": "invite"
+            }
+          },
+          "InviteClaim": {
+            "fields": {
+              "action": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "RoomAccessClaimAction",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "actorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "inviteId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "invite": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "inviteId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Invite",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "action": {
+                  "column": "action"
+                },
+                "actorId": {
+                  "column": "actorId"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "inviteId": {
+                  "column": "inviteId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "inviteClaim"
+            }
+          },
+          "JoinCode": {
+            "fields": {
+              "codeHash": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "expiresAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "revokedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "RoomRole",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "roomId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "claim": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "joinCodeId"
+                  ]
+                },
+                "to": {
+                  "model": "JoinCodeClaim",
+                  "namespace": "public"
+                }
+              },
+              "room": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "roomId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Room",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "codeHash": {
+                  "column": "codeHash"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "expiresAt": {
+                  "column": "expiresAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "revokedAt": {
+                  "column": "revokedAt"
+                },
+                "role": {
+                  "column": "role"
+                },
+                "roomId": {
+                  "column": "roomId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "joinCode"
+            }
+          },
+          "JoinCodeClaim": {
+            "fields": {
+              "action": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "RoomAccessClaimAction",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "actorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "joinCodeId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "joinCode": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "joinCodeId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "JoinCode",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "action": {
+                  "column": "action"
+                },
+                "actorId": {
+                  "column": "actorId"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "joinCodeId": {
+                  "column": "joinCodeId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "joinCodeClaim"
             }
           },
           "Room": {
@@ -507,6 +882,21 @@
                 },
                 "to": {
                   "model": "Invite",
+                  "namespace": "public"
+                }
+              },
+              "joinCodes": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "roomId"
+                  ]
+                },
+                "to": {
+                  "model": "JoinCode",
                   "namespace": "public"
                 }
               },
@@ -1469,6 +1859,13 @@
               "uniques": []
             },
             "invite": {
+              "checks": [
+                {
+                  "expression": "\"role\" IN ('owner', 'editor', 'viewer')",
+                  "name": "invite_role_check_4e2c8b04",
+                  "prefix": "invite_role_check"
+                }
+              ],
               "columns": {
                 "codeHash": {
                   "codecId": "pg/text@1",
@@ -1483,6 +1880,11 @@
                   },
                   "nativeType": "timestamptz",
                   "nullable": false
+                },
+                "deliveryError": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
                 },
                 "email": {
                   "codecId": "pg/text@1",
@@ -1499,10 +1901,35 @@
                   "nativeType": "text",
                   "nullable": false
                 },
+                "revokedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": true
+                },
+                "role": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "editor"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "RoomRole",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
                 "roomId": {
                   "codecId": "pg/int4@1",
                   "nativeType": "int4",
                   "nullable": false
+                },
+                "sentAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": true
                 },
                 "usedAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -1557,6 +1984,300 @@
                 {
                   "columns": [
                     "codeHash"
+                  ]
+                }
+              ]
+            },
+            "inviteClaim": {
+              "checks": [
+                {
+                  "expression": "\"action\" IN ('accepted', 'revoked')",
+                  "name": "inviteClaim_action_check_62175a4a",
+                  "prefix": "inviteClaim_action_check"
+                }
+              ],
+              "columns": {
+                "action": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "RoomAccessClaimAction",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "actorId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "inviteId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "inviteId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "inviteClaim"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "invite"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "actorId",
+                    "createdAt"
+                  ],
+                  "name": "inviteClaim_actorId_createdAt_idx_0e9f1adf",
+                  "prefix": "inviteClaim_actorId_createdAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "inviteId"
+                  ]
+                }
+              ]
+            },
+            "joinCode": {
+              "checks": [
+                {
+                  "expression": "\"role\" IN ('owner', 'editor', 'viewer')",
+                  "name": "joinCode_role_check_4e2c8b04",
+                  "prefix": "joinCode_role_check"
+                }
+              ],
+              "columns": {
+                "codeHash": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "expiresAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "revokedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": true
+                },
+                "role": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "editor"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "RoomRole",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "roomId": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "roomId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "joinCode"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "room"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "expiresAt"
+                  ],
+                  "name": "joinCode_expiresAt_idx_6b6b8c10",
+                  "prefix": "joinCode_expiresAt_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "roomId",
+                    "createdAt"
+                  ],
+                  "name": "joinCode_roomId_createdAt_idx_71ac5cd0",
+                  "prefix": "joinCode_roomId_createdAt_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "roomId"
+                  ],
+                  "name": "joinCode_roomId_idx_fe51d647",
+                  "prefix": "joinCode_roomId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "codeHash"
+                  ]
+                }
+              ]
+            },
+            "joinCodeClaim": {
+              "checks": [
+                {
+                  "expression": "\"action\" IN ('accepted', 'revoked')",
+                  "name": "joinCodeClaim_action_check_62175a4a",
+                  "prefix": "joinCodeClaim_action_check"
+                }
+              ],
+              "columns": {
+                "action": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "RoomAccessClaimAction",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "actorId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "joinCodeId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "joinCodeId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "joinCodeClaim"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "joinCode"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "actorId",
+                    "createdAt"
+                  ],
+                  "name": "joinCodeClaim_actorId_createdAt_idx_0e9f1adf",
+                  "prefix": "joinCodeClaim_actorId_createdAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "joinCodeId"
                   ]
                 }
               ]
@@ -2195,6 +2916,13 @@
             }
           },
           "valueSet": {
+            "RoomAccessClaimAction": {
+              "kind": "valueSet",
+              "values": [
+                "accepted",
+                "revoked"
+              ]
+            },
             "RoomRole": {
               "kind": "valueSet",
               "values": [
@@ -2209,10 +2937,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2da1f891a7d70b25d3ebc3b4a33e059741dfc37b1b9ef51d15bc2d09ebe250eb"
+    "storageHash": "927cff94348dd565a68e3a832420da893f63aab1e64ba99d3c06b4d4925c4cd0"
   },
   "execution": {
-    "executionHash": "0186e367e9dde6664952e3358eaa80112fd085d073bbdde371ec5dc331b5f9dc",
+    "executionHash": "633065dbcb78a23c01cd3d484a8e58bb12a27e175e19e7906a361d55fb7e3a5b",
     "mutations": {
       "defaults": [
         {
@@ -2224,6 +2952,39 @@
             "column": "id",
             "namespace": "public",
             "table": "invite"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "inviteClaim"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "joinCode"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "joinCodeClaim"
           }
         },
         {
