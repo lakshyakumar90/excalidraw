@@ -31,6 +31,7 @@ export interface PreviewEntry extends PreviewFrame {
 export class PreviewStore {
   private entries = new Map<string, PreviewEntry>();
   private listeners = new Set<() => void>();
+  private version = 0;
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -39,7 +40,13 @@ export class PreviewStore {
     };
   }
 
+  /** Monotonic counter for useSyncExternalStore subscriptions. */
+  getSnapshot = (): number => {
+    return this.version;
+  };
+
   private notify(): void {
+    this.version += 1;
     for (const listener of this.listeners) listener();
   }
 

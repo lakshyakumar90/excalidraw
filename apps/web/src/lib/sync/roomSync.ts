@@ -6,16 +6,18 @@ import {
   type Element,
   type NormalizedElement,
   type PresenceParticipant,
+  type PreviewWireElement,
   type ServerToClientCollabMessage,
   type ServerToClientPresenceMessage,
   type TombstoneMap,
 } from "@repo/common";
-import { viewportToScene, type Scene } from "@repo/engine";
+import { PreviewStore, viewportToScene, type Scene } from "@repo/engine";
 import {
   PresenceConnection,
   type PresenceConnectionStatus,
 } from "@/lib/presence/presenceSocket";
 import { setCanvasPresencePublisher } from "@/lib/presence/presencePublisher";
+import { setRoomSyncBridge } from "@/lib/sync/syncBridge";
 import { createThrottledPublisher } from "@/lib/presence/throttle";
 import {
   getCurrentViewport,
@@ -42,11 +44,19 @@ import { OutboxManager, isCoveredBy } from "@/lib/sync/outbox";
 
 export type SceneSyncState = "synced" | "syncing" | "offline" | "read-only";
 
+export interface RemoteSelection {
+  connectionId: string;
+  userId: string;
+  displayName: string;
+  elementIds: string[];
+}
+
 export interface RoomSyncState {
   status: PresenceConnectionStatus;
   detail: string | null;
   participants: PresenceParticipant[];
   selfUserId: string | null;
+  selections: RemoteSelection[];
   scene: SceneSyncState;
   pending: number;
   revision: number;
@@ -79,51 +89,70 @@ interface BufferedDelta {
 
 const DRAFT_DEBOUNCE_MS = 300;
 const OUTBOX_RETRY_MS = 15_000;
+const PREVIEW_PRUNE_MS = 2_000;
+const PREVIEW_TIMEOUT_MS = 5_000;
+const SELECTION_THROTTLE_MS = 100;
+const MAX_SELECTION_IDS = 500;
 
 function applyPresenceMessage(
   participants: PresenceParticipant[],
   message: ServerToClientPresenceMessage,
-): PresenceParticipant[] {
+): { participants: PresenceParticipant[]; leftConnectionId: string | null } {
   switch (message.type) {
     case "presence.snapshot":
-      return message.participants;
+      return { participants: message.participants, leftConnectionId: null };
     case "presence.joined":
-      return participants.some(
-        (participant) => participant.connectionId === message.participant.connectionId,
-      )
-        ? participants.map((participant) =>
-            participant.connectionId === message.participant.connectionId
-              ? message.participant
-              : participant,
-          )
-        : [...participants, message.participant];
+      return {
+        participants: participants.some(
+          (participant) => participant.connectionId === message.participant.connectionId,
+        )
+          ? participants.map((participant) =>
+              participant.connectionId === message.participant.connectionId
+                ? message.participant
+                : participant,
+            )
+          : [...participants, message.participant],
+        leftConnectionId: null,
+      };
     case "presence.left":
-      return participants.filter(
-        (participant) => participant.connectionId !== message.connectionId,
-      );
+      return {
+        participants: participants.filter(
+          (participant) => participant.connectionId !== message.connectionId,
+        ),
+        leftConnectionId: message.connectionId,
+      };
     case "pointer.move":
-      return participants.map((participant) =>
-        participant.connectionId === message.connectionId
-          ? { ...participant, pointer: { x: message.x, y: message.y } }
-          : participant,
-      );
+      return {
+        participants: participants.map((participant) =>
+          participant.connectionId === message.connectionId
+            ? { ...participant, pointer: { x: message.x, y: message.y } }
+            : participant,
+        ),
+        leftConnectionId: null,
+      };
     case "viewport.update":
-      return participants.map((participant) =>
-        participant.connectionId === message.connectionId
-          ? {
-              ...participant,
-              viewport: { x: message.x, y: message.y, zoom: message.zoom },
-            }
-          : participant,
-      );
+      return {
+        participants: participants.map((participant) =>
+          participant.connectionId === message.connectionId
+            ? {
+                ...participant,
+                viewport: { x: message.x, y: message.y, zoom: message.zoom },
+              }
+            : participant,
+        ),
+        leftConnectionId: null,
+      };
     case "pointer.leave":
-      return participants.map((participant) =>
-        participant.connectionId === message.connectionId
-          ? { ...participant, pointer: undefined }
-          : participant,
-      );
+      return {
+        participants: participants.map((participant) =>
+          participant.connectionId === message.connectionId
+            ? { ...participant, pointer: undefined }
+            : participant,
+        ),
+        leftConnectionId: null,
+      };
     case "error":
-      return participants;
+      return { participants, leftConnectionId: null };
   }
 }
 
@@ -191,8 +220,12 @@ export class RoomSync {
   private syncCounter = 0;
   private initialized = false;
   private selfUserId: string | null;
+  /** Ephemeral remote gesture previews (rendered, never persisted). */
+  readonly previews = new PreviewStore();
+  private remoteSelections = new Map<string, { userId: string; elementIds: string[] }>();
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
   private retryTimer: ReturnType<typeof setInterval> | null = null;
+  private previewPruneTimer: ReturnType<typeof setInterval> | null = null;
   private commitSeenSinceCaptureEnd = false;
   private wasCapturing = false;
   private snapshotVersion = 0;
@@ -214,6 +247,41 @@ export class RoomSync {
         x: viewport.x,
         y: viewport.y,
         zoom: viewport.zoom,
+      });
+    },
+  );
+  private previewPublisher = createThrottledPublisher(
+    PRESENCE_THROTTLE_MS,
+    (frame: { gestureId: string; seq: number; elements: PreviewWireElement[] }) => {
+      if (!this.connection?.isOpen) return;
+      const base: Record<string, { version: number; versionNonce: number }> = {};
+      for (const element of frame.elements) {
+        const current = this.deps.scene.getElement(element.id);
+        if (current && Number.isSafeInteger(current.version)) {
+          base[element.id] = {
+            version: current.version as number,
+            versionNonce:
+              Number.isSafeInteger(current.versionNonce) && (current.versionNonce ?? -1) >= 0
+                ? (current.versionNonce as number)
+                : 0,
+          };
+        }
+      }
+      this.connection.send({
+        type: "elements.preview",
+        gestureId: frame.gestureId,
+        seq: frame.seq,
+        base,
+        elements: frame.elements,
+      });
+    },
+  );
+  private selectionPublisher = createThrottledPublisher(
+    SELECTION_THROTTLE_MS,
+    (elementIds: string[]) => {
+      this.connection?.send({
+        type: "selection.update",
+        elementIds: elementIds.slice(0, MAX_SELECTION_IDS),
       });
     },
   );
@@ -243,6 +311,7 @@ export class RoomSync {
     detail: this.detail,
     participants: this.participants,
     selfUserId: this.selfUserId,
+    selections: this.selectionSnapshot(),
     scene: this.deriveSceneState(),
     pending: this.outbox.size,
     revision: this.revision,
@@ -252,6 +321,29 @@ export class RoomSync {
   private emit(): void {
     this.snapshotVersion += 1;
     for (const listener of this.listeners) listener();
+  }
+
+  private displayNameOf(connectionId: string, userId: string): string {
+    const participant = this.participants.find(
+      (entry) => entry.connectionId === connectionId,
+    );
+    if (participant) return participant.displayName;
+    if (this.selfUserId !== null && userId === this.selfUserId) return "you";
+    return "Someone";
+  }
+
+  private selectionSnapshot(): RemoteSelection[] {
+    const selections: RemoteSelection[] = [];
+    for (const [connectionId, selection] of this.remoteSelections) {
+      if (selection.elementIds.length === 0) continue;
+      selections.push({
+        connectionId,
+        userId: selection.userId,
+        displayName: this.displayNameOf(connectionId, selection.userId),
+        elementIds: [...selection.elementIds],
+      });
+    }
+    return selections;
   }
 
   private deriveSceneState(): SceneSyncState {
@@ -320,12 +412,37 @@ export class RoomSync {
         this.connection?.send({ type: "pointer.leave" });
       },
     });
+    setRoomSyncBridge({
+      preview: (gestureId, seq, elements) =>
+        this.publishLocalPreview(gestureId, seq, elements),
+      endPreview: (gestureId) => this.endLocalPreview(gestureId),
+      select: (elementIds) => this.publishSelection(elementIds),
+    });
     this.unsubscribeViewport = subscribeViewport(() => this.publishViewport());
     this.connection = this.deps.createConnection({
       getTicket: this.deps.getTicket,
       onMessage: (message) => {
         if (generation !== this.generation) return;
-        this.participants = applyPresenceMessage(this.participants, message);
+        const applied = applyPresenceMessage(this.participants, message);
+        this.participants = applied.participants;
+        if (message.type === "presence.snapshot") {
+          // Full resync: drop ephemeral state for departed connections.
+          const live = new Set(
+            applied.participants.map((participant) => participant.connectionId),
+          );
+          for (const entry of this.previews.getPreviews()) {
+            if (!live.has(entry.connectionId)) {
+              this.previews.clearGesture(entry.connectionId, entry.gestureId);
+            }
+          }
+          for (const connectionId of [...this.remoteSelections.keys()]) {
+            if (!live.has(connectionId)) this.remoteSelections.delete(connectionId);
+          }
+        }
+        if (applied.leftConnectionId) {
+          this.previews.clearConnection(applied.leftConnectionId);
+          this.remoteSelections.delete(applied.leftConnectionId);
+        }
         this.emit();
       },
       onCollabMessage: (message) => {
@@ -353,6 +470,16 @@ export class RoomSync {
     if (this.retryTimer && typeof (this.retryTimer as { unref?: () => void }).unref === "function") {
       (this.retryTimer as unknown as { unref: () => void }).unref();
     }
+    this.previewPruneTimer = setInterval(() => {
+      if (generation !== this.generation) return;
+      this.previews.pruneOlderThan(this.clock(), PREVIEW_TIMEOUT_MS);
+    }, PREVIEW_PRUNE_MS);
+    if (
+      this.previewPruneTimer &&
+      typeof (this.previewPruneTimer as { unref?: () => void }).unref === "function"
+    ) {
+      (this.previewPruneTimer as unknown as { unref: () => void }).unref();
+    }
     this.emit();
   }
 
@@ -363,8 +490,11 @@ export class RoomSync {
     if (this.unsubscribeViewport) this.unsubscribeViewport();
     this.unsubscribeScene = this.unsubscribeCommit = this.unsubscribeViewport = null;
     setCanvasPresencePublisher(null);
+    setRoomSyncBridge(null);
     this.pointerPublisher.cancel();
     this.viewportPublisher.cancel();
+    this.previewPublisher.cancel();
+    this.selectionPublisher.cancel();
     if (this.draftTimer !== null) {
       clearTimeout(this.draftTimer);
       this.draftTimer = null;
@@ -373,6 +503,10 @@ export class RoomSync {
       clearInterval(this.retryTimer);
       this.retryTimer = null;
     }
+    if (this.previewPruneTimer !== null) {
+      clearInterval(this.previewPruneTimer);
+      this.previewPruneTimer = null;
+    }
     this.connection?.close();
     this.connection = null;
     this.outbox.clear();
@@ -380,6 +514,8 @@ export class RoomSync {
     this.deferred.clear();
     this.pendingSync = null;
     this.bufferedDeltas = [];
+    this.previews.clearAll();
+    this.remoteSelections.clear();
   }
 
   private publishViewport(): void {
@@ -396,6 +532,9 @@ export class RoomSync {
     const requestId = `sync-${this.generation}-${(this.syncCounter += 1)}`;
     this.pendingSync = null;
     this.bufferedDeltas = [];
+    // A new sync generation obsoletes all remote ephemeral state.
+    this.previews.clearAll();
+    this.remoteSelections.clear();
     this.pendingSync = {
       requestId,
       chunks: null,
@@ -425,11 +564,80 @@ export class RoomSync {
         await this.handleAck(message);
         return;
       case "elements.preview":
+        this.routeRemotePreview(message);
+        return;
       case "elements.preview.end":
+        this.previews.clearGesture(message.connectionId, message.gestureId);
+        return;
       case "selection.update":
-        // Routed in the drag/selection slice; ignored until then.
+        if (message.elementIds.length === 0) {
+          this.remoteSelections.delete(message.connectionId);
+        } else {
+          this.remoteSelections.set(message.connectionId, {
+            userId: message.userId,
+            elementIds: [...message.elementIds],
+          });
+        }
+        this.emit();
         return;
     }
+  }
+
+  /**
+   * Route one incoming preview frame: ignore stale sequences, elements based
+   * on superseded commits, and geometry for our own active gesture.
+   */
+  private routeRemotePreview(
+    message: Extract<ServerToClientCollabMessage, { type: "elements.preview" }>,
+  ): void {
+    const captured =
+      this.deps.scene.isCapturing() && this.selfUserId !== null
+        ? new Set(this.deps.scene.getCapturedIds())
+        : new Set<string>();
+    const elements = message.elements.filter((element) => {
+      if (captured.has(element.id)) return false;
+      const base = message.base[element.id];
+      if (!base) return true;
+      const current = this.deps.scene.getElement(element.id);
+      if (!current || !Number.isSafeInteger(current.version)) return true;
+      const nonce = Number.isSafeInteger(current.versionNonce)
+        ? (current.versionNonce as number)
+        : 0;
+      return !(
+        (current.version as number) > base.version ||
+        ((current.version as number) === base.version && nonce > base.versionNonce)
+      );
+    });
+    // A fully filtered frame leaves no ghost behind.
+    if (elements.length === 0) return;
+    this.previews.setPreview({
+      connectionId: message.connectionId,
+      gestureId: message.gestureId,
+      seq: message.seq,
+      elements,
+      receivedAt: this.clock(),
+    });
+  }
+
+  /** Publish one throttled local preview frame for the active gesture. */
+  publishLocalPreview(
+    gestureId: string,
+    seq: number,
+    elements: PreviewWireElement[],
+  ): void {
+    if (!this.connection?.isOpen || elements.length === 0) return;
+    this.previewPublisher.push({ gestureId, seq, elements });
+  }
+
+  /** End a local gesture: flush the pending frame and clear remotes. */
+  endLocalPreview(gestureId: string): void {
+    this.previewPublisher.cancel();
+    this.connection?.send({ type: "elements.preview.end", gestureId });
+  }
+
+  /** Publish the local selection (element IDs only, ephemeral). */
+  publishSelection(elementIds: readonly string[]): void {
+    this.selectionPublisher.push([...elementIds]);
   }
 
   private async handleSnapshot(message: Extract<ServerToClientCollabMessage, { type: "scene.sync.snapshot" }>): Promise<void> {

@@ -116,6 +116,29 @@ export class Scene {
     return this.pendingChanges ? [...this.pendingChanges.keys()] : [];
   }
 
+  /**
+   * Committed (version, nonce) base for captured IDs, for preview frames.
+   * Falls back to (1, 0) for elements created inside the capture.
+   */
+  getCaptureBaseVersions(): Map<string, { version: number; versionNonce: number }> {
+    const base = new Map<string, { version: number; versionNonce: number }>();
+    if (!this.pendingChanges) return base;
+    for (const [id, change] of this.pendingChanges) {
+      const before = change.before;
+      base.set(id, {
+        version:
+          before && Number.isSafeInteger(before.version) && (before.version ?? 0) >= 1
+            ? (before.version as number)
+            : 1,
+        versionNonce:
+          before && Number.isSafeInteger(before.versionNonce) && (before.versionNonce ?? -1) >= 0
+            ? (before.versionNonce as number)
+            : 0,
+      });
+    }
+    return base;
+  }
+
   /** Returns deltas only for changed elements; it never snapshots the scene. */
   endCapture(): SceneElementChange[] {
     const pending = this.pendingChanges;

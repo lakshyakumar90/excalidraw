@@ -8,6 +8,7 @@ import { selectionStore } from "@/lib/selection/selectionStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { historyStore } from "@/lib/history/historyStore";
 import { commitHistoryEntry, commitUndoRedo } from "@/lib/sync/commits";
+import { endGesturePreview } from "@/lib/sync/syncBridge";
 import type { AutosaveHandle } from "@/lib/persistence/autosave";
 import { setCurrentViewport } from "@/lib/persistence/viewportStore";
 import type { CanvasContextMenuState } from "@/components/canvas/CanvasContextMenu";
@@ -101,6 +102,7 @@ export function createCanvasKeyboardHandler({
         return;
       }
       toolManager.cancel();
+      endGesturePreview();
       historyStore.endCapture();
       selectionStore.clear();
       renderLoop.invalidateInteractive();

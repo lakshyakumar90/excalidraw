@@ -13,6 +13,7 @@ import {
   type DraftStore,
 } from "@/lib/persistence/roomDraft";
 import { RoomSync, type HttpRoomScene, type RoomSyncDeps, type RoomSyncState } from "@/lib/sync/roomSync";
+import type { PreviewStore } from "@repo/engine";
 
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080";
 
@@ -23,6 +24,10 @@ export interface UseRoomSyncOptions {
   drafts?: DraftStore;
   outboxStore?: OutboxStore;
   createConnection?: RoomSyncDeps["createConnection"];
+}
+
+export interface UseRoomSyncResult extends RoomSyncState {
+  previews: PreviewStore;
 }
 
 /**
@@ -36,7 +41,7 @@ export function useRoomSync({
   drafts,
   outboxStore,
   createConnection,
-}: UseRoomSyncOptions): RoomSyncState {
+}: UseRoomSyncOptions): UseRoomSyncResult {
   const { data: session } = authClient.useSession();
   const selfUserId = session?.user?.id ?? null;
 
@@ -78,7 +83,9 @@ export function useRoomSync({
     };
   }, [sync, httpScene]);
 
-  return { ...state, selfUserId };
+  // The preview store instance is stable per sync instance.
+  const previews = useMemo(() => sync.previews, [sync]);
+  return { ...state, selfUserId, previews };
 }
 
 export type { Element, TombstoneMap };

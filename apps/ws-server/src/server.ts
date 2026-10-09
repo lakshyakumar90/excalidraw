@@ -309,6 +309,7 @@ export async function startPresenceServer(
             userId: connection.userId,
             gestureId: message.gestureId,
             seq: message.seq,
+            base: message.base,
             elements: message.elements,
           },
           { exceptConnectionId: connection.connectionId },

@@ -132,6 +132,7 @@ test("fan-out skips the sender, closed sockets, and slow sockets for deltas", ()
     userId: "alice",
     gestureId: "g1",
     seq: 1,
+    base: {},
     elements: [],
   });
   assert.equal((slow.ws as ReturnType<typeof fakeSocket>).sent.length, 2);

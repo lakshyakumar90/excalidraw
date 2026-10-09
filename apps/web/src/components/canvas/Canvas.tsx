@@ -7,7 +7,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { Element, Point, Viewport } from "@repo/common";
+import type { Element, Point, Viewport, PreviewWireElement } from "@repo/common";
 import {
   createRenderState,
   createTextElement,
@@ -20,6 +20,13 @@ import {
 } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import { getCanvasPresencePublisher } from "@/lib/presence/presencePublisher";
+import {
+  beginGesturePreview,
+  endGesturePreview,
+  getRoomSyncBridge,
+  pushGesturePreview,
+} from "@/lib/sync/syncBridge";
+import { toPreviewElement } from "@/lib/sync/previewGeometry";
 import { commitHistoryEntry } from "@/lib/sync/commits";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 import { selectionController } from "@/lib/selection/selectionController";
@@ -370,6 +377,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
 
     const unsubscribeSelectionStore = selectionStore.subscribe(() => {
       renderLoop.invalidateInteractive();
+      getRoomSyncBridge()?.select([...selectionStore.getSnapshot()]);
     });
     const unsubscribeStyleStore = styleStore.subscribe(() => {
       renderLoop.invalidateInteractive();
@@ -420,12 +428,36 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       renderLoop.invalidateAll();
     };
 
+    const publishGesturePreview = () => {
+      if (!scene.isCapturing()) return;
+      const elements: PreviewWireElement[] = [];
+      const seen = new Set<string>();
+      for (const id of scene.getCapturedIds()) {
+        const element = scene.getElement(id);
+        if (!element) continue;
+        const preview = toPreviewElement(element);
+        if (preview) {
+          elements.push(preview);
+          seen.add(id);
+        }
+      }
+      const toolPreview = toolManager.getPreviewElement();
+      if (toolPreview && !seen.has(toolPreview.id) && !scene.getElement(toolPreview.id)) {
+        const preview = toPreviewElement(toolPreview as Element);
+        if (preview) elements.push(preview);
+      }
+      if (elements.length > 0) {
+        pushGesturePreview(elements.slice(0, 200));
+      }
+    };
+
     const handlePointerMove = (event: PointerEvent) => {
       const point = getPointerPosition(event);
 
       pointerRef.current = point;
       scenePointerRef.current = viewportToScene(point, viewportRef.current);
       getCanvasPresencePublisher()?.pointer(scenePointerRef.current);
+      publishGesturePreview();
 
       if (eyedropperPointerIdRef.current === event.pointerId) return;
 
@@ -638,6 +670,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
 
       if (toolManager.getActiveTool() === "selection") {
         historyStore.startCapture();
+        beginGesturePreview();
         selectionController.pointerDown(
           scenePoint,
           event.shiftKey,
@@ -655,6 +688,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       }
 
       historyStore.startCapture();
+      beginGesturePreview();
       toolManager.onPointerDown(scenePoint, {
         shiftKey: event.shiftKey,
         button: event.button,
@@ -666,6 +700,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
     };
 
     const handlePointerUp = (event: PointerEvent) => {
+      endGesturePreview();
       if (eyedropperPointerIdRef.current === event.pointerId) {
         eyedropperPointerIdRef.current = null;
         if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
@@ -754,6 +789,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
     };
 
     const handlePointerCancel = (event: PointerEvent) => {
+      endGesturePreview();
       if (eraserPointerId !== event.pointerId) return;
       eraserPointerId = null;
       lastEraserScenePoint = null;
@@ -765,6 +801,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
 
     const handlePointerLeave = () => {
       getCanvasPresencePublisher()?.leave();
+      endGesturePreview();
       if (eraserPointerId !== null) return;
       eraserCursor = null;
       renderLoop.invalidateInteractive();

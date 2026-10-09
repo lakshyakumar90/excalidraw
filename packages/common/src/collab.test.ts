@@ -156,6 +156,7 @@ describe("isServerCollabMessage", () => {
         userId: "u1",
         gestureId: "g1",
         seq: 0,
+        base: {},
         elements: [{ id: "a", x: Number.NaN, y: 0 }],
       }),
     ).toBe(false);

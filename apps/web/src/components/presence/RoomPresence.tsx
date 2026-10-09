@@ -8,6 +8,8 @@ import { computeJumpViewport } from "@/lib/presence/viewportJump";
 import { PresenceAvatars } from "@/components/presence/PresenceAvatars";
 import { PresenceCursors } from "@/components/presence/PresenceCursors";
 import { PresenceStatus } from "@/components/presence/PresenceStatus";
+import { RemotePreviews } from "@/components/presence/RemotePreviews";
+import { RemoteSelections } from "@/components/presence/RemoteSelections";
 import { SyncStatus } from "@/components/presence/SyncStatus";
 
 /**
@@ -30,7 +32,7 @@ export function RoomPresence({
 }) {
   const syncHttpScene = useMemo(() => httpScene, [httpScene]);
   const sync = useRoomSync({ roomId, sceneId, httpScene: syncHttpScene });
-  const { status, detail, participants, selfUserId } = sync;
+  const { status, detail, participants, selfUserId, selections, previews } = sync;
 
   const handleJump = (connectionId: string) => {
     const target = participants.find(
@@ -48,6 +50,8 @@ export function RoomPresence({
   return (
     <>
       <PresenceCursors participants={participants} selfUserId={selfUserId} />
+      <RemotePreviews previews={previews} participants={participants} />
+      <RemoteSelections selections={selections} />
       <PresenceAvatars
         participants={participants}
         selfUserId={selfUserId}

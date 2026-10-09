@@ -109,6 +109,7 @@ export type ServerToClientCollabMessage =
       userId: string;
       gestureId: string;
       seq: number;
+      base: Record<string, { version: number; versionNonce: number }>;
       elements: PreviewWireElement[];
     }
   | {
@@ -436,6 +437,7 @@ export function isServerCollabMessage(value: unknown): value is ServerToClientCo
         isBoundedString(value.gestureId, SYNC_MAX_GESTURE_ID_LENGTH) &&
         isSafeInt(value.seq) &&
         (value.seq as number) >= 0 &&
+        isVersionBase(value.base) &&
         Array.isArray(value.elements) &&
         (value.elements as unknown[]).length <= SYNC_MAX_PREVIEW_ELEMENTS &&
         (value.elements as unknown[]).every(isPreviewElement)
