@@ -1,4 +1,4 @@
-import type { SavedScene, SceneData } from "./scenes";
+import type { SavedScene, SceneData, SceneFileData } from "./scenes";
 import { apiRequest } from "./request";
 
 export async function getRoom(roomId: string): Promise<{
@@ -77,6 +77,28 @@ export async function fetchPresenceTicket(roomId: string): Promise<string> {
     { method: "POST" },
   );
   return result.ticket;
+}
+
+export async function uploadRoomFile(
+  roomId: string,
+  fileId: string,
+  file: { id: string; mimeType: string; dataURL: string; created: number },
+): Promise<number> {
+  const result = await apiRequest<{ revision: number }>(
+    `/room/${encodeURIComponent(roomId)}/files`,
+    {
+      method: "POST",
+      body: JSON.stringify({ fileId, file }),
+    },
+  );
+  return result.revision;
+}
+
+export async function fetchRoomFile(roomId: string, fileId: string): Promise<SceneFileData> {
+  const result = await apiRequest<{ file: SceneFileData }>(
+    `/room/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileId)}`,
+  );
+  return result.file;
 }
 
 export interface RoomMember {
