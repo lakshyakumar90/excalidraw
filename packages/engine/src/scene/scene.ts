@@ -39,47 +39,13 @@ interface PendingElementChange {
   beforeIndex?: number;
 }
 
-function cloneElement(element: Element): Element {
-  return "points" in element
-    ? ({
-        ...element,
-        points: element.points.map((point) => ({ ...point })),
-      } as Element)
-    : { ...element };
-}
-
-function pickFields(
-  element: Element,
-  fields: Iterable<string>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = { type: element.type };
-  for (const field of fields) {
-    if (field === "id" || field === "type") continue;
-    const value = element[field as keyof Element];
-    result[field] = Array.isArray(value) ? structuredClone(value) : value;
-  }
-  return result;
-}
-
-function valuesEqual(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return true;
-  try {
-    return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
-  }
-}
-
-function freshNonce(): number {
-  return Math.floor(Math.random() * 2_147_483_647);
-}
-
-function orderKeyOf(element: Element, fallback: number): number {
-  return typeof element.orderKey === "number" &&
-    Number.isFinite(element.orderKey)
-    ? element.orderKey
-    : fallback;
-}
+import {
+  cloneElement,
+  pickFields,
+  valuesEqual,
+  freshNonce,
+  orderKeyOf,
+} from "./records";
 
 type ElementMutation<T = Element> = T extends Element
   ? Partial<Omit<T, "id" | "type">>
