@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
+import { issuePresenceTicket } from "@repo/auth";
 import { db } from "@repo/db";
 import { InviteSchema, RoomSchema, UpdateSceneSchema } from "@repo/validations";
 
@@ -13,7 +14,21 @@ const roomIdOf = (value: string) => {
 const codeHash = (code: string) =>
   createHash("sha256").update(code).digest("hex");
 
-async function accessibleRoom(roomId: number, userId: string) {
+export interface AccessibleRoom {
+  room: {
+    id: number;
+    slug: string;
+    sceneId: string | null;
+    adminId: string;
+    updatedAt: string;
+  };
+  role: string;
+}
+
+export async function accessibleRoom(
+  roomId: number,
+  userId: string,
+): Promise<AccessibleRoom | null> {
   const room = await db.orm!.public!.Room.where({ id: roomId }).first();
   if (!room) return null;
   const member = await db
@@ -91,6 +106,23 @@ roomsRouter.get("/:roomId", async (req, res) => {
   } catch (error) {
     console.error("Room read error:", error);
     return res.status(500).json({ message: "Unable to load room" });
+  }
+});
+
+roomsRouter.post("/:roomId/presence-ticket", async (req, res) => {
+  const roomId = roomIdOf(req.params.roomId);
+  if (!roomId) return res.status(404).json({ message: "Room not found" });
+  try {
+    // The caller never supplies a user ID: it comes from the validated
+    // session, and the ticket below is the only WebSocket credential.
+    // Tickets are short-lived and kept in memory by the browser.
+    const access = await accessibleRoom(roomId, req.userId!);
+    if (!access) return res.status(404).json({ message: "Room not found" });
+    const ticket = issuePresenceTicket({ userId: req.userId!, roomId });
+    return res.json({ ticket });
+  } catch (error) {
+    console.error("Presence ticket error:", error);
+    return res.status(500).json({ message: "Unable to issue presence ticket" });
   }
 });
 
