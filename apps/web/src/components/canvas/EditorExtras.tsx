@@ -1,5 +1,11 @@
 "use client";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { authClient } from "@repo/auth/client";
 import type { LibrarySummary } from "@repo/common";
 import { visibleBounds, type LayoutAction } from "@repo/engine";
@@ -89,19 +95,24 @@ export function EditorExtras({
           visibleBounds(e, elements),
       )
     : [];
-  const close = () => {
+  const close = useCallback(() => {
     setPanel(null);
+    setBusy(false);
     trigger.current?.focus();
-  };
-  const open = (value: typeof panel, button?: HTMLButtonElement) => {
-    if (button) trigger.current = button;
-    setError("");
-    setPanel(value);
-    if (value)
-      window.dispatchEvent(
-        new CustomEvent("editor-panel-open", { detail: "extras" }),
-      );
-  };
+  }, []);
+  const open = useCallback(
+    (value: typeof panel, button?: HTMLButtonElement) => {
+      if (button) trigger.current = button;
+      setError("");
+      setPanel(value);
+      setBusy(false);
+      if (value)
+        window.dispatchEvent(
+          new CustomEvent("editor-panel-open", { detail: "extras" }),
+        );
+    },
+    [],
+  );
   useEffect(() => {
     const closePanel = (event: Event) => {
       if (
@@ -139,7 +150,7 @@ export function EditorExtras({
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, []);
+  }, [open, close]);
   useEffect(() => {
     document.documentElement.classList.toggle("editor-zen", zen);
 
