@@ -3,6 +3,7 @@ import { boundsFromPoints, type Bounds } from "./bounds";
 
 export function getElementLocalBounds(element: Element): Bounds {
   switch (element.type) {
+    case "frame":
     case "rectangle":
     case "ellipse":
     case "diamond":

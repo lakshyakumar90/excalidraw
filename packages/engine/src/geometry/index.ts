@@ -1,3 +1,4 @@
+export * from "./binding";
 export * from "./viewport";
 export * from "./shapes";
 export * from "./line";
@@ -15,4 +16,3 @@ export * from "./elementLocalBounds";
 export * from "./elementCorners";
 export * from "./rotation";
 export * from "./hitTest";
-

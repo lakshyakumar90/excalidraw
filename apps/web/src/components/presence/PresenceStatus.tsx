@@ -4,14 +4,14 @@ import type { PresenceConnectionStatus } from "@/lib/presence/presenceSocket";
 
 const STATUS_COPY: Record<PresenceConnectionStatus, string> = {
   connecting: "Presence connecting…",
-  live: "Presence live — edits aren't synced",
+  live: "Presence live",
   reconnecting: "Presence reconnecting…",
   offline: "Presence offline",
 };
 
 /**
- * Visible, accessible connection indicator. The copy always describes the
- * presence channel; it never implies scene edits are synchronized or saved.
+ * Visible, accessible presence indicator. Scene durability is reported by
+ * the separate SyncStatus component.
  */
 export function PresenceStatus({
   status,

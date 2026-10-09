@@ -34,12 +34,12 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
       <GuestDrawingOffer userId={user.id} onSaved={dashboard.addSavedScene} />
       <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
         <div>
-          <p className="font-medium">{user.name || user.email}</p>
+          <p className="break-words font-medium">{user.name || user.email}</p>
           <p className="mt-1 text-sm text-neutral-500">
             Saved scenes are separate from your guest canvas.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => void dashboard.handleSignOut()}
             className={secondaryButton}

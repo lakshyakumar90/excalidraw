@@ -7,3 +7,5 @@ allowBuilds:
   msgpackr-extract: true
   unrs-resolver: true
   workerd: true
+minimumReleaseAgeExclude:
+  - bullmq@6.3.12

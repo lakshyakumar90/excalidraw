@@ -7,18 +7,27 @@ import type {
   PresenceParticipant,
   PresencePointer,
   PresenceViewport,
+  RoomRole,
+  ServerToClientCollabMessage,
   ServerToClientPresenceMessage,
 } from "@repo/common";
 
 /**
- * In-memory presence rooms (Phase 14).
+ * In-memory room connections (presence + collaboration).
  *
  * One entry represents one tab (connection), never one user: two tabs of the
- * same user keep distinct connection IDs. No pointer or viewport state is
- * written to PostgreSQL, IndexedDB, or scene JSON — it lives here only.
+ * same user keep distinct connection IDs. Pointer, viewport, preview, and
+ * selection state are ephemeral — never written to PostgreSQL, IndexedDB, or
+ * scene JSON. Only committed element deltas reach the durable authority.
  */
 
 export const OPEN_READY_STATE = 1;
+
+export type { RoomRole };
+
+export type ServerToRoomMessage =
+  | ServerToClientPresenceMessage
+  | ServerToClientCollabMessage;
 
 export interface PresenceSocket {
   readonly readyState: number;
@@ -32,13 +41,20 @@ export interface PresenceSocket {
 export interface RoomConnection {
   connectionId: string;
   roomId: number;
+  sceneId: string | null;
   userId: string;
   displayName: string;
+  role: RoomRole;
+  /** True when the collab subprotocol was negotiated for this socket. */
+  collab: boolean;
   ws: PresenceSocket;
   isAlive: boolean;
   pointer?: PresencePointer;
   viewport?: PresenceViewport;
+  selection: string[];
+  allMessageTimestamps?: number[];
   messageTimestamps: number[];
+  commitTimestamps: number[];
 }
 
 export type RoomMap = Map<number, Map<string, RoomConnection>>;
@@ -88,7 +104,7 @@ export function snapshotParticipants(
   });
 }
 
-function safeSend(ws: PresenceSocket, message: ServerToClientPresenceMessage): void {
+function safeSend(ws: PresenceSocket, message: ServerToRoomMessage): void {
   if (ws.readyState !== OPEN_READY_STATE) return;
   try {
     ws.send(JSON.stringify(message));
@@ -97,15 +113,24 @@ function safeSend(ws: PresenceSocket, message: ServerToClientPresenceMessage): v
   }
 }
 
+/** Unicast to one tab (acks, snapshots, chunks). */
+export function sendToConnection(
+  connection: RoomConnection,
+  message: ServerToRoomMessage,
+): void {
+  safeSend(connection.ws, message);
+}
+
 /**
- * Fan out one message to every open socket in the room. Pointer and viewport
- * deltas are ephemeral: slow sockets (large kernel buffer) skip them instead
- * of accumulating unbounded backlog. Membership events always go through.
+ * Fan out one message to every open socket in the room. Ephemeral frames
+ * (pointer, viewport, previews, selections) are best effort: slow sockets
+ * (large kernel buffer) skip them instead of accumulating unbounded backlog.
+ * Membership and durable collaboration events always go through.
  */
 export function sendToRoom(
   rooms: RoomMap,
   roomId: number,
-  message: ServerToClientPresenceMessage,
+  message: ServerToRoomMessage,
   options?: { exceptConnectionId?: string },
 ): void {
   const room = rooms.get(roomId);
@@ -113,7 +138,11 @@ export function sendToRoom(
   const ephemeral =
     message.type === "pointer.move" ||
     message.type === "viewport.update" ||
-    message.type === "pointer.leave";
+    message.type === "pointer.leave" ||
+    message.type === "elements.preview" ||
+    message.type === "elements.pending" ||
+    message.type === "elements.preview.end" ||
+    message.type === "selection.update";
   for (const connection of room.values()) {
     if (
       options?.exceptConnectionId !== undefined &&
@@ -131,23 +160,19 @@ export function sendToRoom(
   }
 }
 
-/** Sliding-window rate limiter; returns false and keeps the sample on excess. */
+/** Sliding-window rate limiter over one timestamp bucket. */
 export function checkRateLimit(
-  connection: Pick<RoomConnection, "messageTimestamps">,
+  timestamps: number[],
   now: number,
   maxMessages: number = WS_RATE_LIMIT_MAX_MESSAGES,
   windowMs: number = WS_RATE_LIMIT_WINDOW_MS,
-): boolean {
-  const recent = connection.messageTimestamps.filter(
-    (timestamp) => now - timestamp < windowMs,
-  );
+): { allowed: boolean; timestamps: number[] } {
+  const recent = timestamps.filter((timestamp) => now - timestamp < windowMs);
   if (recent.length >= maxMessages) {
-    connection.messageTimestamps = recent;
-    return false;
+    return { allowed: false, timestamps: recent };
   }
   recent.push(now);
-  connection.messageTimestamps = recent;
-  return true;
+  return { allowed: true, timestamps: recent };
 }
 
 export interface DepartedConnection {

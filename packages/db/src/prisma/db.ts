@@ -27,6 +27,12 @@ export const db = postgres<Contract>({
 // Better Auth's built-in PostgreSQL adapter requires a pg Pool. Keep it next
 // to the Prisma runtime so application packages never initialize databases.
 export const authPool = new Pool({ connectionString: databaseUrl });
+// Idle connections can be terminated by the database (sleeping tiers,
+// network blips). A pool-level error must never crash the service; the
+// failing query itself still rejects and is handled at the call site.
+authPool.on("error", (error) => {
+  console.error("Database pool idle-client error:", error);
+});
 
 export async function connectDatabase() {
   await Promise.all([db.connect(), authPool.query("SELECT 1")]);
@@ -35,3 +41,40 @@ export async function connectDatabase() {
 export async function connectApplicationDatabase() {
   await db.connect();
 }
+
+export {
+  acceptEmailRoomInvite,
+  acceptRoomJoinCode,
+  changeRoomMemberRole,
+  createOrGetSceneRoom,
+  createRoomInvite,
+  createRoomJoinCode,
+  findRoomMember,
+  listRoomInvites,
+  listRoomJoinCodes,
+  markInviteSent,
+  prepareRoomInviteResend,
+  roomOwnedBy,
+  recordInviteDelivery,
+  removeRoomMember,
+  revokeEmailRoomInvite,
+  revokeRoomJoinCode,
+} from "./roomAccess.js";
+export type { RoomMemberRole, CredentialClaimAction } from "./roomAccess.js";
+export {
+  getRoomSceneAccess,
+  hasSyncHistory,
+  insertSceneRevision,
+  pruneSceneRevisions,
+  readLegacySceneData,
+  readSyncHead,
+  retainLatestSceneRevisions,
+  roomForScene,
+} from "./sceneSync.js";
+export type {
+  RoomSceneAccess,
+  RoomSceneRole,
+  RevisionHead,
+  SyncDb,
+} from "./sceneSync.js";
+export { libraryRepository } from "./library.js";

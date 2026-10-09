@@ -15,6 +15,10 @@
     "./presence-ticket": {
       "types": "./src/presenceTicket.ts",
       "default": "./dist/presenceTicket.js"
+    },
+    "./room-invitation": {
+      "types": "./src/roomInvitation.ts",
+      "default": "./dist/roomInvitation.js"
     }
   },
   "scripts": {

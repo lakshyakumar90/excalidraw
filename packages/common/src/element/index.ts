@@ -5,6 +5,7 @@ export type {
   EdgeStyle,
   StrokeWidth,
   BaseElement,
+  FrameElement,
   RectangleElement,
   EllipseElement,
   DiamondElement,

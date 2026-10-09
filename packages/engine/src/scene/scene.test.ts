@@ -145,9 +145,17 @@ describe("Scene", () => {
 
     expect(element.y).toBe(100);
 
-    expect(element.version).toBe(initialVersion + 1);
+    // Transient mutations never bump durable versions; exactly one bump
+    // happens at the action boundary via commitChanges.
+    expect(element.version).toBe(initialVersion);
 
     expect(scene.version).toBe(sceneVersion + 1);
+
+    const commit = scene.commitChanges([element.id], "local");
+
+    expect(element.version).toBe(initialVersion + 1);
+
+    expect(commit.elements).toHaveLength(1);
 
     expect(scene.isDirty).toBe(true);
   });

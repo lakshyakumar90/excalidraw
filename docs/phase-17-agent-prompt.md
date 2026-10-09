@@ -1,0 +1,15 @@
+# Prompt for the Phase 17 implementing agent
+
+Implement Phase 17, rooms and invites, end to end. Read `docs/phase-17-rooms-invites-agent-instructions.md` completely, inspect the current implementation and applicable `AGENTS.md` files, and follow that handoff as the specification.
+
+Extend the existing rooms, memberships and invitation routes instead of building a parallel access system. Add idempotent Share from a saved scene, six-character expiring single-use join codes, signed recipient-bound single-use email invitations with actual Resend delivery, and sign-in/signup/verification/OAuth return to the original join flow. Plain room links do not grant access; reject uninvited users clearly. Preserve existing links through a bounded legacy path.
+
+Provide owner/editor/viewer management, code/invite revocation, and a real live read-only viewer canvas. Enforce permissions on HTTP and WebSocket mutations, uploads and drawing previews. Fix stale role fallback on missing membership or authorization failures. Publish access changes through Redis to every WS instance, invalidate every affected tab, and retain bounded fail-closed rechecks. Preserve Phase 15 immediate final-element delivery and Phase 16 Redis acceptance, persistence receipts, local outbox and worker behavior.
+
+Keep Prisma initialization and all new DB queries/transactions in `packages/db`, auth/signing/reusable email in `packages/auth`, browser-safe contracts in `packages/common`, shared server policy in `packages/backend-common`, Redis infrastructure in `packages/redis`, HTTP routes in HTTP, and socket transport in WS. Use the existing exported database client and supported pinned Prisma 8 contract/migration commands. Do not add app-local databases, SQLite, raw SQL or a new auth system. Make claim/revoke concurrency rely on real database uniqueness/transaction guarantees; a conditional read-then-write update is insufficient in this ORM.
+
+Use shared Redis invite/code rate limits and retain properly sized per-client WS budgets. Show truthful email failure/development states. Protect owner invariants, recipient verification, token purpose/expiry, auth return paths, and pending drafts when access is revoked.
+
+Implement and push small coherent commits as described in the handoff. Preserve pre-existing changes and stage only intended paths/hunks. Run the basic focused checks once, one bounded real-DB concurrency check and one short owner/editor/viewer smoke journey; rerun only failures or checks affected by fixes. Diagnose stalled commands instead of repeating broad suites. Record verification and decisions in `docs/architecture/phase-17-decisions.md`.
+
+At completion, run/reuse web, HTTP, WS, the flush worker and the user's local Redis, verify basic health plus one authorized edit/flush, and leave them running for manual testing. Finish with a concise summary, verified results and limitations, commit IDs/pushed branch, test URLs, and a short manual test journey. Do not begin Phase 18 or claim completion based on planning or health checks alone.

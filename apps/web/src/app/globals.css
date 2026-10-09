@@ -36,9 +36,169 @@ body {
   width: 100%;
   height: 100%;
   margin: 0;
-  overflow: hidden;
+  overflow-x: clip;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Editor extensions: keep the work surface clear on compact screens. */
+.editor-zen [data-editor-chrome] {
+  display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The editor owns its viewport; account and room pages keep document scrolling. */
+.editor-workspace {
+  height: 100dvh;
+}
+.mobile-tools-toggle {
+  display: none;
+}
+.editor-style-panel {
+  right: 1rem;
+  top: 5.5rem;
+  bottom: 10rem;
+  width: 17rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.12);
+}
+.editor-style-panel[data-collapsed="true"] {
+  top: 5.5rem;
+  bottom: auto;
+  width: auto;
+}
+.editor-tool-strip {
+  max-width: calc(100vw - 15rem);
+}
+.editor-extra-actions {
+  flex-wrap: wrap;
+}
+.editor-extra-panel {
+  max-width: calc(100vw - 2rem);
+  overflow-wrap: anywhere;
+}
+button,
+a,
+input,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 2px solid #4c6ef5;
+  outline-offset: 3px;
+}
+@media (max-width: 1199px) {
+  .mobile-tools-toggle {
+    display: block;
+    top: max(0.5rem, env(safe-area-inset-top));
+  }
+  .editor-account-link {
+    top: max(0.5rem, env(safe-area-inset-top));
+    right: max(0.5rem, env(safe-area-inset-right));
+    min-height: 44px;
+  }
+  .editor-tool-strip:not([data-expanded="true"]) {
+    display: none;
+  }
+  .editor-tool-strip[data-expanded="true"] {
+    top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.5rem);
+    width: min(32rem, calc(100vw - 1rem));
+    max-width: calc(100vw - 1rem);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    justify-items: center;
+    max-height: calc(100dvh - 10rem);
+    overflow-y: auto;
+  }
+  .editor-tool-strip > span {
+    display: none;
+  }
+  .editor-style-panel {
+    top: 4.5rem;
+    right: 0.5rem;
+    bottom: 9rem;
+    width: min(20rem, calc(100vw - 1rem));
+  }
+  .editor-style-panel[data-collapsed="true"] {
+    top: 4rem;
+  }
+}
+@media (max-width: 640px) {
+  .editor-extra-actions {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    right: 0.5rem;
+    left: 0.5rem;
+    justify-content: center;
+    gap: 0;
+    padding: 0.25rem;
+  }
+  .editor-extra-actions > button {
+    padding-inline: 0.6rem;
+    font-size: 0.75rem;
+  }
+  .editor-extra-panel {
+    bottom: calc(8rem + env(safe-area-inset-bottom));
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 13rem);
+  }
+  .editor-style-panel {
+    bottom: 9rem;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+@media (max-height: 500px) and (max-width: 1199px) {
+  .editor-style-panel,
+  .editor-extra-panel {
+    top: 4rem;
+    bottom: 4rem;
+    max-height: none;
+  }
+}
+@media (max-width: 1199px) {
+  .editor-workspace:has(.editor-tool-strip[data-expanded="true"])
+    .editor-style-panel {
+    visibility: hidden;
+  }
+  .editor-style-panel[data-collapsed="true"] header {
+    padding-block: 0;
+    gap: 0.25rem;
+    padding-left: 0.75rem;
+    padding-right: 0.25rem;
+  }
+}
+@media (max-width: 1199px) {
+  .editor-tool-strip[data-expanded="true"] {
+    overflow: visible;
+  }
+  .editor-tool-strip [role="menu"] {
+    max-height: max(8rem, calc(100dvh - 16rem));
+    overflow-y: auto;
+  }
+}
+@media (max-width: 360px) {
+  .editor-extra-actions {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .editor-extra-actions > button {
+    padding-inline: 0.2rem;
+    font-size: 0.7rem;
+  }
 }

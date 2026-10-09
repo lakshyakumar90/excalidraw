@@ -75,12 +75,12 @@ export class HistoryManager {
     this.beforeSelection = [...this.getSelection()];
   }
 
-  endCapture(): boolean {
-    if (!this.captureOrigin) return false;
+  endCapture(): SceneElementChange[] {
+    if (!this.captureOrigin) return [];
     const origin = this.captureOrigin;
     this.captureOrigin = null;
     const changes = this.scene.endCapture();
-    if (changes.length === 0 || origin === "remote") return false;
+    if (changes.length === 0 || origin === "remote") return [];
 
     this.undoStack.push({
       changes,
@@ -91,40 +91,66 @@ export class HistoryManager {
     if (this.undoStack.length > this.maxDepth) this.undoStack.shift();
     this.redoStack = [];
     this.notify();
-    return true;
+    return changes;
+  }
+
+  /** Restore a provisional gesture without recording history or emitting a commit. */
+  cancelCapture(): void {
+    if (!this.captureOrigin) return;
+    this.captureOrigin = null;
+    this.scene.cancelCapture();
+    this.restoreSelection(this.beforeSelection);
   }
 
   captureUpdate<T>(action: () => T, origin: HistoryOrigin = "local"): T {
+    return this.commitUpdate(action, origin).result;
+  }
+
+  /**
+   * Discrete-action wrapper: runs the action inside one capture and returns
+   * both the action result and the element changes so the caller can commit
+   * exactly one durable version per changed ID.
+   */
+  commitUpdate<T>(
+    action: () => T,
+    origin: HistoryOrigin = "local",
+  ): { result: T; changes: SceneElementChange[] } {
     this.startCapture(origin);
     try {
-      return action();
-    } finally {
+      const result = action();
+      return { result, changes: this.endCapture() };
+    } catch (error) {
       this.endCapture();
+      throw error;
     }
   }
 
-  undo(): boolean {
+  undo(): string[] {
     const entry = this.undoStack.pop();
-    if (!entry) return false;
+    if (!entry) return [];
+    const ids = new Set<string>();
     for (const change of [...entry.changes].reverse()) {
       this.applyChange(change.id, change.before, change.beforeIndex);
+      ids.add(change.id);
     }
     this.restoreSelection(entry.beforeSelection);
     this.redoStack.push(entry);
     this.notify();
-    return true;
+    return [...ids];
   }
 
-  redo(): boolean {
+  redo(): string[] {
     const entry = this.redoStack.pop();
-    if (!entry) return false;
+    if (!entry) return [];
+    const ids = new Set<string>();
     for (const change of entry.changes) {
       this.applyChange(change.id, change.after, change.afterIndex);
+      ids.add(change.id);
     }
     this.restoreSelection(entry.afterSelection);
     this.undoStack.push(entry);
     this.notify();
-    return true;
+    return [...ids];
   }
 
   private applyChange(
@@ -148,7 +174,9 @@ export class HistoryManager {
       this.scene.mutateElement(id, {
         ...next,
         isDeleted:
-          typeof next.isDeleted === "boolean" ? next.isDeleted : current.isDeleted,
+          typeof next.isDeleted === "boolean"
+            ? next.isDeleted
+            : current.isDeleted,
       } as Partial<Omit<Element, "id" | "type">>);
       if (targetIndex !== undefined) {
         this.scene.moveElementToIndex(id, targetIndex);

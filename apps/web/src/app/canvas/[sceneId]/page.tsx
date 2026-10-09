@@ -43,6 +43,7 @@ export default function SavedCanvasPage() {
         key={savedScene.id}
         savedScene={{
           id: savedScene.id,
+          title: savedScene.title,
           elements: savedScene.data.elements as Element[],
           viewport: viewportFromSceneData(savedScene.data),
         }}

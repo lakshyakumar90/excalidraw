@@ -1,16 +1,17 @@
-import { verifyPresenceTicket, assertPresenceTicketConfiguration } from "@repo/auth/presence-ticket";
-import { getAllowedWsOrigins } from "@repo/backend-common";
-import { connectApplicationDatabase, db } from "@repo/db";
+import {
+  verifyPresenceTicket,
+  assertPresenceTicketConfiguration,
+} from "@repo/auth/presence-ticket";
+import {
+  createCollaborationService,
+  getAllowedWsOrigins,
+} from "@repo/backend-common";
+import { openRoomRedis } from "@repo/redis";
+import { connectApplicationDatabase, db, getRoomSceneAccess } from "@repo/db";
 import { startPresenceServer } from "./server.js";
 
 async function hasRoomAccess(roomId: number, userId: string): Promise<boolean> {
-  const room = await db.orm!.public!.Room.where({ id: roomId }).first();
-  if (!room) return false;
-  if (room.adminId === userId) return true;
-  const member = await db
-    .orm!.public!.RoomMember.where({ roomId, userId })
-    .first();
-  return member !== null;
+  return (await getRoomSceneAccess(db, roomId, userId)) !== null;
 }
 
 async function displayNameFor(userId: string): Promise<string> {
@@ -34,10 +35,17 @@ async function startServer() {
   }
 
   const port = Number(process.env.WS_PORT ?? 8080);
+  const roomRedis = openRoomRedis();
+  await roomRedis.redis.ping();
   const handle = await startPresenceServer({
     verifyTicket: verifyPresenceTicket,
     checkAccess: hasRoomAccess,
     resolveDisplayName: displayNameFor,
+    resolveRoom: (roomId, userId) => getRoomSceneAccess(db, roomId, userId),
+    getRole: async (roomId, userId) =>
+      (await getRoomSceneAccess(db, roomId, userId))?.role ?? null,
+    service: createCollaborationService({ store: db, liveStore: roomRedis }),
+    roomRedis,
     allowedOrigins: getAllowedWsOrigins(),
     port,
   });
@@ -49,7 +57,7 @@ async function startServer() {
       .catch((error: unknown) => {
         console.error("Error while stopping the presence server:", error);
       })
-      .finally(() => process.exit(0));
+      .finally(() => roomRedis.close().finally(() => process.exit(0)));
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

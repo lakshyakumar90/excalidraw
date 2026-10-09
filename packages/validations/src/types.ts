@@ -30,9 +30,26 @@ export const RoomSchema = z
 
 export const InviteSchema = z
   .object({
-    email: z.email(),
+    email: z.email().trim().toLowerCase(),
+    role: z.enum(["editor", "viewer"]).default("editor"),
   })
   .strict();
+
+export const RoomRoleSchema = z.enum(["editor", "viewer"]);
+
+export const JoinCodeSchema = z
+  .object({ role: RoomRoleSchema.default("editor") })
+  .strict();
+
+export const UpdateRoomMemberSchema = z
+  .object({ role: RoomRoleSchema })
+  .strict();
+
+export const RoomJoinCodeInputSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.toUpperCase())
+  .pipe(z.string().regex(/^[A-HJ-NP-Z2-9]{6}$/));
 
 const SceneDataSchema = z
   .object({

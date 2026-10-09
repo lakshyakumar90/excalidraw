@@ -4,6 +4,14 @@ import { useEffect, useRef } from "react";
 import type { Point } from "@repo/common";
 
 export type CanvasContextMenuAction =
+  | "align-left"
+  | "align-center"
+  | "align-right"
+  | "align-top"
+  | "align-middle"
+  | "align-bottom"
+  | "distribute-horizontal"
+  | "distribute-vertical"
   | "paste"
   | "select-all"
   | "cut"
@@ -46,6 +54,14 @@ const SELECTION_ITEMS: MenuItem[] = [
   { action: "backward", label: "Send backward" },
   { action: "forward", label: "Bring forward" },
   { action: "front", label: "Bring to front" },
+  ...(["left", "center", "right", "top", "middle", "bottom"] as const).map(
+    (a) => ({
+      action: `align-${a}` as CanvasContextMenuAction,
+      label: `Align ${a}`,
+    }),
+  ),
+  { action: "distribute-horizontal", label: "Distribute horizontally" },
+  { action: "distribute-vertical", label: "Distribute vertically" },
   { action: "delete", label: "Delete", shortcut: "Del" },
 ];
 
@@ -61,6 +77,8 @@ export function CanvasContextMenu({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const firstItemRef = useRef<HTMLButtonElement | null>(null);
   const selectionItems = SELECTION_ITEMS.filter(({ action }) => {
+    if (action.startsWith("align-")) return state.selectedCount >= 2;
+    if (action.startsWith("distribute-")) return state.selectedCount >= 3;
     if (action === "group") return state.selectedCount > 1;
     if (action === "ungroup") return state.hasGroupedSelection;
     return true;
@@ -68,8 +86,11 @@ export function CanvasContextMenu({
   const basicSelectionItems = selectionItems.filter(({ action }) =>
     ["cut", "copy", "duplicate", "group", "ungroup"].includes(action),
   );
-  const arrangeItems = selectionItems.filter(({ action }) =>
-    ["back", "backward", "forward", "front"].includes(action),
+  const arrangeItems = selectionItems.filter(
+    ({ action }) =>
+      ["back", "backward", "forward", "front"].includes(action) ||
+      action.startsWith("align-") ||
+      action.startsWith("distribute-"),
   );
   const deleteItem = selectionItems.find(({ action }) => action === "delete");
 

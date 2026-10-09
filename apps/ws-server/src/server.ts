@@ -9,24 +9,34 @@ import {
   WS_CLOSE_MEMBERSHIP_REVOKED,
   WS_CLOSE_POLICY,
   WS_HEARTBEAT_INTERVAL_MS,
-  WS_MAX_PAYLOAD_BYTES,
   WS_MEMBERSHIP_RECHECK_MS,
+  type CollaborationService,
 } from "@repo/backend-common";
+import type { RoomRedis } from "@repo/redis";
 import {
+  chunkElementsForSnapshot,
+  COLLAB_WS_PROTOCOL,
   PRESENCE_WS_PROTOCOL,
+  validateClientCollabMessage,
   validateClientPresenceMessage,
-  type ServerToClientPresenceMessage,
+  WS_COLLAB_MAX_PAYLOAD_BYTES,
+  WS_COMMIT_RATE_PER_SECOND,
+  WS_EPHEMERAL_RATE_PER_SECOND,
+  type ClientToServerCollabMessage,
+  type ServerToClientCollabMessage,
 } from "@repo/common";
 import {
   addConnection,
   checkRateLimit,
   createRoomMap,
   removeConnection,
+  sendToConnection,
   sendToRoom,
   snapshotParticipants,
   sweepHeartbeats,
   type RoomConnection,
   type RoomMap,
+  type RoomRole,
 } from "./roomStore.js";
 
 export interface VerifiedTicket {
@@ -39,6 +49,16 @@ export interface PresenceServerOptions {
   verifyTicket: (token: string) => VerifiedTicket;
   checkAccess: (roomId: number, userId: string) => Promise<boolean>;
   resolveDisplayName: (userId: string) => Promise<string>;
+  /** Room scene + role for collaboration; absent means sync unavailable. */
+  resolveRoom?: (
+    roomId: number,
+    userId: string,
+  ) => Promise<{ sceneId: string; role: RoomRole } | null>;
+  /** Fresh edit role per mutation/interval; falls back to the stored role. */
+  getRole?: (roomId: number, userId: string) => Promise<RoomRole | null>;
+  /** Durable collaboration authority; absent means sync unavailable. */
+  service?: Pick<CollaborationService, "applyCommit" | "readSyncScene">;
+  roomRedis?: RoomRedis;
   allowedOrigins?: string[];
   heartbeatIntervalMs?: number;
   membershipRecheckMs?: number;
@@ -56,8 +76,10 @@ export interface PresenceServerHandle {
 
 interface AuthedUpgrade {
   roomId: number;
+  sceneId: string | null;
   userId: string;
   displayName: string;
+  role: RoomRole;
 }
 
 function rejectUpgrade(socket: Duplex, status: number): void {
@@ -85,12 +107,25 @@ function rejectUpgrade(socket: Duplex, status: number): void {
 
 function sendError(connection: RoomConnection, message: string): void {
   if (connection.ws.readyState !== 1) return;
-  const payload: ServerToClientPresenceMessage = { type: "error", message };
   try {
-    connection.ws.send(JSON.stringify(payload));
+    connection.ws.send(JSON.stringify({ type: "error", message }));
   } catch {
     // Error replies are best effort.
   }
+}
+
+/** Collab message types by wire name, for choosing the sharper error. */
+function looksLikeCollabMessage(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const type = (value as { type?: unknown }).type;
+  return (
+    type === "scene.sync.request" ||
+    type === "elements.commit" ||
+    type === "elements.preview" ||
+    type === "elements.preview.end" ||
+    type === "laser.move" ||
+    type === "selection.update"
+  );
 }
 
 export async function startPresenceServer(
@@ -102,33 +137,420 @@ export async function startPresenceServer(
     options.membershipRecheckMs ?? WS_MEMBERSHIP_RECHECK_MS;
   const allowedOrigins = options.allowedOrigins ?? [];
   const rooms = createRoomMap();
+  const redisSubscriber = options.roomRedis
+    ? await options.roomRedis.subscribe((event) => {
+        if (event.origin === options.roomRedis?.instanceId) return;
+        const sceneId = event.sceneId;
+        if (
+          event.type === "room.access.changed" &&
+          Number.isSafeInteger(event.roomId) &&
+          typeof event.userId === "string" &&
+          (event.role === null ||
+            event.role === "owner" ||
+            event.role === "editor" ||
+            event.role === "viewer")
+        ) {
+          const room = rooms.get(Number(event.roomId));
+          for (const connection of room?.values() ?? []) {
+            if (connection.userId !== event.userId) continue;
+            sendToConnection(connection, {
+              type: "room.access.changed",
+              role: event.role,
+            });
+            if (event.role === null) {
+              connection.role = "viewer";
+              connection.ws.close(
+                WS_CLOSE_MEMBERSHIP_REVOKED,
+                "Room access revoked",
+              );
+            } else {
+              connection.role = event.role;
+            }
+          }
+        } else if (
+          event.type === "room.persisted" &&
+          typeof sceneId === "string" &&
+          Number.isSafeInteger(event.revision)
+        ) {
+          for (const [, room] of rooms) {
+            for (const connection of room.values()) {
+              if (connection.sceneId === sceneId) {
+                sendToConnection(connection, {
+                  type: "scene.persisted",
+                  revision: Number(event.revision),
+                } as ServerToClientCollabMessage);
+              }
+            }
+          }
+        } else if (
+          event.type === "room.broadcast" &&
+          Number.isSafeInteger(event.roomId) &&
+          event.message &&
+          typeof event.message === "object"
+        ) {
+          sendToRoom(rooms, Number(event.roomId), event.message as never);
+        }
+      })
+    : null;
 
   const httpServer: Server = createServer();
   const wss = new WebSocketServer({
     noServer: true,
-    maxPayload: options.maxPayloadBytes ?? WS_MAX_PAYLOAD_BYTES,
-    // Only the stable protocol is ever negotiated; the ticket entry is
-    // consumed during authentication and never echoed back.
-    handleProtocols: (protocols) =>
-      protocols.has(PRESENCE_WS_PROTOCOL) ? PRESENCE_WS_PROTOCOL : false,
+    maxPayload: options.maxPayloadBytes ?? WS_COLLAB_MAX_PAYLOAD_BYTES,
+    // The ticket entry is consumed during authentication and never echoed.
+    // Collab-capable browsers are offered the collaboration protocol;
+    // presence-only clients keep the Phase 14 protocol.
+    handleProtocols: (protocols) => {
+      if (protocols.has(COLLAB_WS_PROTOCOL)) return COLLAB_WS_PROTOCOL;
+      if (protocols.has(PRESENCE_WS_PROTOCOL)) return PRESENCE_WS_PROTOCOL;
+      return false;
+    },
   });
 
-  const broadcastSnapshot = (roomId: number) => {
-    sendToRoom(rooms, roomId, {
-      type: "presence.snapshot",
-      participants: snapshotParticipants(rooms, roomId),
-    });
-  };
+  function broadcastRoom(
+    roomId: number,
+    message: Parameters<typeof sendToRoom>[2],
+    sendOptions?: Parameters<typeof sendToRoom>[3],
+  ): void {
+    sendToRoom(rooms, roomId, message, sendOptions);
+    if (options.roomRedis) {
+      void options.roomRedis
+        .publish({
+          type: "room.broadcast",
+          roomId,
+          message,
+          origin: options.roomRedis.instanceId,
+        })
+        .catch((error: unknown) => {
+          console.error("Room pub/sub broadcast failed:", error);
+        });
+    }
+  }
 
   const detach = (roomId: number, connectionId: string, userId: string) => {
     const removed = removeConnection(rooms, roomId, connectionId);
     if (!removed) return;
-    sendToRoom(rooms, roomId, {
+    broadcastRoom(roomId, {
       type: "presence.left",
       connectionId,
       userId,
     });
   };
+
+  async function currentRole(
+    connection: RoomConnection,
+  ): Promise<RoomRole | null> {
+    if (!options.getRole) return connection.role;
+    try {
+      const role = await options.getRole(connection.roomId, connection.userId);
+      if (role) {
+        connection.role = role;
+        return role;
+      }
+      connection.ws.close(WS_CLOSE_MEMBERSHIP_REVOKED, "Room access revoked");
+    } catch (error) {
+      console.error("Presence role recheck failed:", error);
+      connection.ws.close(
+        WS_CLOSE_MEMBERSHIP_REVOKED,
+        "Room authorization unavailable",
+      );
+    }
+    return null;
+  }
+
+  async function handleCollabMessage(
+    connection: RoomConnection,
+    message: ClientToServerCollabMessage,
+  ): Promise<void> {
+    const service = options.service;
+    if (!connection.collab || !service || !connection.sceneId) {
+      sendError(
+        connection,
+        "Collaboration is not available on this connection",
+      );
+      return;
+    }
+    if (message.type !== "elements.commit" && options.roomRedis) {
+      void options.roomRedis.recordMessage(connection.sceneId).catch(() => {});
+    }
+    switch (message.type) {
+      case "scene.sync.request": {
+        if (!consumeCommitBudget(connection)) {
+          sendError(connection, "Slow down");
+          return;
+        }
+        let snapshot: Awaited<ReturnType<typeof service.readSyncScene>>;
+        try {
+          snapshot = await service.readSyncScene(connection.sceneId);
+        } catch (error) {
+          console.error("Sync snapshot read failed:", error);
+          sendError(connection, "Sync unavailable right now");
+          return;
+        }
+        if (!snapshot) {
+          sendError(connection, "Scene not found");
+          return;
+        }
+        const chunks = chunkElementsForSnapshot(snapshot.elements);
+        if (chunks.length <= 1) {
+          sendToConnection(connection, {
+            type: "scene.sync.snapshot",
+            requestId: message.requestId,
+            revision: snapshot.revision,
+            elements: snapshot.elements,
+            tombstones: snapshot.tombstones,
+          });
+          return;
+        }
+        sendToConnection(connection, {
+          type: "scene.sync.snapshot",
+          requestId: message.requestId,
+          revision: snapshot.revision,
+          elements: [],
+          tombstones: snapshot.tombstones,
+          chunks: { count: chunks.length },
+        });
+        chunks.forEach((elements, index) => {
+          sendToConnection(connection, {
+            type: "scene.sync.chunk",
+            requestId: message.requestId,
+            index,
+            count: chunks.length,
+            elements,
+          });
+        });
+        return;
+      }
+      case "elements.commit": {
+        if (!consumeCommitBudget(connection)) {
+          sendError(connection, "Slow down");
+          return;
+        }
+        const role = await currentRole(connection);
+        if (role !== "owner" && role !== "editor") {
+          sendToConnection(connection, {
+            type: "elements.ack",
+            mutationId: message.mutationId,
+            revision: null,
+            saved: false,
+            reason: "forbidden",
+          });
+          return;
+        }
+        let result: Awaited<ReturnType<typeof service.applyCommit>>;
+        // Final geometry is visible immediately, but remains display-only
+        // until persistence succeeds. The sender still receives a durable ack.
+        const pending = (elements: typeof message.elements) =>
+          broadcastRoom(
+            connection.roomId,
+            {
+              type: "elements.pending",
+              mutationId: message.mutationId,
+              connectionId: connection.connectionId,
+              userId: connection.userId,
+              elements,
+            },
+            { exceptConnectionId: connection.connectionId },
+          );
+        pending(message.elements);
+        try {
+          result = await service.applyCommit({
+            sceneId: connection.sceneId,
+            userId: connection.userId,
+            role,
+            elements: message.elements,
+            mutationId: message.mutationId,
+          });
+        } catch (error) {
+          pending([]);
+          console.error("Sync commit failed:", error);
+          sendToConnection(connection, {
+            type: "elements.ack",
+            mutationId: message.mutationId,
+            revision: null,
+            saved: false,
+            reason: "unavailable",
+          });
+          return;
+        }
+        sendToConnection(connection, {
+          type: "elements.ack",
+          mutationId: message.mutationId,
+          revision: result.revision,
+          saved: result.saved,
+          ...(result.persisted !== undefined
+            ? { persisted: result.persisted }
+            : {}),
+          ...(result.corrected.length > 0
+            ? { corrected: result.corrected }
+            : {}),
+          ...(result.missingFiles ? { missingFiles: result.missingFiles } : {}),
+          ...(result.reason ? { reason: result.reason } : {}),
+        });
+        if (!result.saved || result.replayed) pending([]);
+        // Replays are acknowledged but never rebroadcast: every replica
+        // already converged on the first delivery.
+        if (result.saved && !result.replayed) {
+          broadcastRoom(
+            connection.roomId,
+            {
+              type: "elements.committed",
+              mutationId: message.mutationId,
+              connectionId: connection.connectionId,
+              userId: connection.userId,
+              revision: result.revision ?? 0,
+              elements: result.winners,
+            },
+            { exceptConnectionId: connection.connectionId },
+          );
+        }
+        return;
+      }
+      case "elements.preview": {
+        if (!consumeEphemeralBudget(connection)) {
+          return;
+        }
+        if (connection.role !== "owner" && connection.role !== "editor") {
+          return;
+        }
+        broadcastRoom(
+          connection.roomId,
+          {
+            type: "elements.preview",
+            connectionId: connection.connectionId,
+            userId: connection.userId,
+            gestureId: message.gestureId,
+            seq: message.seq,
+            base: message.base,
+            elements: message.elements,
+          },
+          { exceptConnectionId: connection.connectionId },
+        );
+        return;
+      }
+      case "elements.preview.end": {
+        if (!consumeEphemeralBudget(connection)) {
+          return;
+        }
+        broadcastRoom(
+          connection.roomId,
+          {
+            type: "elements.preview.end",
+            connectionId: connection.connectionId,
+            userId: connection.userId,
+            gestureId: message.gestureId,
+          },
+          { exceptConnectionId: connection.connectionId },
+        );
+        return;
+      }
+      case "laser.move": {
+        if (!consumeEphemeralBudget(connection)) return;
+        broadcastRoom(
+          connection.roomId,
+          {
+            ...message,
+            connectionId: connection.connectionId,
+            userId: connection.userId,
+          },
+          { exceptConnectionId: connection.connectionId },
+        );
+        return;
+      }
+      case "selection.update": {
+        if (!consumeEphemeralBudget(connection)) {
+          return;
+        }
+        connection.selection = [...message.elementIds];
+        broadcastRoom(
+          connection.roomId,
+          {
+            type: "selection.update",
+            connectionId: connection.connectionId,
+            userId: connection.userId,
+            elementIds: [...message.elementIds],
+          },
+          { exceptConnectionId: connection.connectionId },
+        );
+        return;
+      }
+    }
+  }
+
+  function consumeEphemeralBudget(connection: RoomConnection): boolean {
+    const checked = checkRateLimit(
+      connection.messageTimestamps,
+      Date.now(),
+      WS_EPHEMERAL_RATE_PER_SECOND,
+      1000,
+    );
+    connection.messageTimestamps = checked.timestamps;
+    return checked.allowed;
+  }
+
+  function consumeCommitBudget(connection: RoomConnection): boolean {
+    const checked = checkRateLimit(
+      connection.commitTimestamps,
+      Date.now(),
+      WS_COMMIT_RATE_PER_SECOND,
+      1000,
+    );
+    connection.commitTimestamps = checked.timestamps;
+    return checked.allowed;
+  }
+
+  function handlePresencePayload(
+    connection: RoomConnection,
+    message: Extract<
+      ReturnType<typeof validateClientPresenceMessage>,
+      { ok: true }
+    >["message"],
+  ): void {
+    if (connection.sceneId && options.roomRedis) {
+      void options.roomRedis.recordMessage(connection.sceneId).catch(() => {});
+    }
+    if (message.type === "pointer.move") {
+      connection.pointer = { x: message.x, y: message.y };
+      broadcastRoom(
+        connection.roomId,
+        {
+          type: "pointer.move",
+          connectionId: connection.connectionId,
+          userId: connection.userId,
+          x: message.x,
+          y: message.y,
+        },
+        { exceptConnectionId: connection.connectionId },
+      );
+      return;
+    }
+    if (message.type === "viewport.update") {
+      connection.viewport = { x: message.x, y: message.y, zoom: message.zoom };
+      broadcastRoom(
+        connection.roomId,
+        {
+          type: "viewport.update",
+          connectionId: connection.connectionId,
+          userId: connection.userId,
+          x: message.x,
+          y: message.y,
+          zoom: message.zoom,
+        },
+        { exceptConnectionId: connection.connectionId },
+      );
+      return;
+    }
+    delete connection.pointer;
+    broadcastRoom(
+      connection.roomId,
+      {
+        type: "pointer.leave",
+        connectionId: connection.connectionId,
+        userId: connection.userId,
+      },
+      { exceptConnectionId: connection.connectionId },
+    );
+  }
 
   wss.on("connection", (ws, request) => {
     const auth = (request as IncomingMessage & { presenceAuth?: AuthedUpgrade })
@@ -144,28 +566,55 @@ export async function startPresenceServer(
     const connection: RoomConnection = {
       connectionId: randomUUID(),
       roomId: auth.roomId,
+      sceneId: auth.sceneId,
       userId: auth.userId,
       displayName: auth.displayName,
+      role: auth.role,
+      collab: (ws as { protocol?: string }).protocol === COLLAB_WS_PROTOCOL,
       ws,
       isAlive: true,
+      selection: [],
+      allMessageTimestamps: [],
       messageTimestamps: [],
+      commitTimestamps: [],
     };
     addConnection(rooms, connection);
 
-    // The joiner immediately gets the full snapshot so ephemeral state
-    // recovers without replay; everyone else learns about the new tab.
-    sendToRoom(rooms, connection.roomId, {
-      type: "presence.snapshot",
-      participants: snapshotParticipants(rooms, connection.roomId),
+    void (async () => {
+      let participants = snapshotParticipants(rooms, connection.roomId);
+      if (connection.sceneId && options.roomRedis) {
+        try {
+          await options.roomRedis.join(
+            connection.sceneId,
+            connection.connectionId,
+            {
+              userId: connection.userId,
+              displayName: connection.displayName,
+            },
+          );
+          participants = await options.roomRedis.listParticipants(
+            connection.sceneId,
+          );
+        } catch (error) {
+          console.error("Room connection lease failed:", error);
+        }
+      }
+      sendToConnection(connection, { type: "presence.snapshot", participants });
+      broadcastRoom(
+        connection.roomId,
+        {
+          type: "presence.joined",
+          participant: {
+            connectionId: connection.connectionId,
+            userId: connection.userId,
+            displayName: connection.displayName,
+          },
+        },
+        { exceptConnectionId: connection.connectionId },
+      );
+    })().catch((error: unknown) => {
+      console.error("Presence join failed:", error);
     });
-    sendToRoom(rooms, connection.roomId, {
-      type: "presence.joined",
-      participant: {
-        connectionId: connection.connectionId,
-        userId: connection.userId,
-        displayName: connection.displayName,
-      },
-    }, { exceptConnectionId: connection.connectionId });
 
     ws.on("pong", () => {
       connection.isAlive = true;
@@ -174,6 +623,17 @@ export async function startPresenceServer(
       // Cleanup happens on "close"; prevent unhandled error crashes.
     });
     ws.on("message", (data, isBinary) => {
+      const total = checkRateLimit(
+        connection.allMessageTimestamps ?? [],
+        Date.now(),
+        120,
+        1_000,
+      );
+      connection.allMessageTimestamps = total.timestamps;
+      if (!total.allowed) {
+        sendError(connection, "Message rate limit exceeded");
+        return;
+      }
       if (isBinary) {
         sendError(connection, "Binary messages are not supported");
         return;
@@ -185,63 +645,39 @@ export async function startPresenceServer(
         sendError(connection, "Invalid message");
         return;
       }
-      const validated = validateClientPresenceMessage(parsed);
-      if (!validated.ok) {
-        sendError(connection, validated.error);
+      const presence = validateClientPresenceMessage(parsed);
+      if (presence.ok) {
+        if (!consumeEphemeralBudget(connection)) {
+          sendError(connection, "Slow down");
+          return;
+        }
+        handlePresencePayload(connection, presence.message);
         return;
       }
-      if (!checkRateLimit(connection, Date.now())) {
-        sendError(connection, "Slow down");
-        return;
-      }
-      const message = validated.message;
-      if (message.type === "pointer.move") {
-        connection.pointer = { x: message.x, y: message.y };
-        sendToRoom(
-          rooms,
-          connection.roomId,
-          {
-            type: "pointer.move",
-            connectionId: connection.connectionId,
-            userId: connection.userId,
-            x: message.x,
-            y: message.y,
-          },
-          { exceptConnectionId: connection.connectionId },
+      const collab = validateClientCollabMessage(parsed);
+      if (!collab.ok) {
+        sendError(
+          connection,
+          looksLikeCollabMessage(parsed) ? collab.error : presence.error,
         );
         return;
       }
-      if (message.type === "viewport.update") {
-        connection.viewport = { x: message.x, y: message.y, zoom: message.zoom };
-        sendToRoom(
-          rooms,
-          connection.roomId,
-          {
-            type: "viewport.update",
-            connectionId: connection.connectionId,
-            userId: connection.userId,
-            x: message.x,
-            y: message.y,
-            zoom: message.zoom,
-          },
-          { exceptConnectionId: connection.connectionId },
-        );
-        return;
-      }
-      delete connection.pointer;
-      sendToRoom(
-        rooms,
-        connection.roomId,
-        {
-          type: "pointer.leave",
-          connectionId: connection.connectionId,
-          userId: connection.userId,
+      void handleCollabMessage(connection, collab.message).catch(
+        (error: unknown) => {
+          console.error("Collaboration message failed:", error);
+          sendError(connection, "Sync unavailable right now");
         },
-        { exceptConnectionId: connection.connectionId },
       );
     });
     ws.on("close", () => {
       detach(connection.roomId, connection.connectionId, connection.userId);
+      if (connection.sceneId && options.roomRedis) {
+        void options.roomRedis
+          .leave(connection.sceneId, connection.connectionId)
+          .catch((error: unknown) => {
+            console.error("Room connection lease release failed:", error);
+          });
+      }
     });
   });
 
@@ -254,7 +690,8 @@ export async function startPresenceServer(
         }
         const pathname = (() => {
           try {
-            return new URL(request.url ?? "/", "http://presence.local").pathname;
+            return new URL(request.url ?? "/", "http://presence.local")
+              .pathname;
           } catch {
             return null;
           }
@@ -308,10 +745,33 @@ export async function startPresenceServer(
         } catch (error) {
           console.error("Presence display-name lookup failed:", error);
         }
+        let sceneId: string | null = null;
+        let role: RoomRole = "viewer";
+        if (options.resolveRoom) {
+          try {
+            const resolved = await options.resolveRoom(roomId, claims.userId);
+            if (!resolved) {
+              rejectUpgrade(socket, 403);
+              return;
+            }
+            sceneId = resolved.sceneId;
+            role = resolved.role;
+          } catch (error) {
+            console.error("Presence room lookup failed:", error);
+            rejectUpgrade(socket, 500);
+            return;
+          }
+        }
         // Only after auth and membership pass does the socket join the room.
         (
           request as IncomingMessage & { presenceAuth?: AuthedUpgrade }
-        ).presenceAuth = { roomId, userId: claims.userId, displayName };
+        ).presenceAuth = {
+          roomId,
+          sceneId,
+          userId: claims.userId,
+          displayName,
+          role,
+        };
         wss.handleUpgrade(request, socket, head, (upgraded) => {
           wss.emit("connection", upgraded, request);
         });
@@ -325,11 +785,29 @@ export async function startPresenceServer(
   const heartbeatTimer = setInterval(() => {
     const departed = sweepHeartbeats(rooms);
     for (const { roomId, connection } of departed) {
-      sendToRoom(rooms, roomId, {
+      broadcastRoom(roomId, {
         type: "presence.left",
         connectionId: connection.connectionId,
         userId: connection.userId,
       });
+      if (connection.sceneId && options.roomRedis) {
+        void options.roomRedis
+          .leave(connection.sceneId, connection.connectionId)
+          .catch(() => {});
+      }
+    }
+    if (options.roomRedis) {
+      for (const [, room] of rooms) {
+        for (const connection of room.values()) {
+          if (connection.sceneId) {
+            void options.roomRedis
+              .renew(connection.sceneId, connection.connectionId)
+              .catch((error: unknown) => {
+                console.error("Room connection lease renewal failed:", error);
+              });
+          }
+        }
+      }
     }
   }, heartbeatIntervalMs);
   heartbeatTimer.unref?.();
@@ -345,8 +823,15 @@ export async function startPresenceServer(
               connection.userId,
             );
           } catch (error) {
-            // Transient lookup failures must not evict live participants.
             console.error("Presence membership recheck failed:", error);
+            try {
+              connection.ws.close(
+                WS_CLOSE_MEMBERSHIP_REVOKED,
+                "Room authorization unavailable",
+              );
+            } catch {
+              // The following heartbeat also removes dead sockets.
+            }
             continue;
           }
           if (!allowed) {
@@ -359,6 +844,29 @@ export async function startPresenceServer(
               );
             } catch {
               // Closing is best effort; heartbeat cleanup reaps the rest.
+            }
+            continue;
+          }
+          // Refresh the stored edit role so downgrades stop edits promptly
+          // while presence continues.
+          if (options.getRole) {
+            try {
+              const role = await options.getRole(
+                connection.roomId,
+                connection.userId,
+              );
+              if (role) connection.role = role;
+              else
+                connection.ws.close(
+                  WS_CLOSE_MEMBERSHIP_REVOKED,
+                  "Room access revoked",
+                );
+            } catch (error) {
+              console.error("Presence role refresh failed:", error);
+              connection.ws.close(
+                WS_CLOSE_MEMBERSHIP_REVOKED,
+                "Room authorization unavailable",
+              );
             }
           }
         }
@@ -382,14 +890,15 @@ export async function startPresenceServer(
     close: async () => {
       clearInterval(heartbeatTimer);
       clearInterval(membershipTimer);
+      if (redisSubscriber) await redisSubscriber.quit();
       await new Promise<void>((resolve, reject) => {
         wss.close((error) => (error ? reject(error) : resolve()));
       });
       await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) =>
-          error ? reject(error) : resolve(),
-        );
+        httpServer.close((error) => (error ? reject(error) : resolve()));
       });
     },
   };
 }
+
+export type { RoomRole };

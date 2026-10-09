@@ -12,10 +12,22 @@ model User {
   chats      Chat[]
   membership RoomMember[]
   scenes     Scene[]
+  libraryItems LibraryItem[]
   sessions   Session[]
   accounts   Account[]
   createdAt  TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
+}
+
+model LibraryItem {
+  id String @id @default(cuid(2))
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name String
+  data Jsonb
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
+  @@index([ownerId, updatedAt])
 }
 
 model Room {
@@ -28,6 +40,7 @@ model Room {
   sceneId   String?      @unique
   scene     Scene?       @relation(fields: [sceneId], references: [id], onDelete: Cascade)
   invites   Invite[]
+  joinCodes JoinCode[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -57,23 +70,93 @@ model Scene {
   title     String   @default("Untitled")
   data      Jsonb
   room      Room?
+  revisions SceneRevision[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
+  // Durable sync revision: the compare-and-swap key for collaboration
+  // commits. Incremented exactly once per accepted commit; the server clock
+  // alone is too coarse to serialize rapid writers.
+  syncRevision Int @default(0)
 
   @@index([ownerId, updatedAt])
+}
+
+// Append-only collaboration log (Phase 15). Each accepted commit inserts
+// exactly one row; @@unique([sceneId, revision]) makes concurrent inserts
+// atomic — the loser gets a 23505 conflict and retries — because the ORM's
+// conditional update is read-then-write and cannot serialize writers.
+model SceneRevision {
+  id        Int      @id @default(autoincrement())
+  sceneId   String
+  scene     Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  revision  Int
+  data      Jsonb
+  actorId   String
+  createdAt TimestamptzString @default(now())
+
+  @@unique([sceneId, revision])
 }
 
 model Invite {
   id        String   @id @default(cuid(2))
   codeHash  String   @unique
   email     String
+  role      RoomRole @default(editor)
   roomId    Int
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   expiresAt TimestamptzString
   usedAt    TimestamptzString?
+  revokedAt TimestamptzString?
+  sentAt    TimestamptzString?
+  deliveryError String?
   createdAt TimestamptzString @default(now())
+  claim     InviteClaim?
 
   @@index([roomId, email])
+}
+
+enum RoomAccessClaimAction {
+  accepted
+  revoked
+}
+
+// The unique credential relation serializes accept versus revoke. Both the
+// claim row and membership change are committed in the same transaction.
+model InviteClaim {
+  id        String                 @id @default(cuid(2))
+  inviteId  String                 @unique
+  invite    Invite                 @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  actorId   String
+  action    RoomAccessClaimAction
+  createdAt TimestamptzString      @default(now())
+
+  @@index([actorId, createdAt])
+}
+
+model JoinCode {
+  id        String            @id @default(cuid(2))
+  codeHash  String            @unique
+  roomId    Int
+  room      Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  role      RoomRole          @default(editor)
+  expiresAt TimestamptzString
+  revokedAt TimestamptzString?
+  createdAt TimestamptzString @default(now())
+  claim     JoinCodeClaim?
+
+  @@index([roomId, createdAt])
+  @@index([expiresAt])
+}
+
+model JoinCodeClaim {
+  id        String                 @id @default(cuid(2))
+  joinCodeId String                @unique
+  joinCode  JoinCode               @relation(fields: [joinCodeId], references: [id], onDelete: Cascade)
+  actorId   String
+  action    RoomAccessClaimAction
+  createdAt TimestamptzString      @default(now())
+
+  @@index([actorId, createdAt])
 }
 
 model Session {

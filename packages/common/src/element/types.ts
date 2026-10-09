@@ -1,6 +1,7 @@
 import type { Point } from "../types.js";
 
 export type ElementType =
+  | "frame"
   | "rectangle"
   | "ellipse"
   | "diamond"
@@ -41,10 +42,21 @@ export interface BaseElement {
   versionNonce?: number;
   isDeleted?: boolean;
   updated?: number;
+  /**
+   * Fractional stacking key shared across collaborators. Render order is
+   * (orderKey, id); see packages/common/src/sync.ts. Absent on legacy
+   * records and transient previews; assigned deterministically at load.
+   */
+  orderKey?: number;
 }
 
 export interface RectangleElement extends BaseElement {
   type: "rectangle";
+}
+
+export interface FrameElement extends BaseElement {
+  type: "frame";
+  name?: string;
 }
 
 export interface EllipseElement extends BaseElement {
@@ -109,6 +121,7 @@ export interface FreedrawPoint extends Point {
 }
 
 export type Element =
+  | FrameElement
   | RectangleElement
   | EllipseElement
   | DiamondElement

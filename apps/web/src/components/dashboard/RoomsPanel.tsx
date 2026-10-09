@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { SceneSummary } from "@/lib/api/scenes";
-import { createRoom, listRooms, type RoomSummary } from "@/lib/api/rooms";
+import { listRooms, shareScene, type RoomSummary } from "@/lib/api/rooms";
 import { primaryButton } from "./dashboardStyles";
 
 export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
@@ -37,7 +37,7 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
     setPending(true);
     setError("");
     try {
-      const id = await createRoom(name.trim(), sceneId);
+      const { roomId: id } = await shareScene(name.trim(), sceneId);
       setRooms(await listRooms());
       setName("");
       setSceneId("");
@@ -53,8 +53,7 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
     <section className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold">Rooms</h2>
       <p className="mt-1 text-sm text-neutral-600">
-        Share a saved scene with invited people. Live collaboration arrives in
-        Phase 14.
+        Share a saved scene with invited people and collaborate in real time.
       </p>
       {rooms.length > 0 && (
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -79,7 +78,7 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
             void submit();
           }}
         >
-          <h3 className="text-sm font-semibold">Create a room</h3>
+          <h3 className="text-sm font-semibold">Share a scene</h3>
           <div className="mt-2 flex flex-wrap gap-2">
             <input
               aria-label="Room name"
@@ -105,7 +104,7 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
               ))}
             </select>
             <button disabled={pending} className={primaryButton}>
-              {pending ? "Creating…" : "Create room"}
+              {pending ? "Creating…" : "Share scene"}
             </button>
           </div>
         </form>

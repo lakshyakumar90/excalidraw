@@ -1,4 +1,5 @@
 import { MAX_ZOOM, MIN_ZOOM } from "./constants.js";
+import type { RoomRole } from "./types.js";
 
 /**
  * Presence-only realtime protocol (Phase 14).
@@ -45,6 +46,7 @@ export type ClientToServerPresenceMessage =
   | { type: "pointer.leave" };
 
 export type ServerToClientPresenceMessage =
+  | { type: "room.access.changed"; role: RoomRole | null }
   | { type: "presence.snapshot"; participants: PresenceParticipant[] }
   | { type: "presence.joined"; participant: PresenceParticipant }
   | { type: "presence.left"; connectionId: string; userId: string }
@@ -141,6 +143,13 @@ export function isServerPresenceMessage(
 ): value is ServerToClientPresenceMessage {
   if (!isRecord(value) || typeof value.type !== "string") return false;
   switch (value.type) {
+    case "room.access.changed":
+      return (
+        value.role === null ||
+        value.role === "owner" ||
+        value.role === "editor" ||
+        value.role === "viewer"
+      );
     case "presence.snapshot":
       return (
         Array.isArray(value.participants) &&

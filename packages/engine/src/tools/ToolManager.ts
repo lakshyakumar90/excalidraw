@@ -1,4 +1,5 @@
 import type { Element, Point } from "@repo/common";
+import { FrameTool } from "./FrameTool";
 import { RectangleTool } from "./RectangleTool";
 import { DiamondTool } from "./DiamondTool";
 import { EllipseTool } from "./EllipseTool";
@@ -10,6 +11,8 @@ import { CurvedLineTool } from "./CurvedLineTool";
 import { FreedrawTool } from "./FreedrawTool";
 
 export type ToolType =
+  | "frame"
+  | "laser"
   | "rectangle"
   | "diamond"
   | "ellipse"
@@ -36,6 +39,7 @@ export class ToolManager {
 
   constructor(options: ToolManagerOptions) {
     this.tools = new Map<ToolType, Tool>([
+      ["frame", new FrameTool()],
       ["rectangle", new RectangleTool()],
       ["diamond", new DiamondTool()],
       ["ellipse", new EllipseTool()],

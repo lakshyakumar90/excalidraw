@@ -27,6 +27,7 @@ export default function AcceptInvitePage() {
       setPending(false);
     }
   }
+  const returnTo = `/invite/${encodeURIComponent(code)}`;
   return (
     <main className="grid min-h-screen place-items-center bg-[#faf9f6] p-5 text-neutral-900">
       <section className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -48,13 +49,18 @@ export default function AcceptInvitePage() {
             </button>
           </>
         ) : (
-          <p className="mt-3 text-sm">
-            Sign in or create an account with the invited email address on{" "}
-            <Link className="text-violet-700 underline" href="/dashboard">
-              your dashboard
+          <>
+            <p className="mt-3 text-sm">
+              Sign in or create an account with the invited email address to
+              continue. Your verified email must match the invitation.
+            </p>
+            <Link
+              className="mt-5 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white"
+              href={`/dashboard?returnTo=${encodeURIComponent(returnTo)}`}
+            >
+              Sign in to join
             </Link>
-            , then return to this link.
-          </p>
+          </>
         )}
         {error && (
           <p role="alert" className="mt-3 text-sm text-red-700">

@@ -82,6 +82,8 @@ Define realistic total-scene, element-count, batch-byte, text and point-count li
 
 Use the server as the authority for durable acceptance. A WS commit calls a shared backend merge service which authorizes the role, reads the latest stored scene, reconciles only changed records and persists through `packages/db`. Acknowledge durable success after the write succeeds; broadcast authoritative accepted changes to other sockets, excluding only the sending connection. Another tab of the same user must receive the update.
 
+For immediate visual feedback, relay an authorized, validated final-element display frame before waiting for persistence. Treat that frame as a temporary overlay, never as a durable acknowledgement or canonical scene update. Clear it on authoritative delivery, rejected save, disconnect or timeout. Do not clear the last drag preview before the final-frame handoff. Revision cleanup runs as coalesced background maintenance and must not delay acknowledgement or fan-out.
+
 Implement atomic merge/save using Prisma transactions with appropriate isolation/retry, or a persisted scene revision plus compare-and-swap and bounded retry. A plain read followed by an unconditional full JSON update loses another user's changes. A transaction at ordinary read-committed isolation alone is not sufficient to prevent that race. A per-process mutex alone cannot coordinate the separate HTTP and WS services. Keep transaction/query implementations in `packages/db`; put shared policy/orchestration in `packages/backend-common`.
 
 Convert or retire the old room whole-scene autosave path, and route all remaining room-backed HTTP writes through the same merge service. Preserve files, title and other unrelated scene metadata during merges. Avoid duplicate HTTP and WS persistence loops. Standalone personal scenes and the guest canvas must still work.
@@ -134,43 +136,15 @@ Use small commits in this order, adjusting a boundary when dependencies require 
 
 Do not stage unrelated user changes. The working tree already contained a modification to `packages/backend-common/tsconfig.tsbuildinfo` when this handoff was prepared; inspect current status and treat existing changes as user-owned. Do not commit generated caches, temporary harnesses, screenshots containing credentials, `.env` files or secrets. Preserve lockfile changes only when actual dependency changes require them.
 
-## Required verification
+## Required verification: basic checks with a stopping point
 
-### Automated behavior
+Use a small set of checks appropriate to the changed code. Run the affected focused tests once, a type check for affected packages, and frontend lint when UI code changes. For a broad Phase 15 implementation, run one root type check and one build at the end. Do not repeatedly run every package suite or retry successful checks. Broaden testing only to investigate a concrete failure or remaining risk.
 
-- Reconciliation table: unknown ID, newer/older version, equal version and higher/lower nonce, exact replay, deletion versus newer edit in both directions, legacy metadata, duplicate IDs and invalid metadata. Verify permutations converge, inputs are not mutated and repeated application is idempotent.
-- Ordering: concurrent insertion, reordering, reconnect and persisted reload produce the same visible stacking order.
-- Engine: every committed mutation route sends changed IDs only; pointer frames do not bump versions or save; remote records do not echo, enter undo or corrupt an active capture; undo/redo emits new versions; deferred updates during drag resolve on commit/cancel.
-- Persistence: simultaneous HTTP/WS writers preserve both users' disjoint edits; concurrent same-element edits converge; database failure retains pending edits; repeated commit is harmless; files/metadata survive; viewer and revoked member mutations fail.
-- WS integration using real `ws` clients and ephemeral ports: authoritative initial sync, sender gets acknowledgement but no own delta echo, same-user second tab receives it, room isolation, malformed/oversized/chunked traffic, preview/selection fan-out, slow socket behavior and Phase 14 heartbeat/auth regressions.
-- Browser transport/storage: snapshot/delta races, lost ack, disconnect/replay, stale callbacks, room/account isolation, draft migration, refresh before acknowledgement, stale preview cleanup and network failure mid-drag.
-- Tombstones: retention threshold, server deletion time, pruned body with older offline live replay, newer undelete and compaction atomicity. Preview/selection state never appears in PostgreSQL scene JSON or IndexedDB scene/outbox records.
+Add focused regressions for reconciliation, concurrent durable saves, immediate final-element display, and pending/outbox recovery when these paths change. Use existing harnesses instead of building a large testing framework. Give each test command a reasonable time limit (normally two minutes for focused tests, five minutes for a build). If it hangs, stop it, inspect the output and fix the cause; do not loop indefinitely. Report an unavailable environment check accurately and continue independent work.
 
-Run the relevant focused suites while implementing, then these final gates from the root (check current scripts before execution):
+Perform one basic two-browser smoke check: create and finish a shape (the final styled shape should appear immediately while its save is pending), move it, delete it, and briefly disconnect/reconnect one browser. Confirm both scenes converge and a reload retains saved changes. If the two-minute offline scenario has not already been exercised, run it once. Do not repeat the full tool matrix or every acceptance scenario after an unrelated small fix.
 
-```text
-pnpm --filter @repo/common test
-pnpm --filter @repo/engine exec vitest run
-pnpm --filter @repo/backend-common test
-pnpm --filter @repo/auth test
-pnpm --filter http-server test
-pnpm --filter ws-server test
-pnpm --filter web test
-pnpm check-types
-pnpm --filter web lint
-pnpm build
-git diff --check
-```
-
-Run database concurrency/migration tests against a dedicated test database; mock-only tests cannot establish atomic write correctness. Never reset the development/production database to run tests. Start servers through the documented workspace commands and confirm restart/cached-build behavior remains working.
-
-### Two-browser acceptance check
-
-Use two distinct signed-in editable members of one test room, plus a viewer/nonmember check. Verify creation, text/style edits, delete/undo, paste, image display, drag/resize/rotation, bindings and z-order. Watch network frames: commits contain only changed elements; previews contain no file bytes; selections are ephemeral. Confirm cursor/selection alignment through pan/zoom and no local history pollution from remote edits.
-
-Disconnect browser A's network for at least two minutes during a drag (physically disconnect if practical, otherwise use a real network-offline control and record that method). Complete edits offline while B changes the same element, adds another and deletes a third. Reconnect A: both browsers converge, deleted shapes stay deleted, pending edits receive durable acknowledgement, and stale previews disappear. Repeat with refresh after an offline committed edit. Reload both browsers and restart the WS server to verify persisted results. Test an unacknowledged commit interrupted by disconnect.
-
-Record exact test commands, results, network-disconnect method, database race evidence and any unavailable manual check in `docs/phase-15-verification.md`. Do not claim completion if required scenarios failed or were not exercised; fix failures within this phase.
+Record the commands, basic smoke result and any actual unverified behavior in `docs/phase-15-verification.md`. Once the relevant checks pass, stop testing, review the diff, commit and push the coherent changes. Do not claim an unperformed browser check passed.
 
 ## GitHub delivery and definition of done
 

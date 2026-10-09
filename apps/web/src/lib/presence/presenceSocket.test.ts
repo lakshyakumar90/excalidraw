@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
+  COLLAB_WS_PROTOCOL,
   PRESENCE_WS_PROTOCOL,
+  type ServerToClientCollabMessage,
   type ServerToClientPresenceMessage,
 } from "@repo/common";
 import {
@@ -39,7 +41,7 @@ class FakeWebSocket {
     this.readyState = FakeWebSocket.OPEN;
     this.onopen?.();
   }
-  receive(message: ServerToClientPresenceMessage) {
+  receive(message: ServerToClientPresenceMessage | ServerToClientCollabMessage) {
     this.onmessage?.({ data: JSON.stringify(message) });
   }
   peerClose(code: number) {
@@ -108,6 +110,7 @@ describe("PresenceConnection", () => {
     const connection = new PresenceConnection("ws://local:8080", "7", {
       getTicket: async () => "ticket-1",
       onMessage: (message) => messages.push(message),
+      onCollabMessage: () => {},
       onStatus: tracker.onStatus,
     });
     connection.start();
@@ -115,7 +118,11 @@ describe("PresenceConnection", () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
     const socket = FakeWebSocket.instances[0]!;
     expect(socket.url).toBe("ws://local:8080/room/7");
-    expect(socket.protocols).toEqual([PRESENCE_WS_PROTOCOL, "auth.ticket-1"]);
+    expect(socket.protocols).toEqual([
+      COLLAB_WS_PROTOCOL,
+      PRESENCE_WS_PROTOCOL,
+      "auth.ticket-1",
+    ]);
     expect(tracker.statuses).toContain("connecting");
 
     socket.open();
@@ -126,6 +133,29 @@ describe("PresenceConnection", () => {
     expect(tracker.statuses.at(-1)).toBe("offline");
   });
 
+  it("routes collaboration messages to the collab handler", async () => {
+    const tracker = trackStatuses();
+    const collab: ServerToClientCollabMessage[] = [];
+    const connection = new PresenceConnection("ws://local:8080", "7", {
+      getTicket: async () => "ticket-1",
+      onMessage: () => {},
+      onCollabMessage: (message) => collab.push(message),
+      onStatus: tracker.onStatus,
+    });
+    connection.start();
+    await sleep(10);
+    const socket = FakeWebSocket.instances[0]!;
+    socket.open();
+    socket.receive({
+      type: "elements.ack",
+      mutationId: "m1",
+      revision: 2,
+      saved: true,
+    });
+    expect(collab).toHaveLength(1);
+    connection.close();
+  });
+
   it("refetches a ticket and reconnects after an abnormal close", async () => {
     const tracker = trackStatuses();
     let tickets = 0;
@@ -134,6 +164,7 @@ describe("PresenceConnection", () => {
       "7",
       {
         getTicket: async () => `ticket-${(tickets += 1)}`,
+        onCollabMessage: () => {},
         onMessage: () => {},
         onStatus: tracker.onStatus,
       },
@@ -147,7 +178,7 @@ describe("PresenceConnection", () => {
     await sleep(60);
     // A fresh ticket proves every reconnect.
     expect(FakeWebSocket.instances).toHaveLength(2);
-    expect(FakeWebSocket.instances[1]!.protocols[1]).toBe("auth.ticket-2");
+    expect(FakeWebSocket.instances[1]!.protocols[2]).toBe("auth.ticket-2");
     connection.close();
   });
 
@@ -158,6 +189,7 @@ describe("PresenceConnection", () => {
       "7",
       {
         getTicket: async () => "ticket-1",
+        onCollabMessage: () => {},
         onMessage: () => {},
         onStatus: tracker.onStatus,
       },
@@ -183,6 +215,7 @@ describe("PresenceConnection", () => {
         getTicket: async () => {
           throw Object.assign(new Error("Room not found"), { status: 404 });
         },
+        onCollabMessage: () => {},
         onMessage: () => {},
         onStatus: tracker.onStatus,
       },

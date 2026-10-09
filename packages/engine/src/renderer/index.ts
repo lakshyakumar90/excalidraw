@@ -4,3 +4,6 @@ export * from "./svgRenderer";
 export * from "./renderState";
 export * from "./viewport";
 export * from "./culling";
+export * from "./elementBitmapCache";
+export * from "./sketch";
+export * from "./benchmark";

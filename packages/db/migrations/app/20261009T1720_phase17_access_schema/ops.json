@@ -1,0 +1,776 @@
+[
+  {
+    "id": "table.inviteClaim",
+    "label": "Create table \"inviteClaim\"",
+    "summary": "Creates table \"inviteClaim\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "inviteClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"inviteClaim\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"inviteClaim\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"inviteClaim\"",
+        "sql": "CREATE TABLE \"public\".\"inviteClaim\" (\n  \"action\" text NOT NULL,\n  \"actorId\" text NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" text NOT NULL,\n  \"inviteId\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"inviteClaim_action_check_62175a4a\" CHECK (\"action\" IN ('accepted', 'revoked'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"inviteClaim\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"inviteClaim\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.joinCode",
+    "label": "Create table \"joinCode\"",
+    "summary": "Creates table \"joinCode\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "joinCode"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"joinCode\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"joinCode\"",
+        "sql": "CREATE TABLE \"public\".\"joinCode\" (\n  \"codeHash\" text NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"expiresAt\" timestamptz NOT NULL,\n  \"id\" text NOT NULL,\n  \"revokedAt\" timestamptz,\n  \"role\" text DEFAULT 'editor' NOT NULL,\n  \"roomId\" int4 NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"joinCode_role_check_4e2c8b04\" CHECK (\"role\" IN ('owner', 'editor', 'viewer'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"joinCode\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.joinCodeClaim",
+    "label": "Create table \"joinCodeClaim\"",
+    "summary": "Creates table \"joinCodeClaim\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "joinCodeClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"joinCodeClaim\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCodeClaim\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"joinCodeClaim\"",
+        "sql": "CREATE TABLE \"public\".\"joinCodeClaim\" (\n  \"action\" text NOT NULL,\n  \"actorId\" text NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" text NOT NULL,\n  \"joinCodeId\" text NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"joinCodeClaim_action_check_62175a4a\" CHECK (\"action\" IN ('accepted', 'revoked'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"joinCodeClaim\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCodeClaim\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.invite.deliveryError",
+    "label": "Add column \"deliveryError\" to \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "deliveryError",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"deliveryError\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "deliveryError"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"deliveryError\"",
+        "sql": "ALTER TABLE \"public\".\"invite\" ADD COLUMN \"deliveryError\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"deliveryError\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "deliveryError"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.invite.revokedAt",
+    "label": "Add column \"revokedAt\" to \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "revokedAt",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"revokedAt\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "revokedAt"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"revokedAt\"",
+        "sql": "ALTER TABLE \"public\".\"invite\" ADD COLUMN \"revokedAt\" timestamptz"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"revokedAt\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "revokedAt"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.invite.role",
+    "label": "Add column \"role\" to \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "role",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"role\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "role"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"role\"",
+        "sql": "ALTER TABLE \"public\".\"invite\" ADD COLUMN \"role\" text DEFAULT 'editor' NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"role\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "role"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.invite.sentAt",
+    "label": "Add column \"sentAt\" to \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "sentAt",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"sentAt\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "sentAt"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"sentAt\"",
+        "sql": "ALTER TABLE \"public\".\"invite\" ADD COLUMN \"sentAt\" timestamptz"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"sentAt\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "invite",
+          "sentAt"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "checkConstraint.invite.invite_role_check_4e2c8b04",
+    "label": "Add check constraint \"invite_role_check_4e2c8b04\" on \"invite\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "checkConstraint",
+        "name": "invite_role_check_4e2c8b04",
+        "table": "invite"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"invite_role_check_4e2c8b04\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "invite_role_check_4e2c8b04",
+          "public",
+          "\"public\".\"invite\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add check constraint \"invite_role_check_4e2c8b04\"",
+        "sql": "ALTER TABLE \"public\".\"invite\" ADD CONSTRAINT \"invite_role_check_4e2c8b04\" CHECK (\"role\" IN ('owner', 'editor', 'viewer'))"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"invite_role_check_4e2c8b04\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "invite_role_check_4e2c8b04",
+          "public",
+          "\"public\".\"invite\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.inviteClaim.inviteClaim_inviteId_key",
+    "label": "Add unique constraint on \"inviteClaim\" (inviteId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "inviteClaim_inviteId_key",
+        "table": "inviteClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"inviteClaim_inviteId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "inviteClaim_inviteId_key",
+          "public",
+          "\"public\".\"inviteClaim\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"inviteClaim_inviteId_key\"",
+        "sql": "ALTER TABLE \"public\".\"inviteClaim\" ADD CONSTRAINT \"inviteClaim_inviteId_key\" UNIQUE (\"inviteId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"inviteClaim_inviteId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "inviteClaim_inviteId_key",
+          "public",
+          "\"public\".\"inviteClaim\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.joinCode.joinCode_codeHash_key",
+    "label": "Add unique constraint on \"joinCode\" (codeHash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "joinCode_codeHash_key",
+        "table": "joinCode"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"joinCode_codeHash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCode_codeHash_key",
+          "public",
+          "\"public\".\"joinCode\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"joinCode_codeHash_key\"",
+        "sql": "ALTER TABLE \"public\".\"joinCode\" ADD CONSTRAINT \"joinCode_codeHash_key\" UNIQUE (\"codeHash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"joinCode_codeHash_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCode_codeHash_key",
+          "public",
+          "\"public\".\"joinCode\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.joinCodeClaim.joinCodeClaim_joinCodeId_key",
+    "label": "Add unique constraint on \"joinCodeClaim\" (joinCodeId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "joinCodeClaim_joinCodeId_key",
+        "table": "joinCodeClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"joinCodeClaim_joinCodeId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCodeClaim_joinCodeId_key",
+          "public",
+          "\"public\".\"joinCodeClaim\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"joinCodeClaim_joinCodeId_key\"",
+        "sql": "ALTER TABLE \"public\".\"joinCodeClaim\" ADD CONSTRAINT \"joinCodeClaim_joinCodeId_key\" UNIQUE (\"joinCodeId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"joinCodeClaim_joinCodeId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCodeClaim_joinCodeId_key",
+          "public",
+          "\"public\".\"joinCodeClaim\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.inviteClaim.inviteClaim_actorId_createdAt_idx_0e9f1adf",
+    "label": "Create index \"inviteClaim_actorId_createdAt_idx_0e9f1adf\" on \"inviteClaim\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "inviteClaim_actorId_createdAt_idx_0e9f1adf",
+        "table": "inviteClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"inviteClaim_actorId_createdAt_idx_0e9f1adf\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"inviteClaim_actorId_createdAt_idx_0e9f1adf\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"inviteClaim_actorId_createdAt_idx_0e9f1adf\"",
+        "sql": "CREATE INDEX \"inviteClaim_actorId_createdAt_idx_0e9f1adf\" ON \"public\".\"inviteClaim\" (\"actorId\", \"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"inviteClaim_actorId_createdAt_idx_0e9f1adf\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"inviteClaim_actorId_createdAt_idx_0e9f1adf\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.joinCode.joinCode_expiresAt_idx_6b6b8c10",
+    "label": "Create index \"joinCode_expiresAt_idx_6b6b8c10\" on \"joinCode\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "joinCode_expiresAt_idx_6b6b8c10",
+        "table": "joinCode"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"joinCode_expiresAt_idx_6b6b8c10\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode_expiresAt_idx_6b6b8c10\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"joinCode_expiresAt_idx_6b6b8c10\"",
+        "sql": "CREATE INDEX \"joinCode_expiresAt_idx_6b6b8c10\" ON \"public\".\"joinCode\" (\"expiresAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"joinCode_expiresAt_idx_6b6b8c10\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode_expiresAt_idx_6b6b8c10\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.joinCode.joinCode_roomId_createdAt_idx_71ac5cd0",
+    "label": "Create index \"joinCode_roomId_createdAt_idx_71ac5cd0\" on \"joinCode\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "joinCode_roomId_createdAt_idx_71ac5cd0",
+        "table": "joinCode"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"joinCode_roomId_createdAt_idx_71ac5cd0\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode_roomId_createdAt_idx_71ac5cd0\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"joinCode_roomId_createdAt_idx_71ac5cd0\"",
+        "sql": "CREATE INDEX \"joinCode_roomId_createdAt_idx_71ac5cd0\" ON \"public\".\"joinCode\" (\"roomId\", \"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"joinCode_roomId_createdAt_idx_71ac5cd0\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode_roomId_createdAt_idx_71ac5cd0\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.joinCode.joinCode_roomId_idx_fe51d647",
+    "label": "Create index \"joinCode_roomId_idx_fe51d647\" on \"joinCode\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "joinCode_roomId_idx_fe51d647",
+        "table": "joinCode"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"joinCode_roomId_idx_fe51d647\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode_roomId_idx_fe51d647\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"joinCode_roomId_idx_fe51d647\"",
+        "sql": "CREATE INDEX \"joinCode_roomId_idx_fe51d647\" ON \"public\".\"joinCode\" (\"roomId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"joinCode_roomId_idx_fe51d647\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCode_roomId_idx_fe51d647\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.joinCodeClaim.joinCodeClaim_actorId_createdAt_idx_0e9f1adf",
+    "label": "Create index \"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\" on \"joinCodeClaim\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "joinCodeClaim_actorId_createdAt_idx_0e9f1adf",
+        "table": "joinCodeClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\"",
+        "sql": "CREATE INDEX \"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\" ON \"public\".\"joinCodeClaim\" (\"actorId\", \"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"joinCodeClaim_actorId_createdAt_idx_0e9f1adf\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.inviteClaim.inviteClaim_inviteId_fkey",
+    "label": "Add foreign key \"inviteClaim_inviteId_fkey\" on \"inviteClaim\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "inviteClaim_inviteId_fkey",
+        "table": "inviteClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"inviteClaim_inviteId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "inviteClaim_inviteId_fkey",
+          "public",
+          "\"public\".\"inviteClaim\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"inviteClaim_inviteId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"inviteClaim\"\nADD CONSTRAINT \"inviteClaim_inviteId_fkey\"\nFOREIGN KEY (\"inviteId\")\nREFERENCES \"public\".\"invite\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"inviteClaim_inviteId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "inviteClaim_inviteId_fkey",
+          "public",
+          "\"public\".\"inviteClaim\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.joinCode.joinCode_roomId_fkey",
+    "label": "Add foreign key \"joinCode_roomId_fkey\" on \"joinCode\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "joinCode_roomId_fkey",
+        "table": "joinCode"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"joinCode_roomId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCode_roomId_fkey",
+          "public",
+          "\"public\".\"joinCode\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"joinCode_roomId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"joinCode\"\nADD CONSTRAINT \"joinCode_roomId_fkey\"\nFOREIGN KEY (\"roomId\")\nREFERENCES \"public\".\"room\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"joinCode_roomId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCode_roomId_fkey",
+          "public",
+          "\"public\".\"joinCode\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.joinCodeClaim.joinCodeClaim_joinCodeId_fkey",
+    "label": "Add foreign key \"joinCodeClaim_joinCodeId_fkey\" on \"joinCodeClaim\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "joinCodeClaim_joinCodeId_fkey",
+        "table": "joinCodeClaim"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"joinCodeClaim_joinCodeId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCodeClaim_joinCodeId_fkey",
+          "public",
+          "\"public\".\"joinCodeClaim\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"joinCodeClaim_joinCodeId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"joinCodeClaim\"\nADD CONSTRAINT \"joinCodeClaim_joinCodeId_fkey\"\nFOREIGN KEY (\"joinCodeId\")\nREFERENCES \"public\".\"joinCode\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"joinCodeClaim_joinCodeId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "joinCodeClaim_joinCodeId_fkey",
+          "public",
+          "\"public\".\"joinCodeClaim\""
+        ]
+      }
+    ]
+  }
+]

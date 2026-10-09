@@ -47,11 +47,16 @@ function connection(
   return {
     connectionId,
     roomId,
+    sceneId: `scene-${roomId}`,
     userId,
     displayName: userId,
+    role: "editor",
+    collab: true,
     ws: ws ?? fakeSocket(),
     isAlive: true,
+    selection: [],
     messageTimestamps: [],
+    commitTimestamps: [],
   };
 }
 
@@ -106,20 +111,48 @@ test("fan-out skips the sender, closed sockets, and slow sockets for deltas", ()
   assert.equal((slow.ws as ReturnType<typeof fakeSocket>).sent.length, 0);
   assert.equal((closed.ws as ReturnType<typeof fakeSocket>).sent.length, 0);
 
-  // Membership events are not ephemeral: slow sockets still get them.
+  // Membership and durable collaboration events are not ephemeral:
+  // slow sockets still get them.
   sendToRoom(rooms, 1, { type: "presence.left", connectionId: "sender", userId: "alice" });
   assert.equal((slow.ws as ReturnType<typeof fakeSocket>).sent.length, 1);
+  sendToRoom(rooms, 1, {
+    type: "elements.committed",
+    mutationId: "m1",
+    connectionId: "sender",
+    userId: "alice",
+    revision: 2,
+    elements: [],
+  });
+  assert.equal((slow.ws as ReturnType<typeof fakeSocket>).sent.length, 2);
+
+  // Previews and selections are ephemeral like pointer deltas.
+  sendToRoom(rooms, 1, {
+    type: "elements.preview",
+    connectionId: "sender",
+    userId: "alice",
+    gestureId: "g1",
+    seq: 1,
+    base: {},
+    elements: [],
+  });
+  assert.equal((slow.ws as ReturnType<typeof fakeSocket>).sent.length, 2);
+  assert.equal((peer.ws as ReturnType<typeof fakeSocket>).sent.length, 4);
 });
 
 test("rate limiter allows bursts within budget and rejects excess", () => {
-  const tab = connection(1, "c1", "alice");
+  let timestamps: number[] = [];
   const now = 1_000_000;
   for (let index = 0; index < 60; index += 1) {
-    assert.equal(checkRateLimit(tab, now + index), true);
+    const checked = checkRateLimit(timestamps, now + index);
+    assert.equal(checked.allowed, true);
+    timestamps = checked.timestamps;
   }
-  assert.equal(checkRateLimit(tab, now + 60), false);
+  const rejected = checkRateLimit(timestamps, now + 60);
+  assert.equal(rejected.allowed, false);
+  timestamps = rejected.timestamps;
   // After the window passes, publishing resumes.
-  assert.equal(checkRateLimit(tab, now + 1_001), true);
+  const resumed = checkRateLimit(timestamps, now + 1_001);
+  assert.equal(resumed.allowed, true);
 });
 
 test("heartbeat sweep pings the living and terminates the missed", () => {

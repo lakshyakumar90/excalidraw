@@ -1,13 +1,21 @@
+import { applyLayout } from "./layoutActions";
+import type { LayoutAction } from "@repo/engine";
 import type { Point } from "@repo/common";
 import type { CanvasContextMenuAction } from "@/components/canvas/CanvasContextMenu";
 import { selectionController } from "@/lib/selection/selectionController";
 import { selectionStore } from "@/lib/selection/selectionStore";
 import { scene } from "@/lib/scene/scene";
+import { historyStore } from "@/lib/history/historyStore";
+import { commitHistoryEntry } from "@/lib/sync/commits";
 
 export function runContextMenuAction(
   action: CanvasContextMenuAction,
   scenePoint: Point,
 ): void {
+  if (action.startsWith("align-") || action.startsWith("distribute-")) {
+    applyLayout(action.slice(action.indexOf("-") + 1) as LayoutAction);
+    return;
+  }
   switch (action) {
     case "paste":
       void selectionController.pasteFromClipboard(scenePoint);
@@ -35,9 +43,13 @@ export function runContextMenuAction(
     case "backward":
     case "forward":
     case "back":
-    case "front":
-      scene.reorderElements(selectionStore.getSnapshot(), action);
+    case "front": {
+      const { changes } = historyStore.commitUpdate(() =>
+        scene.reorderElements(selectionStore.getSnapshot(), action),
+      );
+      commitHistoryEntry(changes, "local");
       break;
+    }
     case "delete":
       selectionController.deleteSelection();
       break;
