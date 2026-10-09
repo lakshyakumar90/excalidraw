@@ -34,7 +34,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'2da1f891a7d70b25d3ebc3b4a33e059741dfc37b1b9ef51d15bc2d09ebe250eb'>;
+  StorageHashBase<'e35d8a511abb96a9454780f5fbc314322b65393fc83f2c6094dceecb8d8374ed'>;
 export type ExecutionHash =
   ExecutionHashBase<'0186e367e9dde6664952e3358eaa80112fd085d073bbdde371ec5dc331b5f9dc'>;
 export type ProfileHash =
@@ -297,14 +297,6 @@ export type FieldOutputTypes = {
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly syncRevision: CodecTypes['pg/int4@1']['output'];
     };
-    readonly SceneRevision: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly sceneId: CodecTypes['pg/text@1']['output'];
-      readonly revision: CodecTypes['pg/int4@1']['output'];
-      readonly data: CodecTypes['pg/jsonb@1']['output'];
-      readonly actorId: CodecTypes['pg/text@1']['output'];
-      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
-    };
     readonly Session: {
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -392,14 +384,6 @@ export type FieldInputTypes = {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly syncRevision: CodecTypes['pg/int4@1']['input'];
-    };
-    readonly SceneRevision: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly sceneId: CodecTypes['pg/text@1']['input'];
-      readonly revision: CodecTypes['pg/int4@1']['input'];
-      readonly data: CodecTypes['pg/jsonb@1']['input'];
-      readonly actorId: CodecTypes['pg/text@1']['input'];
-      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
     };
     readonly Session: {
       readonly id: CodecTypes['pg/text@1']['input'];
@@ -489,14 +473,6 @@ export type StorageColumnTypes = {
       readonly title: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     };
-    readonly sceneRevision: {
-      readonly actorId: CodecTypes['pg/text@1']['output'];
-      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
-      readonly data: CodecTypes['pg/jsonb@1']['output'];
-      readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly revision: CodecTypes['pg/int4@1']['output'];
-      readonly sceneId: CodecTypes['pg/text@1']['output'];
-    };
     readonly session: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -585,14 +561,6 @@ export type StorageColumnInputTypes = {
       readonly title: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
     };
-    readonly sceneRevision: {
-      readonly actorId: CodecTypes['pg/text@1']['input'];
-      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
-      readonly data: CodecTypes['pg/jsonb@1']['input'];
-      readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly revision: CodecTypes['pg/int4@1']['input'];
-      readonly sceneId: CodecTypes['pg/text@1']['input'];
-    };
     readonly session: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['input'];
@@ -677,19 +645,8 @@ export namespace Models {
     updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     syncRevision: CodecTypes['pg/int4@1']['output'];
     owner: public_User;
-    revisions: public_SceneRevision[];
     room: public_Room | null;
-    readonly [RelationKeys]?: 'owner' | 'revisions' | 'room';
-  };
-  export type public_SceneRevision = {
-    id: CodecTypes['pg/int4@1']['output'];
-    sceneId: CodecTypes['pg/text@1']['output'];
-    revision: CodecTypes['pg/int4@1']['output'];
-    data: CodecTypes['pg/jsonb@1']['output'];
-    actorId: CodecTypes['pg/text@1']['output'];
-    createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
-    scene: public_Scene;
-    readonly [RelationKeys]?: 'scene';
+    readonly [RelationKeys]?: 'owner' | 'room';
   };
   export type public_Invite = {
     id: CodecTypes['pg/text@1']['output'];
@@ -758,7 +715,6 @@ export declare const models: {
     Room: Models.public_Room;
     RoomMember: Models.public_RoomMember;
     Scene: Models.public_Scene;
-    SceneRevision: Models.public_SceneRevision;
     Invite: Models.public_Invite;
     Session: Models.public_Session;
     Account: Models.public_Account;
@@ -1261,69 +1217,6 @@ type ContractBase = Omit<
                 },
               ];
             };
-            readonly sceneRevision: {
-              columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: 'autoincrement()';
-                  };
-                };
-                readonly sceneId: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly revision: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
-                readonly data: {
-                  readonly nativeType: 'jsonb';
-                  readonly codecId: 'pg/jsonb@1';
-                  readonly nullable: false;
-                };
-                readonly actorId: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly createdAt: {
-                  readonly nativeType: 'timestamptz';
-                  readonly codecId: 'pg/timestamptz-string@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                };
-              };
-              primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [{ readonly columns: readonly ['sceneId', 'revision'] }];
-              indexes: readonly [
-                {
-                  readonly name: 'sceneRevision_sceneId_idx_9fae5bf5';
-                  readonly prefix: 'sceneRevision_sceneId_idx';
-                  readonly columns: readonly ['sceneId'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'sceneRevision';
-                    readonly columns: readonly ['sceneId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'scene';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
             readonly session: {
               columns: {
                 readonly id: {
@@ -1529,10 +1422,6 @@ type ContractBase = Omit<
       readonly model: 'RoomMember';
     };
     readonly scene: { readonly namespace: 'public' & NamespaceId; readonly model: 'Scene' };
-    readonly sceneRevision: {
-      readonly namespace: 'public' & NamespaceId;
-      readonly model: 'SceneRevision';
-    };
     readonly invite: { readonly namespace: 'public' & NamespaceId; readonly model: 'Invite' };
     readonly session: { readonly namespace: 'public' & NamespaceId; readonly model: 'Session' };
     readonly account: { readonly namespace: 'public' & NamespaceId; readonly model: 'Account' };
@@ -1971,17 +1860,6 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['id'];
                 };
               };
-              readonly revisions: {
-                readonly to: {
-                  readonly namespace: 'public' & NamespaceId;
-                  readonly model: 'SceneRevision';
-                };
-                readonly cardinality: '1:N';
-                readonly on: {
-                  readonly localFields: readonly ['id'];
-                  readonly targetFields: readonly ['sceneId'];
-                };
-              };
               readonly room: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Room' };
                 readonly cardinality: '1:1';
@@ -2003,63 +1881,6 @@ type ContractBase = Omit<
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly syncRevision: { readonly column: 'syncRevision' };
-              };
-            };
-          };
-          readonly SceneRevision: {
-            readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly sceneId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly revision: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly data: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
-              };
-              readonly actorId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'pg/timestamptz-string@1';
-                };
-              };
-            };
-            readonly relations: {
-              readonly scene: {
-                readonly to: {
-                  readonly namespace: 'public' & NamespaceId;
-                  readonly model: 'Scene';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['sceneId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'sceneRevision';
-              readonly namespaceId: 'public';
-              readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly sceneId: { readonly column: 'sceneId' };
-                readonly revision: { readonly column: 'revision' };
-                readonly data: { readonly column: 'data' };
-                readonly actorId: { readonly column: 'actorId' };
-                readonly createdAt: { readonly column: 'createdAt' };
               };
             };
           };

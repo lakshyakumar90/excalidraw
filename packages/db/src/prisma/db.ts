@@ -35,3 +35,19 @@ export async function connectDatabase() {
 export async function connectApplicationDatabase() {
   await db.connect();
 }
+
+export {
+  getRoomSceneAccess,
+  hasSyncHistory,
+  insertSceneRevision,
+  pruneSceneRevisions,
+  readLegacySceneData,
+  readSyncHead,
+  roomForScene,
+} from "./sceneSync.js";
+export type {
+  RoomSceneAccess,
+  RoomSceneRole,
+  RevisionHead,
+  SyncDb,
+} from "./sceneSync.js";

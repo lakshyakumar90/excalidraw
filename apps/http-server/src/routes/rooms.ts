@@ -1,8 +1,23 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
 import { issuePresenceTicket } from "@repo/auth";
+import { createCollaborationService } from "@repo/backend-common";
 import { db } from "@repo/db";
 import { InviteSchema, RoomSchema, UpdateSceneSchema } from "@repo/validations";
+
+const syncService = () => createCollaborationService({ store: db });
+
+function toCommitRole(role: string): "owner" | "editor" | null {
+  return role === "owner" || role === "editor" ? role : null;
+}
+
+/** Serve the durable head for synced room scenes, legacy data otherwise. */
+async function readRoomSceneData(sceneId: string): Promise<unknown> {
+  const synced = await syncService().readSyncScene(sceneId);
+  if (synced) return synced.data;
+  const scene = await db.orm!.public!.Scene.where({ id: sceneId }).first();
+  return scene ? scene.data : null;
+}
 
 export const roomsRouter: Router = Router();
 type JsonValue =
@@ -94,9 +109,13 @@ roomsRouter.get("/:roomId", async (req, res) => {
   try {
     const access = await accessibleRoom(roomId, req.userId!);
     if (!access) return res.status(404).json({ message: "Room not found" });
-    const scene = access.room.sceneId
+    const sceneRow = access.room.sceneId
       ? await db.orm!.public!.Scene.where({ id: access.room.sceneId }).first()
       : null;
+    const scene =
+      sceneRow && access.room.sceneId
+        ? { ...sceneRow, data: await readRoomSceneData(access.room.sceneId) }
+        : sceneRow;
     return res.json({
       roomId,
       name: access.room.slug,
@@ -136,13 +155,99 @@ roomsRouter.patch("/:roomId/scene", async (req, res) => {
     const access = await accessibleRoom(roomId, req.userId!);
     if (!access?.room.sceneId || access.role === "viewer")
       return res.status(404).json({ message: "Editable room not found" });
-    await db
-      .orm!.public!.Scene.where({ id: access.room.sceneId })
-      .update({ data: parsed.data.data as JsonValue });
-    return res.status(204).end();
+    // Room-backed writes merge through the shared collaboration authority
+    // instead of replacing the whole document: concurrent editors keep
+    // each other's committed elements.
+    const role = toCommitRole(access.role);
+    if (!role) return res.status(404).json({ message: "Editable room not found" });
+    const data = parsed.data.data as {
+      elements?: unknown;
+      appState?: unknown;
+      files?: unknown;
+    };
+    const result = await syncService().applyCommit({
+      sceneId: access.room.sceneId,
+      userId: req.userId!,
+      role,
+      elements: data.elements ?? [],
+      mutationId: `http-${randomUUID()}`,
+      appState: data.appState,
+      files: data.files,
+    });
+    if (!result.saved && result.reason === "missing-scene")
+      return res.status(404).json({ message: "Editable room not found" });
+    if (!result.saved && result.missingFiles)
+      return res.status(409).json({
+        message: "Upload image files before saving",
+        missingFiles: result.missingFiles,
+      });
+    if (!result.saved && result.reason === "invalid")
+      return res.status(400).json({ message: "Invalid scene update" });
+    if (!result.saved && result.reason === "too-large")
+      return res.status(413).json({ message: "Scene update too large" });
+    if (!result.saved)
+      return res.status(503).json({ message: "Unable to save room scene" });
+    return res.json({ revision: result.revision });
   } catch (error) {
     console.error("Room scene update error:", error);
     return res.status(500).json({ message: "Unable to save room scene" });
+  }
+});
+
+roomsRouter.post("/:roomId/files", async (req, res) => {
+  const roomId = roomIdOf(req.params.roomId);
+  if (!roomId) return res.status(404).json({ message: "Room not found" });
+  const body = req.body as { fileId?: unknown; file?: unknown };
+  if (typeof body?.fileId !== "string" || body.fileId.length === 0) {
+    return res.status(400).json({ message: "Invalid file upload" });
+  }
+  try {
+    const access = await accessibleRoom(roomId, req.userId!);
+    if (!access?.room.sceneId || access.role === "viewer")
+      return res.status(404).json({ message: "Editable room not found" });
+    const role = toCommitRole(access.role);
+    if (!role) return res.status(404).json({ message: "Editable room not found" });
+    const result = await syncService().attachFile({
+      sceneId: access.room.sceneId,
+      userId: req.userId!,
+      role,
+      fileId: body.fileId,
+      file: body.file,
+    });
+    if (!result.saved && result.reason === "missing-scene")
+      return res.status(404).json({ message: "Editable room not found" });
+    if (!result.saved && result.reason === "invalid")
+      return res.status(400).json({ message: "Invalid file upload" });
+    if (!result.saved && result.reason === "too-large")
+      return res.status(413).json({ message: "File upload too large" });
+    if (!result.saved)
+      return res.status(503).json({ message: "Unable to save file" });
+    return res.json({ revision: result.revision });
+  } catch (error) {
+    console.error("Room file upload error:", error);
+    return res.status(500).json({ message: "Unable to save file" });
+  }
+});
+
+roomsRouter.get("/:roomId/files/:fileId", async (req, res) => {
+  const roomId = roomIdOf(req.params.roomId);
+  const fileId = req.params.fileId;
+  if (!roomId || !fileId) return res.status(404).json({ message: "File not found" });
+  try {
+    // Read-only members may fetch referenced bytes to render collaborators'
+    // image elements; the file IDs themselves travel over the sync channel.
+    const access = await accessibleRoom(roomId, req.userId!);
+    if (!access?.room.sceneId)
+      return res.status(404).json({ message: "File not found" });
+    const data = (await readRoomSceneData(access.room.sceneId)) as {
+      files?: Record<string, unknown>;
+    } | null;
+    const file = data?.files?.[fileId];
+    if (!file) return res.status(404).json({ message: "File not found" });
+    return res.json({ file });
+  } catch (error) {
+    console.error("Room file read error:", error);
+    return res.status(500).json({ message: "Unable to load file" });
   }
 });
 

@@ -28,6 +28,10 @@
       "model": "Scene",
       "namespace": "public"
     },
+    "sceneRevision": {
+      "model": "SceneRevision",
+      "namespace": "public"
+    },
     "session": {
       "model": "Session",
       "namespace": "public"
@@ -693,6 +697,13 @@
                   "kind": "scalar"
                 }
               },
+              "syncRevision": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
               "title": {
                 "nullable": false,
                 "type": {
@@ -722,6 +733,21 @@
                 },
                 "to": {
                   "model": "User",
+                  "namespace": "public"
+                }
+              },
+              "revisions": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "sceneId"
+                  ]
+                },
+                "to": {
+                  "model": "SceneRevision",
                   "namespace": "public"
                 }
               },
@@ -756,6 +782,9 @@
                 "ownerId": {
                   "column": "ownerId"
                 },
+                "syncRevision": {
+                  "column": "syncRevision"
+                },
                 "title": {
                   "column": "title"
                 },
@@ -765,6 +794,94 @@
               },
               "namespaceId": "public",
               "table": "scene"
+            }
+          },
+          "SceneRevision": {
+            "fields": {
+              "actorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "revision": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "sceneId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "scene": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "sceneId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Scene",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "actorId": {
+                  "column": "actorId"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "data": {
+                  "column": "data"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "revision": {
+                  "column": "revision"
+                },
+                "sceneId": {
+                  "column": "sceneId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "sceneRevision"
             }
           },
           "Session": {
@@ -1695,6 +1812,15 @@
                   "nativeType": "text",
                   "nullable": false
                 },
+                "syncRevision": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 0
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                },
                 "title": {
                   "codecId": "pg/text@1",
                   "default": {
@@ -1754,6 +1880,90 @@
                 ]
               },
               "uniques": []
+            },
+            "sceneRevision": {
+              "columns": {
+                "actorId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "data": {
+                  "codecId": "pg/jsonb@1",
+                  "nativeType": "jsonb",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "revision": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "sceneId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "sceneId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "sceneRevision"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "scene"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "sceneId"
+                  ],
+                  "name": "sceneRevision_sceneId_idx_9fae5bf5",
+                  "prefix": "sceneRevision_sceneId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "sceneId",
+                    "revision"
+                  ]
+                }
+              ]
             },
             "session": {
               "columns": {
@@ -1999,7 +2209,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1573e84c9992c18979af521805a85e6b3b41115e122e37966eac13395197970e"
+    "storageHash": "2da1f891a7d70b25d3ebc3b4a33e059741dfc37b1b9ef51d15bc2d09ebe250eb"
   },
   "execution": {
     "executionHash": "0186e367e9dde6664952e3358eaa80112fd085d073bbdde371ec5dc331b5f9dc",

@@ -57,10 +57,31 @@ model Scene {
   title     String   @default("Untitled")
   data      Jsonb
   room      Room?
+  revisions SceneRevision[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
+  // Durable sync revision: the compare-and-swap key for collaboration
+  // commits. Incremented exactly once per accepted commit; the server clock
+  // alone is too coarse to serialize rapid writers.
+  syncRevision Int @default(0)
 
   @@index([ownerId, updatedAt])
+}
+
+// Append-only collaboration log (Phase 15). Each accepted commit inserts
+// exactly one row; @@unique([sceneId, revision]) makes concurrent inserts
+// atomic — the loser gets a 23505 conflict and retries — because the ORM's
+// conditional update is read-then-write and cannot serialize writers.
+model SceneRevision {
+  id        Int      @id @default(autoincrement())
+  sceneId   String
+  scene     Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  revision  Int
+  data      Jsonb
+  actorId   String
+  createdAt TimestamptzString @default(now())
+
+  @@unique([sceneId, revision])
 }
 
 model Invite {

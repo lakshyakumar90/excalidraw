@@ -1,0 +1,44 @@
+[
+  {
+    "id": "column.public.scene.syncRevision",
+    "label": "Add column \"syncRevision\" to \"scene\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "syncRevision",
+        "table": "scene"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"syncRevision\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "scene",
+          "syncRevision"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"syncRevision\"",
+        "sql": "ALTER TABLE \"public\".\"scene\" ADD COLUMN \"syncRevision\" int4 DEFAULT 0 NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"syncRevision\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "scene",
+          "syncRevision"
+        ]
+      }
+    ]
+  }
+]
