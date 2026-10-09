@@ -203,7 +203,8 @@ describe("applyCommit merge semantics", () => {
     };
     const first = await service.applyCommit(input);
     const second = await service.applyCommit(input);
-    expect(first).toEqual(second);
+    expect(second.replayed).toBe(true);
+    expect({ ...second, replayed: false }).toEqual({ ...first, replayed: false });
     expect(store.writes).toBe(1);
   });
 

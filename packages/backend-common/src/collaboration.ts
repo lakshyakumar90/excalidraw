@@ -127,6 +127,8 @@ export interface CommitResult {
   /** Winners that differ from what the client sent (lost conflicts). */
   corrected: NormalizedElement[];
   missingFiles?: string[];
+  /** True when this is a duplicate delivery of an earlier mutation. */
+  replayed?: boolean;
   reason?:
     | "forbidden"
     | "invalid"
@@ -322,7 +324,7 @@ export function createCollaborationService(options: CollaborationServiceOptions)
       return { saved: false, revision: null, winners: [], corrected: [], reason: "invalid" };
     }
     const cached = seenMutations.get(input.mutationId);
-    if (cached) return cached;
+    if (cached) return { ...cached, replayed: true };
     let payloadBytes = 0;
     try {
       payloadBytes = JSON.stringify(input.elements)?.length ?? 0;
@@ -427,6 +429,7 @@ export function createCollaborationService(options: CollaborationServiceOptions)
       revision: written.revision,
       winners,
       corrected,
+      replayed: false,
     });
   }
 

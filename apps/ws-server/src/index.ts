@@ -1,16 +1,10 @@
 import { verifyPresenceTicket, assertPresenceTicketConfiguration } from "@repo/auth/presence-ticket";
-import { getAllowedWsOrigins } from "@repo/backend-common";
-import { connectApplicationDatabase, db } from "@repo/db";
+import { createCollaborationService, getAllowedWsOrigins } from "@repo/backend-common";
+import { connectApplicationDatabase, db, getRoomSceneAccess } from "@repo/db";
 import { startPresenceServer } from "./server.js";
 
 async function hasRoomAccess(roomId: number, userId: string): Promise<boolean> {
-  const room = await db.orm!.public!.Room.where({ id: roomId }).first();
-  if (!room) return false;
-  if (room.adminId === userId) return true;
-  const member = await db
-    .orm!.public!.RoomMember.where({ roomId, userId })
-    .first();
-  return member !== null;
+  return (await getRoomSceneAccess(db, roomId, userId)) !== null;
 }
 
 async function displayNameFor(userId: string): Promise<string> {
@@ -38,6 +32,10 @@ async function startServer() {
     verifyTicket: verifyPresenceTicket,
     checkAccess: hasRoomAccess,
     resolveDisplayName: displayNameFor,
+    resolveRoom: (roomId, userId) => getRoomSceneAccess(db, roomId, userId),
+    getRole: async (roomId, userId) =>
+      (await getRoomSceneAccess(db, roomId, userId))?.role ?? null,
+    service: createCollaborationService({ store: db }),
     allowedOrigins: getAllowedWsOrigins(),
     port,
   });

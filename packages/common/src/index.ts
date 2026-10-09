@@ -4,4 +4,5 @@ export * from "./element/index.js";
 export * from "./presence.js";
 export * from "./sync.js";
 export * from "./syncValidate.js";
+export * from "./collab.js";
 
