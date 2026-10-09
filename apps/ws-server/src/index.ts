@@ -1,5 +1,12 @@
-import { verifyPresenceTicket, assertPresenceTicketConfiguration } from "@repo/auth/presence-ticket";
-import { createCollaborationService, getAllowedWsOrigins } from "@repo/backend-common";
+import {
+  verifyPresenceTicket,
+  assertPresenceTicketConfiguration,
+} from "@repo/auth/presence-ticket";
+import {
+  createCollaborationService,
+  getAllowedWsOrigins,
+} from "@repo/backend-common";
+import { openRoomRedis } from "@repo/redis";
 import { connectApplicationDatabase, db, getRoomSceneAccess } from "@repo/db";
 import { startPresenceServer } from "./server.js";
 
@@ -28,6 +35,8 @@ async function startServer() {
   }
 
   const port = Number(process.env.WS_PORT ?? 8080);
+  const roomRedis = openRoomRedis();
+  await roomRedis.redis.ping();
   const handle = await startPresenceServer({
     verifyTicket: verifyPresenceTicket,
     checkAccess: hasRoomAccess,
@@ -35,7 +44,8 @@ async function startServer() {
     resolveRoom: (roomId, userId) => getRoomSceneAccess(db, roomId, userId),
     getRole: async (roomId, userId) =>
       (await getRoomSceneAccess(db, roomId, userId))?.role ?? null,
-    service: createCollaborationService({ store: db }),
+    service: createCollaborationService({ store: db, liveStore: roomRedis }),
+    roomRedis,
     allowedOrigins: getAllowedWsOrigins(),
     port,
   });
@@ -47,7 +57,7 @@ async function startServer() {
       .catch((error: unknown) => {
         console.error("Error while stopping the presence server:", error);
       })
-      .finally(() => process.exit(0));
+      .finally(() => roomRedis.close().finally(() => process.exit(0)));
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

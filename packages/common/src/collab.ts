@@ -108,10 +108,12 @@ export type ServerToClientCollabMessage =
       mutationId: string;
       revision: number | null;
       saved: boolean;
+      persisted?: boolean;
       corrected?: NormalizedElement[];
       missingFiles?: string[];
       reason?: string;
     }
+  | { type: "scene.persisted"; revision: number }
   | {
       type: "elements.preview";
       connectionId: string;
@@ -440,6 +442,7 @@ export function isServerCollabMessage(value: unknown): value is ServerToClientCo
         (value.revision === null ||
           (isSafeInt(value.revision) && (value.revision as number) >= 0)) &&
         typeof value.saved === "boolean" &&
+        (value.persisted === undefined || typeof value.persisted === "boolean") &&
         (value.corrected === undefined ||
           (Array.isArray(value.corrected) &&
             value.corrected.length <= SYNC_MAX_COMMIT_ELEMENTS &&
@@ -451,6 +454,8 @@ export function isServerCollabMessage(value: unknown): value is ServerToClientCo
           (typeof value.reason === "string" &&
             value.reason.length <= SYNC_MAX_REASON_LENGTH))
       );
+    case "scene.persisted":
+      return isSafeInt(value.revision) && value.revision >= 0;
     case "elements.preview":
       return (
         typeof value.connectionId === "string" &&

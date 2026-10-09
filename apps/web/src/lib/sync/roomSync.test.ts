@@ -361,6 +361,35 @@ describe("RoomSync outbox and acknowledgements", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps Redis-accepted edits queued until Postgres confirms their revision", async () => {
+    const h = harness(HTTP_EMPTY);
+    await startWithHttp(h, HTTP_EMPTY);
+    await completeSync(h);
+    h.scene.addElement(rect("durable") as never);
+    h.scene.commitChanges(["durable"], "local");
+    await sleep(5);
+    const commit = h.conn().sent.find(
+      (message) => message.type === "elements.commit",
+    ) as { mutationId: string };
+    const key = draftKey("alice", "1", "scene-1");
+
+    h.conn().receiveCollab({
+      type: "elements.ack",
+      mutationId: commit.mutationId,
+      revision: 3,
+      saved: true,
+      persisted: false,
+    });
+    await sleep(5);
+    expect(await h.outboxStore.list(key)).toHaveLength(1);
+    expect(h.sync.getSnapshot().scene).toBe("syncing");
+
+    h.conn().receiveCollab({ type: "scene.persisted", revision: 3 });
+    await sleep(5);
+    expect(await h.outboxStore.list(key)).toHaveLength(0);
+    expect(h.sync.getSnapshot().scene).toBe("synced");
+  });
+
   it("replays the same mutation ID after refresh-before-ack", async () => {
     const h = harness(HTTP_EMPTY);
     await startWithHttp(h, HTTP_EMPTY);

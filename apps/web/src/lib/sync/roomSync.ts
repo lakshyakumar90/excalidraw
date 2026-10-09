@@ -221,6 +221,7 @@ export class RoomSync {
   private notice: string | null = null;
   private readOnly = false;
   private filesBlocked = new Set<string>();
+  private acceptedRevisions = new Map<string, number>();
   private revision = 0;
   private tombstones: TombstoneMap = {};
   private deferred = new Map<string, NormalizedElement>();
@@ -621,6 +622,17 @@ export class RoomSync {
       case "elements.ack":
         await this.handleAck(message);
         return;
+      case "scene.persisted":
+        for (const [mutationId, revision] of this.acceptedRevisions) {
+          if (revision <= message.revision) {
+            this.acceptedRevisions.delete(mutationId);
+            await this.outbox.remove(mutationId);
+          }
+        }
+        await this.coverOutbox();
+        void this.persistDraftSoon();
+        this.emit();
+        return;
       case "elements.preview":
         this.routeRemotePreview(message);
         return;
@@ -827,9 +839,14 @@ export class RoomSync {
       this.emit();
       return;
     }
-    if (message.saved) {
+    if (message.saved && message.persisted !== false) {
       this.filesBlocked.delete(message.mutationId);
+      this.acceptedRevisions.delete(message.mutationId);
       await this.outbox.remove(message.mutationId);
+      this.notice = null;
+    } else if (message.saved && message.revision !== null) {
+      this.filesBlocked.delete(message.mutationId);
+      this.acceptedRevisions.set(message.mutationId, message.revision);
       this.notice = null;
     } else if (message.reason === "forbidden") {
       this.readOnly = true;

@@ -19,6 +19,7 @@ import {
   type SyncDb,
 } from "@repo/db";
 import type { RoomSceneRole } from "@repo/db";
+import type { RoomRedis } from "@repo/redis";
 
 /**
  * Durable collaboration authority (Phase 15), shared by the WS commit path
@@ -121,6 +122,7 @@ export interface CommitInput {
 
 export interface CommitResult {
   saved: boolean;
+  persisted?: boolean;
   revision: number | null;
   /** Authoritative records for every sent ID (exact stored state). */
   winners: NormalizedElement[];
@@ -147,6 +149,7 @@ export interface AttachFileInput {
 
 export interface AttachFileResult {
   saved: boolean;
+  persisted?: boolean;
   revision?: number;
   reason?: "forbidden" | "invalid" | "too-large" | "missing-scene" | "conflict-retry-exhausted";
 }
@@ -214,7 +217,17 @@ function dbQueries(store: SyncDb): CollaborationQueries {
 export interface CollaborationServiceOptions {
   store: SyncDb;
   queries?: CollaborationQueries;
+  liveStore?: Pick<RoomRedis, "readSnapshot" | "writeSnapshot" | "warmSnapshot">;
   clock?: () => Date;
+}
+
+let configuredLiveStore: CollaborationServiceOptions["liveStore"];
+
+/** Configure the process-local Redis connection used by HTTP room routes. */
+export function configureCollaborationLiveStore(
+  store: CollaborationServiceOptions["liveStore"],
+): void {
+  configuredLiveStore = store;
 }
 
 type ComputedWrite =
@@ -224,6 +237,7 @@ type ComputedWrite =
 
 export function createCollaborationService(options: CollaborationServiceOptions) {
   const queries = options.queries ?? dbQueries(options.store);
+  const liveStore = options.liveStore ?? configuredLiveStore;
   const clock = options.clock ?? (() => new Date());
   const seenMutations = new Map<string, CommitResult>();
   const compactions = new Map<string, { revision: number }>();
@@ -270,14 +284,17 @@ export function createCollaborationService(options: CollaborationServiceOptions)
     actorId: string,
     compute: (current: { data: unknown; revision: number }) => ComputedWrite,
   ): Promise<
-    | { ok: true; revision: number; data: StoredSyncData }
+    | { ok: true; revision: number; data: StoredSyncData; persisted: boolean }
     | { ok: false; missingFiles: string[] }
     | { ok: false; fileTableFull: true }
     | { ok: false; missingScene: true }
     | { ok: false; exhausted: true }
   > {
     for (let attempt = 0; attempt < COLLABORATION_MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const head = await queries.readHead(sceneId);
+      const live = await liveStore?.readSnapshot(sceneId);
+      const head = live
+        ? { revision: live.revision, data: live.data }
+        : await queries.readHead(sceneId);
       let current: { data: unknown; revision: number } | null = head
         ? { data: head.data, revision: head.revision }
         : null;
@@ -289,8 +306,26 @@ export function createCollaborationService(options: CollaborationServiceOptions)
       const computed = compute(current);
       if ("missingFiles" in computed) return { ok: false, missingFiles: computed.missingFiles };
       if ("fileTableFull" in computed) return { ok: false, fileTableFull: true };
+      let persisted = true;
       try {
-        await queries.appendRevision(sceneId, current.revision + 1, computed.data, actorId);
+        if (liveStore) {
+          const accepted = await liveStore.writeSnapshot(
+            sceneId,
+            current.revision,
+            current.revision + 1,
+            actorId,
+            computed.data as Record<string, unknown> & { elements: unknown[] },
+          );
+          if (!accepted) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 2 + Math.floor(Math.random() * 8)),
+            );
+            continue;
+          }
+          persisted = false;
+        } else {
+          await queries.appendRevision(sceneId, current.revision + 1, computed.data, actorId);
+        }
       } catch (error) {
         if (isUniqueViolation(error)) {
           // Another writer won this revision; back off briefly to let the
@@ -304,8 +339,8 @@ export function createCollaborationService(options: CollaborationServiceOptions)
       }
       // Compaction is maintenance, not part of durable commit acceptance.
       // Coalesce concurrent writes so cleanup cannot build an unbounded queue.
-      scheduleCompaction(sceneId, current.revision + 1);
-      return { ok: true, revision: current.revision + 1, data: computed.data };
+      if (!liveStore) scheduleCompaction(sceneId, current.revision + 1);
+      return { ok: true, revision: current.revision + 1, data: computed.data, persisted };
     }
     return { ok: false, exhausted: true };
   }
@@ -345,7 +380,22 @@ export function createCollaborationService(options: CollaborationServiceOptions)
       return { saved: false, revision: null, winners: [], corrected: [], reason: "invalid" };
     }
     const cached = seenMutations.get(input.mutationId);
-    if (cached) return { ...cached, replayed: true };
+    if (cached) {
+      if (liveStore && cached.revision !== null) {
+        const snapshot = await liveStore.readSnapshot(input.sceneId);
+        const durableHead = snapshot
+          ? null
+          : await queries.readHead(input.sceneId);
+        return {
+          ...cached,
+          persisted: snapshot
+            ? snapshot.persistedRevision >= cached.revision
+            : !!durableHead && durableHead.revision >= cached.revision,
+          replayed: true,
+        };
+      }
+      return { ...cached, replayed: true };
+    }
     let payloadBytes = 0;
     try {
       payloadBytes = JSON.stringify(input.elements)?.length ?? 0;
@@ -447,6 +497,7 @@ export function createCollaborationService(options: CollaborationServiceOptions)
     }
     return remember(input.mutationId, {
       saved: true,
+      persisted: written.persisted,
       revision: written.revision,
       winners,
       corrected,
@@ -493,7 +544,7 @@ export function createCollaborationService(options: CollaborationServiceOptions)
     if (!written.ok) {
       return { saved: false, reason: "conflict-retry-exhausted" };
     }
-    return { saved: true, revision: written.revision };
+    return { saved: true, persisted: written.persisted, revision: written.revision };
   }
 
   async function readSyncScene(sceneId: string): Promise<{
@@ -502,11 +553,35 @@ export function createCollaborationService(options: CollaborationServiceOptions)
     revision: number;
     data: StoredSyncData;
   } | null> {
-    const head = await queries.readHead(sceneId);
+    const live = await liveStore?.readSnapshot(sceneId);
+    const head = live
+      ? { revision: live.revision, data: live.data }
+      : await queries.readHead(sceneId);
     const legacy = head ? null : await queries.readLegacy(sceneId);
     if (!head && !legacy) return null;
-    const data = head ? head.data : legacy!.data;
-    const revision = head ? head.revision : readStoredSync(data).revision;
+    let data = head ? head.data : legacy!.data;
+    let revision = head ? head.revision : readStoredSync(data).revision;
+    if (!live && liveStore) {
+      const storedFromDb = readStoredSync(data);
+      const warmData = {
+        elements: sortElementsByOrder(storedFromDb.elements),
+        ...(storedFromDb.appState ? { appState: storedFromDb.appState } : {}),
+        ...(Object.keys(storedFromDb.files).length > 0
+          ? { files: storedFromDb.files }
+          : {}),
+        sync: { revision, tombstones: storedFromDb.tombstones },
+      };
+      await liveStore.warmSnapshot(
+        sceneId,
+        revision,
+        warmData as Record<string, unknown> & { elements: unknown[] },
+      );
+      const warmed = await liveStore.readSnapshot(sceneId);
+      if (warmed) {
+        data = warmed.data;
+        revision = warmed.revision;
+      }
+    }
     const stored = readStoredSync(data);
     const merged = reconcileElements([], stored.elements, {});
     const elements = sortElementsByOrder(merged.merged) as NormalizedElement[];

@@ -93,6 +93,51 @@ it("accepts a durable write without waiting for revision cleanup", async () => {
   releaseCleanup();
 });
 
+it("accepts edits into the live store without claiming Postgres durability", async () => {
+  const postgres = fakeStore();
+  let live: { revision: number; data: Record<string, unknown> } | null = null;
+  const liveStore = {
+    readSnapshot: async () =>
+      live
+        ? {
+            sceneId: "s-live",
+            revision: live.revision,
+            actorId: "u1",
+            data: live.data as Record<string, unknown> & { elements: unknown[] },
+            persistedRevision: 0,
+            firstDirtyAt: 1,
+            lastDirtyAt: 1,
+          }
+        : null,
+    writeSnapshot: async (
+      _sceneId: string,
+      expected: number,
+      revision: number,
+      _actorId: string,
+      data: Record<string, unknown> & { elements: unknown[] },
+    ) => {
+      if ((live?.revision ?? 0) !== expected) return false;
+      live = { revision, data };
+      return true;
+    },
+  };
+  const service = createCollaborationService({
+    store: undefined as never,
+    queries: postgres.queries,
+    liveStore: liveStore as never,
+  });
+  const result = await service.applyCommit({
+    sceneId: "s-live",
+    userId: "u1",
+    role: "editor",
+    elements: [rect("live")],
+    mutationId: "live-1",
+  });
+  expect(result).toMatchObject({ saved: true, persisted: false, revision: 1 });
+  expect(postgres.writes).toBe(0);
+  expect((await service.readSyncScene("s-live"))?.elements).toHaveLength(1);
+});
+
 describe("applyCommit authorization and validation", () => {
   it("rejects viewer commits without touching storage", async () => {
     const store = fakeStore();
