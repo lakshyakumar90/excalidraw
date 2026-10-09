@@ -5,6 +5,8 @@ import {
   createTextElement,
 } from "../element";
 import { renderSceneToSvg } from "./svgRenderer";
+import { getSketchGeometry } from "./sketch/geometry";
+import { sketchPathToSvg } from "./sketch/canvasPath";
 
 describe("renderSceneToSvg", () => {
   it("renders vector shapes with content bounds and optional background", () => {
@@ -23,8 +25,8 @@ describe("renderSceneToSvg", () => {
       padding: 10,
       background: "#fff",
     });
-    expect(svg).toContain('width="120" height="70"');
-    expect(svg).toContain('<rect x="0" y="0" width="100" height="50"');
+    expect(svg).toContain('width="126" height="76"');
+    expect(svg).toContain('<path d="M ');
     expect(svg).toContain('stroke-dasharray="4 2.5"');
     expect(svg).toContain('fill="#f00"');
     expect(svg).toContain('fill="#fff"');
@@ -59,13 +61,13 @@ describe("renderSceneToSvg", () => {
       true,
     );
     expect(svg).toContain('viewBox="0 0 ');
-    expect(svg.match(/<rect/g)).toHaveLength(2);
+    expect(svg.match(/data-element-id="svg-/g)).toHaveLength(2);
   });
 
   it("exports only the elements provided for selection-only output", () => {
     const selected = createRectangleElement({ id: "selected", x: 80 });
     const svg = renderSceneToSvg([selected]);
-    expect(svg.match(/<rect/g)).toHaveLength(1);
+    expect(svg.match(/data-element-id="selected"/g)).toHaveLength(1);
     expect(svg).not.toContain("not-selected");
   });
 
@@ -81,5 +83,19 @@ describe("renderSceneToSvg", () => {
     });
     expect(svg).toContain('<image x="0" y="0" width="20" height="10"');
     expect(svg).toContain('href="data:image/png;base64,AAAA"');
+  });
+
+  it("exports the exact same seeded outline commands as the canvas renderer", () => {
+    const rectangle = createRectangleElement({
+      id: "parity",
+      width: 90,
+      height: 50,
+      seed: 42,
+      roughness: 2,
+    });
+    const svg = renderSceneToSvg([rectangle]);
+    for (const path of getSketchGeometry(rectangle).outlines) {
+      expect(svg).toContain(`d="${sketchPathToSvg(path)}"`);
+    }
   });
 });

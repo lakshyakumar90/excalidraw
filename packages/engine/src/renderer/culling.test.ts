@@ -34,6 +34,18 @@ describe("element culling", () => {
     expect(isElementVisible(element, viewportBounds)).toBe(false);
   });
 
+  it("keeps decorative strokes visible when the logical bounds are just outside the viewport", () => {
+    const element = createRectangleElement({
+      x: -3,
+      y: 20,
+      width: 2,
+      height: 30,
+      roughness: 2,
+      strokeWidth: 2,
+    });
+    expect(isElementVisible(element, viewportBounds)).toBe(true);
+  });
+
   it("filters visible elements", () => {
     const visible = createRectangleElement({
       x: 100,

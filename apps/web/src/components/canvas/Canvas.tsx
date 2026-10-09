@@ -7,9 +7,15 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { Element, Point, Viewport, PreviewWireElement } from "@repo/common";
+import type {
+  Element,
+  Point,
+  Viewport,
+  PreviewWireElement,
+} from "@repo/common";
 import {
   createRenderState,
+  createElementBitmapCache,
   createTextElement,
   getElementsAtPosition,
   RenderLoop,
@@ -177,6 +183,8 @@ export function Canvas({
 
     let width = 0;
     let height = 0;
+    let pixelRatio = window.devicePixelRatio || 1;
+    const bitmapCache = createElementBitmapCache();
     const eraserMarkedIds = new Set<string>();
     const eraserTrailPoints: EraserTrailPoint[] = [];
     let eraserCursor: Point | null = null;
@@ -208,7 +216,8 @@ export function Canvas({
                       }
                     : element,
                 ),
-            { grid: false, origin: false },
+            // Screen cache is DPR-aware; exports and transient previews render directly.
+            { grid: false, origin: false, bitmapCache, pixelRatio },
             imageAssets,
           );
         },
@@ -434,17 +443,17 @@ export function Canvas({
       width = rect.width;
       height = rect.height;
 
-      const dpr = window.devicePixelRatio || 1;
-      staticCanvas.width = Math.round(width * dpr);
-      staticCanvas.height = Math.round(height * dpr);
-      interactiveCanvas.width = Math.round(width * dpr);
-      interactiveCanvas.height = Math.round(height * dpr);
+      pixelRatio = window.devicePixelRatio || 1;
+      staticCanvas.width = Math.round(width * pixelRatio);
+      staticCanvas.height = Math.round(height * pixelRatio);
+      interactiveCanvas.width = Math.round(width * pixelRatio);
+      interactiveCanvas.height = Math.round(height * pixelRatio);
       staticCanvas.style.width = `${width}px`;
       staticCanvas.style.height = `${height}px`;
       interactiveCanvas.style.width = `${width}px`;
       interactiveCanvas.style.height = `${height}px`;
-      staticContext.setTransform(dpr, 0, 0, dpr, 0, 0);
-      interactiveContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+      staticContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      interactiveContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       renderLoop.invalidateAll();
     };
 
@@ -462,7 +471,11 @@ export function Canvas({
         }
       }
       const toolPreview = toolManager.getPreviewElement();
-      if (toolPreview && !seen.has(toolPreview.id) && !scene.getElement(toolPreview.id)) {
+      if (
+        toolPreview &&
+        !seen.has(toolPreview.id) &&
+        !scene.getElement(toolPreview.id)
+      ) {
         const preview = toPreviewElement(toolPreview as Element);
         if (preview) elements.push(preview);
       }
@@ -602,16 +615,18 @@ export function Canvas({
                     : {}),
                 };
 
-          const { changes: eyedropperChanges } = historyStore.commitUpdate(() => {
-            styleStore.update(changes);
-            colorHistoryStore.add(color);
-            for (const id of selectionStore.getSnapshot()) {
-              const element = scene.getElement(id);
-              if (element && !element.isDeleted) {
-                scene.mutateElement(element.id, changes);
+          const { changes: eyedropperChanges } = historyStore.commitUpdate(
+            () => {
+              styleStore.update(changes);
+              colorHistoryStore.add(color);
+              for (const id of selectionStore.getSnapshot()) {
+                const element = scene.getElement(id);
+                if (element && !element.isDeleted) {
+                  scene.mutateElement(element.id, changes);
+                }
               }
-            }
-          });
+            },
+          );
           commitHistoryEntry(eyedropperChanges, "local");
           eyedropperStore.cancel();
           updateCanvasCursor();
@@ -647,7 +662,10 @@ export function Canvas({
           getPointerPosition(event),
           viewportRef.current,
         );
-        selectionController.selectAtContextMenu(point, viewportRef.current.zoom);
+        selectionController.selectAtContextMenu(
+          point,
+          viewportRef.current.zoom,
+        );
         renderLoop.invalidateInteractive();
         return;
       }
@@ -938,7 +956,7 @@ export function Canvas({
       const isTextEntry =
         target instanceof HTMLElement &&
         (target.isContentEditable ||
-          target.matches("input, textarea, select, [role=\"textbox\"]"));
+          target.matches('input, textarea, select, [role="textbox"]'));
       if (event.code === "Space" && !isTextEntry) {
         spacePressRef.current = true;
         event.preventDefault();
@@ -1020,6 +1038,7 @@ export function Canvas({
       unsubscribe();
       renderLoop.stop();
       imageCache.dispose();
+      bitmapCache.clear();
       window.removeEventListener("resize", resizeCanvas);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
       interactiveCanvas.removeEventListener("contextmenu", handleContextMenu);

@@ -15,6 +15,14 @@ import {
   sampleCatmullRom,
 } from "../geometry";
 import { buildClosedStrokePath } from "../geometry/strokeOutline";
+import { getSketchGeometry, getSketchLinePaths } from "./sketch/geometry";
+import { traceSketchPath } from "./sketch/canvasPath";
+import {
+  type ElementBitmap,
+  ElementBitmapCache,
+  createBitmapCanvas,
+  quantizeZoom,
+} from "./elementBitmapCache";
 import {
   DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
@@ -32,6 +40,9 @@ export interface StaticRenderOptions {
   background?: boolean;
   grid?: boolean;
   origin?: boolean;
+  bitmapCache?: ElementBitmapCache;
+  pixelRatio?: number;
+  bypassBitmapCache?: boolean;
 }
 
 //This moves the drawing context to the element’s center, rotates it, and moves back. The resulting transform matches the center-based rotation already used by getElementCorners.
@@ -144,63 +155,6 @@ function drawOrigin(
   context.restore();
 }
 
-interface LocalBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function getRoundedPolygonPoints(
-  vertices: readonly Point[],
-  radius: number,
-): Point[] {
-  if (radius <= 0) return [...vertices];
-
-  const points: Point[] = [];
-  const steps = 5;
-
-  for (let index = 0; index < vertices.length; index += 1) {
-    const previous = vertices[(index - 1 + vertices.length) % vertices.length];
-    const current = vertices[index];
-    const next = vertices[(index + 1) % vertices.length];
-    if (!previous || !current || !next) continue;
-
-    const incomingLength = Math.hypot(
-      current.x - previous.x,
-      current.y - previous.y,
-    );
-    const outgoingLength = Math.hypot(next.x - current.x, next.y - current.y);
-    const inset = Math.min(radius, incomingLength / 2, outgoingLength / 2);
-    const start = {
-      x: current.x + ((previous.x - current.x) / incomingLength) * inset,
-      y: current.y + ((previous.y - current.y) / incomingLength) * inset,
-    };
-    const end = {
-      x: current.x + ((next.x - current.x) / outgoingLength) * inset,
-      y: current.y + ((next.y - current.y) / outgoingLength) * inset,
-    };
-
-    points.push(start);
-    for (let step = 1; step <= steps; step += 1) {
-      const t = step / steps;
-      const inverse = 1 - t;
-      points.push({
-        x:
-          inverse * inverse * start.x +
-          2 * inverse * t * current.x +
-          t * t * end.x,
-        y:
-          inverse * inverse * start.y +
-          2 * inverse * t * current.y +
-          t * t * end.y,
-      });
-    }
-  }
-
-  return points;
-}
-
 function getRoughPathPoints(
   points: readonly Point[],
   closed: boolean,
@@ -292,184 +246,91 @@ function applyStrokeAppearance(
   );
 }
 
-function fillShape(
-  context: CanvasRenderingContext2D,
-  element: Element,
-  bounds: LocalBounds,
-  createPath: () => void,
-): void {
-  const backgroundColor = element.backgroundColor ?? "transparent";
-  if (backgroundColor === "transparent") return;
-
-  // Keep backgrounds visible for existing elements created before fill styles were rendered.
-  const fillStyle =
-    element.fillStyle === "none" && backgroundColor !== "transparent"
-      ? "solid"
-      : (element.fillStyle ?? "none");
-  if (fillStyle === "none") return;
-
-  context.save();
-  createPath();
-
-  if (fillStyle === "solid") {
-    context.fillStyle = backgroundColor;
-    context.fill();
-    context.restore();
-    return;
-  }
-
-  context.clip();
-  context.strokeStyle = backgroundColor;
-  context.lineWidth = Math.max(0.75, (element.strokeWidth ?? 1) * 0.65);
-  context.lineCap = "butt";
-  context.setLineDash([]);
-  const spacing = 9;
-  const firstOffset = bounds.x - bounds.height;
-  const lastOffset = bounds.x + bounds.width;
-
-  for (let offset = firstOffset; offset <= lastOffset; offset += spacing) {
-    context.beginPath();
-    context.moveTo(offset, bounds.y);
-    context.lineTo(offset + bounds.height, bounds.y + bounds.height);
-    context.stroke();
-
-    if (fillStyle === "cross-hatch") {
-      context.beginPath();
-      context.moveTo(offset, bounds.y + bounds.height);
-      context.lineTo(offset + bounds.height, bounds.y);
-      context.stroke();
-    }
-  }
-
-  context.restore();
-}
-
 function strokePoints(
   context: CanvasRenderingContext2D,
   element: Element,
   points: readonly Point[],
   closed = false,
+  stream = 0,
 ): void {
-  const styledPoints = getRoughPathPoints(points, closed, element);
   applyStrokeAppearance(context, element);
-  tracePoints(context, styledPoints, closed);
-  context.stroke();
+  if (closed) {
+    tracePoints(context, getRoughPathPoints(points, true, element), true);
+    context.stroke();
+    return;
+  }
+  for (const path of getSketchLinePaths(points, element, stream)) {
+    traceSketchPath(context, path);
+    context.stroke();
+  }
+}
+
+function drawSketchShape(
+  context: CanvasRenderingContext2D,
+  element: Element,
+): void {
+  const geometry = getSketchGeometry(element);
+  context.save();
+  applyElementTransform(context, element);
+  context.globalAlpha = (element.opacity ?? 100) / 100;
+  const background = element.backgroundColor ?? "transparent";
+  const fillStyle =
+    element.fillStyle === "none" && background !== "transparent"
+      ? "solid"
+      : (element.fillStyle ?? "none");
+
+  if (background !== "transparent" && fillStyle !== "none") {
+    if (fillStyle === "solid") {
+      context.fillStyle = background;
+      traceSketchPath(context, geometry.fillContour);
+      context.fill();
+    } else {
+      context.save();
+      traceSketchPath(context, geometry.fillContour);
+      context.clip();
+      context.strokeStyle = background;
+      context.lineWidth = Math.max(0.75, (element.strokeWidth ?? 1) * 0.65);
+      context.lineCap = "butt";
+      context.setLineDash([]);
+      for (const direction of geometry.hatch) {
+        for (const segment of direction) {
+          context.beginPath();
+          context.moveTo(segment.start.x, segment.start.y);
+          context.lineTo(segment.end.x, segment.end.y);
+          context.stroke();
+        }
+      }
+      context.restore();
+    }
+  }
+
+  applyStrokeAppearance(context, element);
+  for (const outline of geometry.outlines) {
+    traceSketchPath(context, outline);
+    context.stroke();
+  }
+  context.restore();
 }
 
 function drawRectangle(
   context: CanvasRenderingContext2D,
   element: Extract<Element, { type: "rectangle" }>,
 ): void {
-  const width = element.width ?? 0;
-  const height = element.height ?? 0;
-  const opacity = element.opacity ?? 100;
-  context.save();
-  applyElementTransform(context, element);
-  context.globalAlpha = opacity / 100;
-
-  const vertices = [
-    { x: 0, y: 0 },
-    { x: width, y: 0 },
-    { x: width, y: height },
-    { x: 0, y: height },
-  ];
-  const radius =
-    element.edgeStyle === "rounded"
-      ? Math.min(12, Math.min(width, height) * 0.2)
-      : 0;
-  const outline = getRoundedPolygonPoints(vertices, radius);
-  const createPath = () => tracePoints(context, outline, true);
-
-  fillShape(context, element, { x: 0, y: 0, width, height }, createPath);
-  strokePoints(context, element, outline, true);
-  context.restore();
+  drawSketchShape(context, element);
 }
 
 function drawEllipse(
   context: CanvasRenderingContext2D,
   element: Extract<Element, { type: "ellipse" }>,
 ): void {
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const width = element.width ?? 0;
-  const height = element.height ?? 0;
-  const angle = element.angle ?? 0;
-  const opacity = element.opacity ?? 100;
-  context.save();
-  context.translate(x + width / 2, y + height / 2);
-  context.rotate(angle);
-  context.globalAlpha = opacity / 100;
-
-  const halfWidth = Math.abs(width) / 2;
-  const halfHeight = Math.abs(height) / 2;
-  const createPath = () => {
-    context.beginPath();
-    context.ellipse(0, 0, halfWidth, halfHeight, 0, 0, Math.PI * 2);
-  };
-  const points = Array.from({ length: 64 }, (_, index) => {
-    const angle = (index / 64) * Math.PI * 2;
-    return { x: Math.cos(angle) * halfWidth, y: Math.sin(angle) * halfHeight };
-  });
-
-  fillShape(
-    context,
-    element,
-    {
-      x: -halfWidth,
-      y: -halfHeight,
-      width: halfWidth * 2,
-      height: halfHeight * 2,
-    },
-    createPath,
-  );
-  strokePoints(context, element, points, true);
-  context.restore();
+  drawSketchShape(context, element);
 }
 
 function drawDiamond(
   context: CanvasRenderingContext2D,
   element: Extract<Element, { type: "diamond" }>,
 ): void {
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const width = element.width ?? 0;
-  const height = element.height ?? 0;
-  const angle = element.angle ?? 0;
-  const opacity = element.opacity ?? 100;
-  context.save();
-  context.translate(x + width / 2, y + height / 2);
-  context.rotate(angle);
-  context.globalAlpha = opacity / 100;
-
-  const halfWidth = Math.abs(width) / 2;
-  const halfHeight = Math.abs(height) / 2;
-
-  const vertices = [
-    { x: 0, y: -halfHeight },
-    { x: halfWidth, y: 0 },
-    { x: 0, y: halfHeight },
-    { x: -halfWidth, y: 0 },
-  ];
-  const radius =
-    element.edgeStyle === "rounded"
-      ? Math.min(12, Math.min(halfWidth, halfHeight) * 0.35)
-      : 0;
-  const outline = getRoundedPolygonPoints(vertices, radius);
-  const createPath = () => tracePoints(context, outline, true);
-
-  fillShape(
-    context,
-    element,
-    {
-      x: -halfWidth,
-      y: -halfHeight,
-      width: halfWidth * 2,
-      height: halfHeight * 2,
-    },
-    createPath,
-  );
-  strokePoints(context, element, outline, true);
-  context.restore();
+  drawSketchShape(context, element);
 }
 
 function drawLine(
@@ -558,8 +419,8 @@ export function drawArrow(
   );
 
   if (arrowHead) {
-    strokePoints(context, element, [end, arrowHead.left]);
-    strokePoints(context, element, [end, arrowHead.right]);
+    strokePoints(context, element, [end, arrowHead.left], false, 1);
+    strokePoints(context, element, [end, arrowHead.right], false, 2);
   }
 
   context.restore();
@@ -725,9 +586,7 @@ function drawText(
     element.text,
     fontSize,
     fontFamily,
-    element.containerId || element.wrapText
-      ? (element.width ?? 0)
-      : undefined,
+    element.containerId || element.wrapText ? (element.width ?? 0) : undefined,
   );
   const layoutHeight = lines.length * lineHeight;
   const y =
@@ -812,6 +671,145 @@ function drawElement(
   }
 }
 
+function cachedShapeKey(
+  element: Element,
+  bucket: number,
+  pixelRatio: number,
+): string {
+  return JSON.stringify([
+    element.id,
+    element.version,
+    element.versionNonce,
+    bucket,
+    pixelRatio,
+    element.type,
+    element.width,
+    element.height,
+    element.type === "line" || element.type === "arrow"
+      ? element.points
+      : undefined,
+    element.type === "line" || element.type === "arrow"
+      ? element.lineType
+      : undefined,
+    element.seed,
+    element.roughness,
+    element.edgeStyle,
+    element.fillStyle,
+    element.backgroundColor,
+    element.strokeColor,
+    element.strokeWidth,
+    element.strokeStyle,
+  ]);
+}
+
+function drawCachedShape(
+  context: CanvasRenderingContext2D,
+  element: Element,
+  elements: readonly Element[],
+  cache: ElementBitmapCache,
+  zoom: number,
+  pixelRatio: number,
+): boolean {
+  if (
+    element.type !== "rectangle" &&
+    element.type !== "ellipse" &&
+    element.type !== "diamond" &&
+    element.type !== "line" &&
+    element.type !== "arrow"
+  )
+    return false;
+  if (
+    element.type === "arrow" &&
+    elements.some(
+      (candidate) =>
+        candidate.type === "text" &&
+        candidate.containerId === element.id &&
+        !candidate.isDeleted,
+    )
+  )
+    return false;
+  const bucket = quantizeZoom(zoom);
+  if (!bucket) return false;
+  const ratio = Math.max(1, Math.min(3, pixelRatio));
+  const scale = bucket * ratio;
+  const arrowPadding =
+    element.type === "arrow" ? Math.max(10, (element.strokeWidth ?? 1) * 4) : 0;
+  const padding = Math.ceil(
+    Math.max(
+      5,
+      (element.roughness ?? 1) * 4 +
+        (element.strokeWidth ?? 1) * 3 +
+        arrowPadding,
+    ),
+  );
+  const localBounds = getElementLocalBounds(element);
+  const isBox =
+    element.type === "rectangle" ||
+    element.type === "ellipse" ||
+    element.type === "diamond";
+  const minX = isBox ? 0 : localBounds.minX;
+  const minY = isBox ? 0 : localBounds.minY;
+  const localWidth = isBox
+    ? Math.abs(element.width ?? 0)
+    : Math.max(0, localBounds.maxX - localBounds.minX);
+  const localHeight = isBox
+    ? Math.abs(element.height ?? 0)
+    : Math.max(0, localBounds.maxY - localBounds.minY);
+  const logicalWidth = Math.max(1, localWidth) + padding * 2;
+  const logicalHeight = Math.max(1, localHeight) + padding * 2;
+  const width = Math.ceil(logicalWidth * scale);
+  const height = Math.ceil(logicalHeight * scale);
+  // Avoid browser canvas dimension limits and very large single-entry allocations.
+  if (width > 2048 || height > 2048 || width * height > 2_000_000) return false;
+  const key = cachedShapeKey(element, bucket, ratio);
+  let bitmap = cache.get(key);
+  if (!bitmap) {
+    const canvas = createBitmapCanvas(width, height);
+    const bitmapContext = canvas.getContext(
+      "2d",
+    ) as CanvasRenderingContext2D | null;
+    if (!bitmapContext) return false;
+    bitmapContext.setTransform(
+      scale,
+      0,
+      0,
+      scale,
+      (padding - minX) * scale,
+      (padding - minY) * scale,
+    );
+    const unrotated = {
+      ...element,
+      x: 0,
+      y: 0,
+      angle: 0,
+      opacity: 100,
+    } as Element;
+    drawElement(bitmapContext, unrotated, [unrotated]);
+    const created = canvas as unknown as ElementBitmap;
+    if (!cache.set(key, created)) return false;
+    bitmap = created;
+  }
+  if (!bitmap) return false;
+  context.save();
+  applyElementTransform(context, element);
+  context.globalAlpha *= (element.opacity ?? 100) / 100;
+  context.drawImage(
+    bitmap,
+    minX - padding,
+    minY - padding,
+    logicalWidth,
+    logicalHeight,
+  );
+  context.restore();
+  return true;
+}
+
+export function createElementBitmapCache(
+  maxBytes?: number,
+): ElementBitmapCache {
+  return new ElementBitmapCache(maxBytes);
+}
+
 function applyViewportTransform(
   context: CanvasRenderingContext2D,
   viewport: Viewport,
@@ -839,7 +837,18 @@ export function renderStatic(
   applyViewportTransform(context, viewport);
 
   for (const element of visibleElements) {
-    drawElement(context, element, elements, imageAssets);
+    const cached =
+      !options.bypassBitmapCache && options.bitmapCache
+        ? drawCachedShape(
+            context,
+            element,
+            elements,
+            options.bitmapCache,
+            viewport.zoom,
+            options.pixelRatio ?? 1,
+          )
+        : false;
+    if (!cached) drawElement(context, element, elements, imageAssets);
   }
   context.restore();
   return visibleElements.length;
