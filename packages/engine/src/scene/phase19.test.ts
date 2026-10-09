@@ -54,7 +54,7 @@ describe("Phase 19 geometry and gesture invariants", () => {
       b = rect("b");
     expect(findBindingShape([a, b], { x: 111, y: 50 }, 1)?.id).toBe("b");
     expect(findBindingShape([a, b], { x: 111, y: 50 }, 2)).toBeUndefined();
-    expect(findBindingShape([a],{x:50,y:50},1)?.id).toBe("a");
+    expect(findBindingShape([a], { x: 50, y: 50 }, 1)?.id).toBe("a");
     expect(
       findBindingShape([a, { ...b, isDeleted: true }], { x: 100, y: 50 }, 1)
         ?.id,

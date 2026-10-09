@@ -251,7 +251,7 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
         <div
           role="group"
           aria-label="Canvas zoom"
-          onClick={() =>
+          onClickCapture={() =>
             window.dispatchEvent(new Event("canvas-user-interaction"))
           }
           className="flex h-9 items-center"

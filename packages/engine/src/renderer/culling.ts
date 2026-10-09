@@ -15,8 +15,10 @@ export function isElementVisible(
   const settings = sketchSettings(element.roughness);
   const stroke = element.strokeWidth ?? 1;
   const arrowExtra = element.type === "arrow" ? Math.max(10, stroke * 4) : 0;
-  const padding = element.type==="frame"?24:
-    settings.amplitude + settings.overshoot + stroke / 2 + arrowExtra;
+  const padding =
+    element.type === "frame"
+      ? 24
+      : settings.amplitude + settings.overshoot + stroke / 2 + arrowExtra;
   const elementBounds = {
     minX: bounds.minX - padding,
     minY: bounds.minY - padding,

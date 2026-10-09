@@ -115,13 +115,13 @@ export function RoomPresence({
     };
     frame = requestAnimationFrame(tick);
     window.addEventListener("canvas-user-interaction", stop);
-    window.addEventListener("wheel", stop, { passive: true });
+    window.addEventListener("wheel", stop, { passive: true, capture: true });
     window.addEventListener("keydown", key);
     return () => {
       cancelAnimationFrame(frame);
       followState.active = false;
       window.removeEventListener("canvas-user-interaction", stop);
-      window.removeEventListener("wheel", stop);
+      window.removeEventListener("wheel", stop, true);
       window.removeEventListener("keydown", key);
     };
   }, [following]);

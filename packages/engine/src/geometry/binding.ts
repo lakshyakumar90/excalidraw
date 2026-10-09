@@ -49,7 +49,7 @@ function toShapeLocalPoint(shape: ConnectableShape, point: Point): Point {
 
 function normalize(vector: Point): Point {
   const length = Math.hypot(vector.x, vector.y);
-  if(length<1e-9)return {x:1,y:0};
+  if (length < 1e-9) return { x: 1, y: 0 };
   return { x: vector.x / length, y: vector.y / length };
 }
 

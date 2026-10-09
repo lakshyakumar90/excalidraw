@@ -260,7 +260,7 @@ export function renderSceneToSvg(
 }
 
 function paintPadding(element: Element): number {
-  if(element.type==="frame")return 24;
+  if (element.type === "frame") return 24;
   const settings = sketchSettings(element.roughness);
   const arrowExtra =
     element.type === "arrow" ? Math.max(10, (element.strokeWidth ?? 1) * 4) : 0;

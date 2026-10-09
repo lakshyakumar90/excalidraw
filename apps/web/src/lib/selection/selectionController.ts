@@ -7,7 +7,8 @@ This controller owns canvas selection, transforms, and point editing:
 */
 
 import {
-  findBindingShape,visibleBounds,
+  findBindingShape,
+  visibleBounds,
   SnapIndex,
   frameForElement,
   selectionClosure,
@@ -633,11 +634,34 @@ export const selectionController = {
   ) {
     context.save();
     context.strokeStyle = "#7048e8";
-    if(gesture.kind==="point"){
-      const arrow=scene.getEffectiveElement(gesture.elementId);
-      if(arrow?.type==="arrow"&&(gesture.pointIndex===0||gesture.pointIndex===arrow.points.length-1)){
-        const point=arrow.points[gesture.pointIndex];const candidate=point?findBindingShape(scene.getElements(),getLinearPointWorldPosition(arrow,point),viewport.zoom):undefined;
-        if(candidate){context.save();const w=(candidate.width??0)*viewport.zoom,h=(candidate.height??0)*viewport.zoom;context.translate(candidate.x*viewport.zoom+viewport.scrollX+w/2,candidate.y*viewport.zoom+viewport.scrollY+h/2);context.rotate(candidate.angle??0);context.lineWidth=2;context.strokeRect(-w/2,-h/2,w,h);context.restore();}
+    if (gesture.kind === "point") {
+      const arrow = scene.getEffectiveElement(gesture.elementId);
+      if (
+        arrow?.type === "arrow" &&
+        (gesture.pointIndex === 0 ||
+          gesture.pointIndex === arrow.points.length - 1)
+      ) {
+        const point = arrow.points[gesture.pointIndex];
+        const candidate = point
+          ? findBindingShape(
+              scene.getElements(),
+              getLinearPointWorldPosition(arrow, point),
+              viewport.zoom,
+            )
+          : undefined;
+        if (candidate) {
+          context.save();
+          const w = (candidate.width ?? 0) * viewport.zoom,
+            h = (candidate.height ?? 0) * viewport.zoom;
+          context.translate(
+            candidate.x * viewport.zoom + viewport.scrollX + w / 2,
+            candidate.y * viewport.zoom + viewport.scrollY + h / 2,
+          );
+          context.rotate(candidate.angle ?? 0);
+          context.lineWidth = 2;
+          context.strokeRect(-w / 2, -h / 2, w, h);
+          context.restore();
+        }
       }
     }
     context.lineWidth = 1;
