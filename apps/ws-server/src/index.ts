@@ -1,24 +1,58 @@
-import { WebSocketServer } from "ws";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { JWT_SECRET } from "@repo/backend-common";
+import { verifyPresenceTicket, assertPresenceTicketConfiguration } from "@repo/auth";
+import { getAllowedWsOrigins } from "@repo/backend-common";
+import { connectDatabase, db } from "@repo/db";
+import { startPresenceServer } from "./server.js";
 
-const wss = new WebSocketServer({ port: 8080 });
+async function hasRoomAccess(roomId: number, userId: string): Promise<boolean> {
+  const room = await db.orm!.public!.Room.where({ id: roomId }).first();
+  if (!room) return false;
+  if (room.adminId === userId) return true;
+  const member = await db
+    .orm!.public!.RoomMember.where({ roomId, userId })
+    .first();
+  return member !== null;
+}
 
-wss.on("connection", function connection(ws, request) {
-  const url = request.url;
-  if (!url) return;
+async function displayNameFor(userId: string): Promise<string> {
+  const user = await db.orm!.public!.User.where({ id: userId }).first();
+  const name = user?.name?.trim();
+  // Participant emails are never exposed over presence.
+  return name ? name.slice(0, 120) : "Someone";
+}
 
-  const queryParams = new URLSearchParams(url.split("?")[1]);
-  const token = queryParams.get('token');
-  if (!token) return;
+async function startServer() {
+  // Fail startup when the ticket secret is absent or weak; there is no
+  // hard-coded fallback. Tickets prove only the handshake — membership is
+  // re-checked at upgrade time and on a bounded interval.
+  assertPresenceTicketConfiguration();
 
-  const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-  if (!decoded || !decoded.userId) {
-    ws.close();
-    return;
+  try {
+    await connectDatabase();
+  } catch (error) {
+    console.error("Failed to connect to the database:", error);
+    process.exit(1);
   }
 
-  ws.on("message", function message(data) {
-    ws.send("pong");
+  const port = Number(process.env.WS_PORT ?? 8080);
+  const handle = await startPresenceServer({
+    verifyTicket: verifyPresenceTicket,
+    checkAccess: hasRoomAccess,
+    resolveDisplayName: displayNameFor,
+    allowedOrigins: getAllowedWsOrigins(),
+    port,
   });
-});
+  console.log(`Presence server is running on port ${handle.port}`);
+
+  const shutdown = () => {
+    void handle
+      .close()
+      .catch((error: unknown) => {
+        console.error("Error while stopping the presence server:", error);
+      })
+      .finally(() => process.exit(0));
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+void startServer();

@@ -105,6 +105,13 @@ describe("isServerPresenceMessage", () => {
     expect(isServerPresenceMessage({ type: "error", message: "slow down" })).toBe(
       true,
     );
+    expect(
+      isServerPresenceMessage({
+        type: "pointer.leave",
+        connectionId: "c1",
+        userId: "u1",
+      }),
+    ).toBe(true);
   });
 
   it("rejects malformed or unknown server payloads", () => {

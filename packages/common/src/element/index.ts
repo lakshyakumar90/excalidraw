@@ -16,4 +16,4 @@ export type {
   TextElement,
   ImageElement,
   Element,
-} from "./types";
+} from "./types.js";

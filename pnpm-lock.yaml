@@ -109,6 +109,12 @@ importers:
 
   apps/ws-server:
     dependencies:
+      '@repo/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@repo/common':
+        specifier: workspace:*
+        version: link:../../packages/common
       ws:
         specifier: ^8.21.3
         version: 8.21.3
@@ -122,21 +128,15 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
-      '@repo/validations':
-        specifier: workspace:*
-        version: link:../../packages/validations
-      '@types/jsonwebtoken':
-        specifier: ^9.0.10
-        version: 9.0.10
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      jsonwebtoken:
-        specifier: ^9.0.3
-        version: 9.0.3
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
 
   packages/auth:
     dependencies:

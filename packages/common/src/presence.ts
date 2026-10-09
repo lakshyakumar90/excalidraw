@@ -49,6 +49,7 @@ export type ServerToClientPresenceMessage =
   | { type: "presence.joined"; participant: PresenceParticipant }
   | { type: "presence.left"; connectionId: string; userId: string }
   | { type: "pointer.move"; connectionId: string; userId: string; x: number; y: number }
+  | { type: "pointer.leave"; connectionId: string; userId: string }
   | {
       type: "viewport.update";
       connectionId: string;
@@ -148,6 +149,7 @@ export function isServerPresenceMessage(
     case "presence.joined":
       return isRecord(value.participant) && isPresenceParticipant(value.participant);
     case "presence.left":
+    case "pointer.leave":
       return (
         typeof value.connectionId === "string" &&
         typeof value.userId === "string"
