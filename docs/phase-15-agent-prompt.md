@@ -1,0 +1,11 @@
+# Prompt for the Phase 15 implementing agent
+
+Implement Phase 15 element synchronization end to end in this repository. Read `docs/phase-15-element-sync-agent-instructions.md` completely and follow it as the task specification. Inspect current code and applicable `AGENTS.md` instructions first, including the installed Next.js guides required for frontend changes.
+
+Preserve the package boundaries: database initialization and Prisma queries in `packages/db`; Better Auth and ticket logic in `packages/auth`; browser-safe shared types, validation and reconciliation in `packages/common`; HTTP/WS-only shared orchestration in `packages/backend-common`. Reuse the existing room WebSocket connection and lightweight auth entry. Preserve the fixed environment loading and build cache behavior.
+
+Implement the user's higher-version, then higher-versionNonce reconciliation rule; broadcast only committed changed elements; handle transient drags without persistence/version bumps; reconcile initial and reconnect snapshots with room-scoped IndexedDB drafts; synchronize soft deletion; safely prune deleted bodies without reviving stale records; show remote selections; and verify a two-minute network outage during a drag. Integrate atomic durable merge/save, acknowledgements and a persistent committed-edit outbox so concurrent users and lost connections cannot silently lose saved edits. Keep all existing canvas tools, history, image rendering and Phase 14 presence working.
+
+Create the architecture decisions and verification records specified in the handoff. Work through its ordered implementation slices, add meaningful tests, run final checks and perform the two-browser/network-disconnect acceptance scenario. Fix failures before claiming completion. Preserve pre-existing user changes and never commit secrets or generated caches.
+
+Commit coherent small chunks with their tests as each slice is ready, then push all intended commits to GitHub using the repository's branch workflow. Do not make one giant commit or start Phase 16. Finish with a concise report of behavior, test evidence, commit IDs, branch/PR link and any actual remaining limitation.
