@@ -1,4 +1,5 @@
 import type { db } from "./db.js";
+import { randomUUID } from "node:crypto";
 
 type RoomDb = typeof db;
 type RoomDbContext = Pick<RoomDb, "orm">;
@@ -34,14 +35,21 @@ export async function listRoomInvites(store: RoomDb, roomId: number) {
 export async function listRoomJoinCodes(store: RoomDb, roomId: number) {
   return publicDb(store)
     .JoinCode.where({ roomId })
-    .include("claim")
     .orderBy((code) => code.createdAt.desc())
     .all();
 }
 
 export async function acceptEmailRoomInvite(
   store: RoomDb,
-  input: { codeHash: string; userId: string; now?: string },
+  input: {
+    codeHash: string;
+    userId: string;
+    inviteId?: string;
+    roomId?: number;
+    email?: string;
+    role?: "editor" | "viewer";
+    now?: string;
+  },
 ): Promise<{ roomId: number; role: RoomMemberRole } | null> {
   const now = input.now ?? new Date().toISOString();
   try {
@@ -52,6 +60,10 @@ export async function acceptEmailRoomInvite(
       const user = await publicDb(tx).User.where({ id: input.userId }).first();
       if (
         !invite ||
+        (input.inviteId && invite.id !== input.inviteId) ||
+        (input.roomId && invite.roomId !== input.roomId) ||
+        (input.email && invite.email.toLowerCase() !== input.email.toLowerCase()) ||
+        (input.role && invite.role !== input.role) ||
         !user ||
         user.email.toLowerCase() !== invite.email.toLowerCase() ||
         !user.emailVerified ||
@@ -153,15 +165,6 @@ export async function acceptRoomJoinCode(
       userId: input.userId,
     }).first();
     if (member) return { roomId: code.roomId, role: member.role as RoomMemberRole };
-    const claim = await publicDb(tx).JoinCodeClaim.where({
-      joinCodeId: code.id,
-    }).first();
-    if (claim) return null;
-    await publicDb(tx).JoinCodeClaim.create({
-      joinCodeId: code.id,
-      actorId: input.userId,
-      action: "accepted",
-    });
     await publicDb(tx).RoomMember.create({
       roomId: code.roomId,
       userId: input.userId,
@@ -210,15 +213,8 @@ export async function revokeRoomJoinCode(
       roomId: input.roomId,
     }).first();
     if (!room || !code || code.revokedAt) return false;
-    const claim = await publicDb(tx).JoinCodeClaim.where({
-      joinCodeId: code.id,
-    }).first();
-    if (claim) return false;
-    await publicDb(tx).JoinCodeClaim.create({
-      joinCodeId: code.id,
-      actorId: input.ownerId,
-      action: "revoked",
-    });
+    // Join codes remain reusable by different invitees until they expire.
+    // Revocation is represented directly on the code, not as a redemption.
     await publicDb(tx).JoinCode.where({ id: code.id }).update({
       revokedAt: new Date().toISOString(),
     });
@@ -303,6 +299,43 @@ export async function createRoomInvite(
   return publicDb(store).Invite.create(input);
 }
 
+export async function prepareRoomInviteResend(
+  store: RoomDb,
+  input: {
+    roomId: number;
+    inviteId: string;
+    ownerId: string;
+    codeHash: string;
+    now?: string;
+  },
+) {
+  const now = input.now ?? new Date().toISOString();
+  return store.transaction(async (tx) => {
+    const room = await publicDb(tx).Room.where({
+      id: input.roomId,
+      adminId: input.ownerId,
+    }).first();
+    const invite = await publicDb(tx).Invite.where({
+      id: input.inviteId,
+      roomId: input.roomId,
+    }).first();
+    if (
+      !room ||
+      !invite ||
+      invite.usedAt ||
+      invite.revokedAt ||
+      Date.parse(invite.expiresAt) <= Date.parse(now) ||
+      (await publicDb(tx).InviteClaim.where({ inviteId: input.inviteId }).first())
+    ) return null;
+    await publicDb(tx).Invite.where({ id: invite.id }).update({
+      codeHash: input.codeHash,
+      sentAt: null,
+      deliveryError: null,
+    });
+    return { ...invite, codeHash: input.codeHash, sentAt: null, deliveryError: null, roomName: room.slug };
+  });
+}
+
 export async function recordInviteDelivery(
   store: RoomDb,
   input: { id: string; sentAt?: string; error?: string },
@@ -337,7 +370,7 @@ export async function createOrGetSceneRoom(
     return existing.adminId === input.ownerId
       ? { roomId: existing.id, slug: existing.slug }
       : null;
-  const suffix = Math.random().toString(36).slice(2, 8);
+  const suffix = randomUUID().slice(0, 8);
   const base = input.name
     .normalize("NFKD")
     .toLowerCase()

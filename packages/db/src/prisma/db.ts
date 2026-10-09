@@ -53,6 +53,7 @@ export {
   listRoomInvites,
   listRoomJoinCodes,
   markInviteSent,
+  prepareRoomInviteResend,
   roomOwnedBy,
   recordInviteDelivery,
   removeRoomMember,
