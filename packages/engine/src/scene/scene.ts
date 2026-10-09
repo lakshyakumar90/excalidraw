@@ -1,4 +1,15 @@
 import type { Element } from "@repo/common";
+import {
+  assignOrderKeys,
+  midpointOrderKey,
+  nextOrderKey,
+  normalizeElement,
+  rebalanceOrderKeys,
+  reconcileElements,
+  sortElementsByOrder,
+  type SyncTombstone,
+  type TombstoneMap,
+} from "@repo/common";
 
 export interface SceneElementChange {
   id: string;
@@ -6,6 +17,19 @@ export interface SceneElementChange {
   after: Record<string, unknown> | null;
   beforeIndex?: number;
   afterIndex?: number;
+}
+
+export type CommitOrigin = "local" | "undo" | "redo";
+
+export interface SceneCommit {
+  origin: CommitOrigin;
+  /** Cloned complete records, exactly the changed IDs. */
+  elements: Element[];
+}
+
+export interface RemoteApplyResult {
+  appliedIds: string[];
+  tombstoneUpdates: Record<string, SyncTombstone | null>;
 }
 
 interface PendingElementChange {
@@ -42,6 +66,17 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   }
 }
 
+function freshNonce(): number {
+  return Math.floor(Math.random() * 2_147_483_647);
+}
+
+function orderKeyOf(element: Element, fallback: number): number {
+  return typeof element.orderKey === "number" &&
+    Number.isFinite(element.orderKey)
+    ? element.orderKey
+    : fallback;
+}
+
 type ElementMutation<T = Element> = T extends Element
   ? Partial<Omit<T, "id" | "type">>
   : never;
@@ -54,7 +89,14 @@ export class Scene {
   private sceneVersion = 0;
   private dirty = false;
   private subscribers = new Set<() => void>();
+  private commitSubscribers = new Set<(commit: SceneCommit) => void>();
   private pendingChanges: Map<string, PendingElementChange> | null = null;
+  /**
+   * Highest version observed per ID (remote applies and local commits).
+   * Local commits use max(current, observed) + 1 so a commit made right
+   * after a concurrent remote edit still moves forward.
+   */
+  private maxObservedVersions = new Map<string, number>();
 
   /** Starts collecting field deltas until endCapture is called. */
   beginCapture(): void {
@@ -62,6 +104,11 @@ export class Scene {
       throw new Error("A scene history capture is already active");
     }
     this.pendingChanges = new Map();
+  }
+
+  /** A capture is active (mid-gesture): autosave/outbox must defer. */
+  isCapturing(): boolean {
+    return this.pendingChanges !== null;
   }
 
   /** Returns deltas only for changed elements; it never snapshots the scene. */
@@ -131,8 +178,35 @@ export class Scene {
       throw new Error(`Element with id "${element.id}" already exists`);
     }
     this.recordChange(element.id, null);
+    const stored = element as Element & {
+      version?: number;
+      versionNonce?: number;
+      isDeleted?: boolean;
+      updated?: number;
+      orderKey?: number;
+    };
+    if (!Number.isSafeInteger(stored.version) || (stored.version ?? 0) < 1) {
+      stored.version = 1;
+    }
+    if (!Number.isSafeInteger(stored.versionNonce) || (stored.versionNonce ?? -1) < 0) {
+      stored.versionNonce = freshNonce();
+    }
+    if (stored.isDeleted !== true) stored.isDeleted = false;
+    if (typeof stored.updated !== "number" || !Number.isFinite(stored.updated)) {
+      stored.updated = Date.now();
+    }
+    if (
+      typeof stored.orderKey !== "number" ||
+      !Number.isFinite(stored.orderKey)
+    ) {
+      stored.orderKey = nextOrderKey(this.elements);
+    }
     this.elements.push(element);
     this.elementMap.set(element.id, element);
+    this.elements = sortElementsByOrder(this.elements);
+    const version = stored.version ?? 1;
+    const observed = this.maxObservedVersions.get(element.id) ?? 0;
+    if (version > observed) this.maxObservedVersions.set(element.id, version);
     this.sceneVersion += 1;
     this.dirty = true;
     this.notify();
@@ -147,13 +221,18 @@ export class Scene {
   }
 
   replaceAll(elements: readonly Element[]): void {
-    const replacement = structuredClone([...elements]);
+    const replacement = assignOrderKeys(structuredClone([...elements]));
     const elementMap = new Map(replacement.map((element) => [element.id, element]));
     if (elementMap.size !== replacement.length) {
       throw new Error("Scene elements must have unique ids");
     }
-    this.elements = replacement;
+    this.elements = sortElementsByOrder(replacement);
     this.elementMap = elementMap;
+    this.maxObservedVersions.clear();
+    for (const element of replacement) {
+      const normalized = normalizeElement(element, { strict: false, orderFallback: 0 });
+      if (normalized) this.maxObservedVersions.set(element.id, normalized.version);
+    }
     this.sceneVersion += 1;
     this.dirty = true;
     this.notify();
@@ -171,6 +250,26 @@ export class Scene {
 
     const previous = this.elements;
     const next = previous.slice();
+
+    // Concurrent inserts can share an orderKey (ID tie-break keeps them
+    // deterministic). Rebalance first so adjacent swaps change the order;
+    // the caller's commit bumps the moved elements. Unmoved elements keep
+    // their versions with new keys — a documented, vanishingly rare edge
+    // that still converges on the next commit touching them.
+    const seenKeys = new Set<number>();
+    let hasDuplicateKeys = false;
+    for (const element of next) {
+      const key = orderKeyOf(element, 0);
+      if (seenKeys.has(key)) {
+        hasDuplicateKeys = true;
+        break;
+      }
+      seenKeys.add(key);
+    }
+    if (hasDuplicateKeys) {
+      const rebalanced = rebalanceOrderKeys(next);
+      next.splice(0, next.length, ...rebalanced);
+    }
 
     if (action === "front" || action === "back") {
       const moved = next.filter((element) => selectedIds.has(element.id));
@@ -190,7 +289,14 @@ export class Scene {
           selectedIds.has(next[index]!.id) &&
           !selectedIds.has(next[index + 1]!.id)
         ) {
-          [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
+          const lower = next[index]!;
+          const upper = next[index + 1]!;
+          const lowerKey = orderKeyOf(lower, index);
+          const upperKey = orderKeyOf(upper, index + 1);
+          next[index] = upper;
+          next[index + 1] = lower;
+          lower.orderKey = upperKey;
+          upper.orderKey = lowerKey;
         }
       }
     } else {
@@ -199,7 +305,14 @@ export class Scene {
           selectedIds.has(next[index]!.id) &&
           !selectedIds.has(next[index - 1]!.id)
         ) {
-          [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
+          const upper = next[index]!;
+          const lower = next[index - 1]!;
+          const upperKey = orderKeyOf(upper, index);
+          const lowerKey = orderKeyOf(lower, index - 1);
+          next[index - 1] = upper;
+          next[index] = lower;
+          lower.orderKey = upperKey;
+          upper.orderKey = lowerKey;
         }
       }
     }
@@ -208,11 +321,29 @@ export class Scene {
       return false;
     }
 
+    if (action === "front" || action === "back") {
+      const remainingKeys = next
+        .filter((element) => !selectedIds.has(element.id))
+        .map((element, index) => orderKeyOf(element, index));
+      const bound =
+        remainingKeys.length === 0
+          ? -1
+          : action === "front"
+            ? Math.max(...remainingKeys)
+            : Math.min(...remainingKeys);
+      const moved = next.filter((element) => selectedIds.has(element.id));
+      moved.forEach((element, offset) => {
+        element.orderKey =
+          action === "front" ? bound + 1 + offset : bound - (moved.length - offset);
+      });
+    }
+
     const previousIndexById = new Map(
       previous.map((element, index) => [element.id, index]),
     );
+    const nextSorted = sortElementsByOrder(next);
     const nextIndexById = new Map(
-      next.map((element, index) => [element.id, index]),
+      nextSorted.map((element, index) => [element.id, index]),
     );
     for (const element of previous) {
       const beforeIndex = previousIndexById.get(element.id);
@@ -228,20 +359,8 @@ export class Scene {
         if (pending) pending.beforeIndex = beforeIndex;
       }
     }
-    const now = Date.now();
-    for (const element of next) {
-      if (
-        selectedIds.has(element.id) &&
-        previousIndexById.get(element.id) !== nextIndexById.get(element.id)
-      ) {
-        element.version =
-          element.version === undefined ? 1 : element.version + 1;
-        element.versionNonce = Math.floor(Math.random() * 2_147_483_647);
-        element.updated = now;
-      }
-    }
 
-    this.elements = next;
+    this.elements = nextSorted;
     this.sceneVersion += 1;
     this.dirty = true;
     this.notify();
@@ -281,6 +400,23 @@ export class Scene {
     const [element] = this.elements.splice(currentIndex, 1);
     if (!element) return false;
     this.elements.splice(targetIndex, 0, element);
+    const beforeKey =
+      targetIndex > 0
+        ? orderKeyOf(this.elements[targetIndex - 1]!, targetIndex - 1)
+        : null;
+    const afterKey =
+      targetIndex < this.elements.length - 1
+        ? orderKeyOf(this.elements[targetIndex + 1]!, targetIndex + 1)
+        : null;
+    const key = midpointOrderKey(beforeKey, afterKey);
+    if (key === null) {
+      const rebalanced = rebalanceOrderKeys(this.elements);
+      this.elements = [...rebalanced];
+      this.elementMap = new Map(this.elements.map((item) => [item.id, item]));
+    } else {
+      element.orderKey = key;
+      this.elements = sortElementsByOrder(this.elements);
+    }
     this.mutateElement(id, {});
     return true;
   }
@@ -292,12 +428,26 @@ export class Scene {
     };
   };
 
-  private notify(): void {
-    for (const listener of this.subscribers) {
-      listener();
-    }
+  onCommit(listener: (commit: SceneCommit) => void): () => void {
+    this.commitSubscribers.add(listener);
+    return () => {
+      this.commitSubscribers.delete(listener);
+    };
   }
 
+  private notify(): void {
+    for (const listener of this.subscribers) listener();
+  }
+
+  private emitCommit(commit: SceneCommit): void {
+    for (const listener of this.commitSubscribers) listener(commit);
+  }
+
+  /**
+   * Transient mutation: updates content, records history, notifies, but does
+   * NOT bump version/nonce/updated. Durable versions are assigned exactly
+   * once by commitChanges at the action boundary.
+   */
   //Partial<Element> means you can provide only the properties you want to change.
   mutateElement(id: string, changes: ElementMutation): Element | undefined {
     const element = this.elementMap.get(id);
@@ -306,13 +456,113 @@ export class Scene {
     this.recordChange(id, element, Object.keys(changes));
 
     Object.assign(element, changes);
-    element.version = element.version === undefined ? 1 : element.version + 1;
-    element.versionNonce = Math.floor(Math.random() * 2_147_483_647);
-    element.updated = Date.now();
     this.sceneVersion += 1;
     this.dirty = true;
     this.notify();
     return element;
+  }
+
+  /**
+   * Record an externally observed version (remote apply, snapshot merge) so
+   * the next local commit moves past it instead of forking.
+   */
+  noteObservedVersion(id: string, version: number): void {
+    if (!Number.isSafeInteger(version) || version < 0) return;
+    const current = this.maxObservedVersions.get(id) ?? 0;
+    if (version > current) this.maxObservedVersions.set(id, version);
+  }
+
+  /**
+   * Commit exactly one durable version per ID: version becomes
+   * max(current, observed) + 1 with a fresh nonce. Returns cloned complete
+   * records for the wire/outbox and notifies commit subscribers. The same
+   * (id, version, nonce) always identifies the same committed content.
+   */
+  commitChanges(ids: Iterable<string>, origin: CommitOrigin): SceneCommit {
+    const seen = new Set<string>();
+    const committed: Element[] = [];
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const element = this.elementMap.get(id);
+      if (!element) continue;
+      const current =
+        typeof element.version === "number" && Number.isFinite(element.version)
+          ? Math.floor(element.version)
+          : 0;
+      const observed = this.maxObservedVersions.get(id) ?? 0;
+      element.version = Math.max(current, observed, 1) + 1;
+      element.versionNonce = freshNonce();
+      element.updated = Date.now();
+      this.maxObservedVersions.set(id, element.version);
+      committed.push(cloneElement(element));
+    }
+    if (committed.length > 0) {
+      this.sceneVersion += 1;
+      this.dirty = true;
+      this.notify();
+      this.emitCommit({ origin, elements: committed });
+    }
+    return { origin, elements: committed };
+  }
+
+  /**
+   * Set exact local records (already-versioned merge winners, e.g. a drag
+   * commit reconciled against deferred remote state) and emit one commit
+   * event without further bumps.
+   */
+  applyLocal(records: readonly Element[], origin: CommitOrigin): SceneCommit {
+    const applied: Element[] = [];
+    for (const record of records) {
+      const current = this.elementMap.get(record.id);
+      if (!current) continue;
+      const index = this.elements.findIndex((item) => item.id === record.id);
+      const replacement = cloneElement(record);
+      this.elements[index] = replacement;
+      this.elementMap.set(record.id, replacement);
+      if (Number.isSafeInteger(record.version)) {
+        this.noteObservedVersion(record.id, record.version as number);
+      }
+      applied.push(cloneElement(replacement));
+    }
+    if (applied.length > 0) {
+      this.elements = sortElementsByOrder(this.elements);
+      this.sceneVersion += 1;
+      this.dirty = true;
+      this.notify();
+      this.emitCommit({ origin, elements: applied });
+    }
+    return { origin, elements: applied };
+  }
+
+  /**
+   * Apply authoritative remote records: reconcile by (version, nonce),
+   * preserve exact remote metadata, redraw and persist the draft, but never
+   * rebroadcast, bump, or create undo steps.
+   */
+  applyRemote(
+    records: readonly Element[],
+    tombstones: TombstoneMap = {},
+  ): RemoteApplyResult {
+    const result = reconcileElements(this.elements, records, tombstones);
+    if (
+      result.changedIds.length === 0 &&
+      Object.keys(result.tombstoneUpdates).length === 0
+    ) {
+      return { appliedIds: [], tombstoneUpdates: {} };
+    }
+    this.elements = [...result.merged];
+    this.elementMap = new Map(this.elements.map((item) => [item.id, item]));
+    for (const applied of result.appliedFromRemote) {
+      this.noteObservedVersion(applied.id, applied.version);
+    }
+    this.sceneVersion += 1;
+    this.dirty = true;
+    this.notify();
+    return {
+      appliedIds: result.appliedFromRemote.map((item) => item.id),
+      tombstoneUpdates: result.tombstoneUpdates,
+    };
   }
 
   get version(): number {

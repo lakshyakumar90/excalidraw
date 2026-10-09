@@ -16,16 +16,22 @@ describe("HistoryManager", () => {
       (ids) => (selectedIds = new Set(ids)),
     );
 
-    history.captureUpdate(() => scene.mutateElement(element.id, { x: 50 }));
+    const edit = history.commitUpdate(() =>
+      scene.mutateElement(element.id, { x: 50 }),
+    );
+    scene.commitChanges(
+      edit.changes.map((change) => change.id),
+      "local",
+    );
     const afterEditVersion = element.version;
 
-    expect(history.undo()).toBe(true);
+    scene.commitChanges(history.undo(), "undo");
     expect(element.x).toBe(10);
     expect(element.version).toBeGreaterThan(afterEditVersion ?? 0);
     expect(history.canRedo).toBe(true);
 
     const afterUndoVersion = element.version;
-    expect(history.redo()).toBe(true);
+    scene.commitChanges(history.redo(), "redo");
     expect(element.x).toBe(50);
     expect(element.version).toBeGreaterThan(afterUndoVersion ?? 0);
   });
@@ -44,9 +50,9 @@ describe("HistoryManager", () => {
     const element = createRectangleElement({ id: "new-shape" });
 
     history.captureUpdate(() => scene.addElement(element));
-    expect(history.undo()).toBe(true);
+    expect(history.undo()).toEqual([element.id]);
     expect(scene.getElement(element.id)?.isDeleted).toBe(true);
-    expect(history.redo()).toBe(true);
+    expect(history.redo()).toEqual([element.id]);
     expect(scene.getElement(element.id)?.isDeleted).toBe(false);
   });
 
@@ -182,7 +188,7 @@ describe("HistoryManager", () => {
     let activeTool = "rectangle";
     activeTool = "selection";
     expect(activeTool).toBe("selection");
-    expect(history.undo()).toBe(true);
+    expect(history.undo()).toEqual([rectangle.id]);
     expect(scene.getElement(rectangle.id)?.isDeleted).toBe(true);
   });
 

@@ -7,6 +7,7 @@ import { selectionController } from "@/lib/selection/selectionController";
 import { selectionStore } from "@/lib/selection/selectionStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { historyStore } from "@/lib/history/historyStore";
+import { commitHistoryEntry, commitUndoRedo } from "@/lib/sync/commits";
 import type { AutosaveHandle } from "@/lib/persistence/autosave";
 import { setCurrentViewport } from "@/lib/persistence/viewportStore";
 import type { CanvasContextMenuState } from "@/components/canvas/CanvasContextMenu";
@@ -57,8 +58,8 @@ export function createCanvasKeyboardHandler({
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
       event.preventDefault();
-      if (event.shiftKey) historyStore.redo();
-      else historyStore.undo();
+      if (event.shiftKey) commitUndoRedo(historyStore.redo(), "redo");
+      else commitUndoRedo(historyStore.undo(), "undo");
       renderLoop.invalidateStatic();
       renderLoop.invalidateInteractive();
       return;
@@ -66,7 +67,7 @@ export function createCanvasKeyboardHandler({
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
       event.preventDefault();
-      historyStore.redo();
+      commitUndoRedo(historyStore.redo(), "redo");
       renderLoop.invalidateStatic();
       renderLoop.invalidateInteractive();
       return;
@@ -218,7 +219,8 @@ export function createCanvasKeyboardHandler({
     }
 
     if (event.key === "Enter") {
-      historyStore.captureUpdate(() => toolManager.commit());
+      const { changes } = historyStore.commitUpdate(() => toolManager.commit());
+      commitHistoryEntry(changes, "local");
       renderLoop.invalidateInteractive();
       return;
     }

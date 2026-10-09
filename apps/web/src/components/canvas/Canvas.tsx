@@ -20,6 +20,7 @@ import {
 } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
 import { getCanvasPresencePublisher } from "@/lib/presence/presencePublisher";
+import { commitHistoryEntry } from "@/lib/sync/commits";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
@@ -112,10 +113,11 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
   const insertImage = useCallback(async (file: File, point: Point) => {
     try {
       const imageElement = await createImageElementFromFile(file, point);
-      historyStore.captureUpdate(() => {
+      const { changes } = historyStore.commitUpdate(() => {
         scene.addElement(imageElement);
         selectionStore.set([imageElement.id]);
       });
+      commitHistoryEntry(changes, "local");
       publishImportStatus(`Added ${file.name}`);
     } catch (error) {
       publishImportStatus(
@@ -543,7 +545,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
                     : {}),
                 };
 
-          historyStore.captureUpdate(() => {
+          const { changes: eyedropperChanges } = historyStore.commitUpdate(() => {
             styleStore.update(changes);
             colorHistoryStore.add(color);
             for (const id of selectionStore.getSnapshot()) {
@@ -553,6 +555,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
               }
             }
           });
+          commitHistoryEntry(eyedropperChanges, "local");
           eyedropperStore.cancel();
           updateCanvasCursor();
         }
@@ -689,7 +692,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
         lastEraserScenePoint = null;
         const erasedIds = [...eraserMarkedIds];
         if (erasedIds.length > 0) {
-          historyStore.captureUpdate(() => {
+          const { changes: eraserChanges } = historyStore.commitUpdate(() => {
             for (const id of erasedIds) {
               const element = scene.getElement(id);
               if (element && !element.isDeleted) {
@@ -702,6 +705,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
               ),
             );
           });
+          commitHistoryEntry(eraserChanges, "local");
         }
         eraserMarkedIds.clear();
         renderLoop.invalidateStatic();
@@ -722,7 +726,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
 
       if (toolManager.getActiveTool() === "selection") {
         selectionController.pointerUp(scenePoint, event.shiftKey, event.altKey);
-        historyStore.endCapture();
+        commitHistoryEntry(historyStore.endCapture(), "local");
         interactiveCanvas.style.cursor = selectionController.getCursor(
           scenePoint,
           viewportRef.current.zoom,
@@ -742,7 +746,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
         pointerId: event.pointerId,
         pressure: event.pressure,
       });
-      historyStore.endCapture();
+      commitHistoryEntry(historyStore.endCapture(), "local");
 
       if (interactiveCanvas.hasPointerCapture(event.pointerId)) {
         interactiveCanvas.releasePointerCapture(event.pointerId);

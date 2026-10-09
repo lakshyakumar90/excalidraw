@@ -10,6 +10,7 @@ import { styleStore, type CurrentItemStyle } from "@/lib/styles/styleStore";
 import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 import { historyStore } from "@/lib/history/historyStore";
+import { commitHistoryEntry } from "@/lib/sync/commits";
 
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 const EMPTY_RECENT_COLORS: readonly string[] = [];
@@ -196,12 +197,13 @@ export function StylePanel() {
       changes.backgroundColor = "transparent";
     }
 
-    historyStore.captureUpdate(() => {
+    const { changes: entryChanges } = historyStore.commitUpdate(() => {
       styleStore.update(changes);
       for (const element of selectedElements) {
         scene.mutateElement(element.id, changes);
       }
     });
+    commitHistoryEntry(entryChanges, "local");
   };
 
   return (
@@ -405,7 +407,12 @@ export function StylePanel() {
                   key={action}
                   type="button"
                   aria-label={label}
-                  onClick={() => historyStore.captureUpdate(() => scene.reorderElements(selectedIds, action))}
+                  onClick={() => {
+                    const { changes: orderChanges } = historyStore.commitUpdate(() =>
+                      scene.reorderElements(selectedIds, action),
+                    );
+                    commitHistoryEntry(orderChanges, "local");
+                  }}
               className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 px-2 text-xs font-medium text-neutral-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   {label}

@@ -16,6 +16,7 @@ export function startAutosave(
     elements: readonly Element[],
     viewport: Viewport,
   ) => Promise<void> = saveScene,
+  shouldDefer: () => boolean = () => false,
 ): AutosaveHandle {
   let timer: number | null = null;
   let dirty = false;
@@ -32,6 +33,9 @@ export function startAutosave(
       return;
     }
     if (!dirty) return;
+    // Never persist a transient mid-gesture draft: captures always end in a
+    // commit that reschedules, so deferring here only delays, never drops.
+    if (shouldDefer()) return;
 
     saving = true;
     do {

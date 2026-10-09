@@ -3,6 +3,7 @@ import type { Viewport } from "@repo/common";
 import { getArrowMidpoint, measureText, sceneToViewport } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import { historyStore } from "@/lib/history/historyStore";
+import { commitHistoryEntry } from "@/lib/sync/commits";
 
 export interface TextEditorState {
   elementId: string;
@@ -24,7 +25,7 @@ export function commitTextElement(editor: TextEditorState | null): void {
   if (editor && editor.value.length === 0) {
     scene.removeElement(editor.elementId);
   }
-  historyStore.endCapture();
+  commitHistoryEntry(historyStore.endCapture(), "local");
 }
 
 export function TextEditorOverlay({

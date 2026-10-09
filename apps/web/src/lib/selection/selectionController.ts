@@ -31,6 +31,7 @@ import {
 } from "./selectionTransforms";
 import { selectionStore } from "./selectionStore";
 import { historyStore } from "@/lib/history/historyStore";
+import { commitHistoryEntry } from "@/lib/sync/commits";
 
 import {
   cloneElement,
@@ -646,9 +647,11 @@ export const selectionController = {
   },
 
   groupSelection(): boolean {
-    return historyStore.captureUpdate(() =>
+    const { result, changes } = historyStore.commitUpdate(() =>
       this.groupSelectionWithoutCapture(),
     );
+    commitHistoryEntry(changes, "local");
+    return result;
   },
 
   groupSelectionWithoutCapture(): boolean {
@@ -673,9 +676,11 @@ export const selectionController = {
   },
 
   ungroupSelection(): boolean {
-    return historyStore.captureUpdate(() =>
+    const { result, changes } = historyStore.commitUpdate(() =>
       this.ungroupSelectionWithoutCapture(),
     );
+    commitHistoryEntry(changes, "local");
+    return result;
   },
 
   ungroupSelectionWithoutCapture(): boolean {
@@ -710,9 +715,11 @@ export const selectionController = {
   },
 
   duplicateSelection(offset = 10): boolean {
-    return historyStore.captureUpdate(() =>
+    const { result, changes } = historyStore.commitUpdate(() =>
       this.duplicateSelectionWithoutCapture(offset),
     );
+    commitHistoryEntry(changes, "local");
+    return result;
   },
 
   duplicateSelectionWithoutCapture(offset = 10): boolean {
@@ -770,13 +777,15 @@ export const selectionController = {
     const offsetX = cursor.x - (minX + maxX) / 2;
     const offsetY = cursor.y - (minY + maxY) / 2;
 
-    return historyStore.captureUpdate(() => {
+    const { result, changes } = historyStore.commitUpdate(() => {
       const pastedElements = duplicateElements(elements!, offsetX, offsetY);
       for (const element of pastedElements) scene.addElement(element);
       selectionStore.set(pastedElements.map((element) => element.id));
       groupDrillPath = [];
       return true;
     });
+    commitHistoryEntry(changes, "local");
+    return result;
   },
 
   selectAll(): void {
@@ -789,7 +798,7 @@ export const selectionController = {
   },
 
   deleteSelection(): void {
-    historyStore.captureUpdate(() => {
+    const { changes } = historyStore.commitUpdate(() => {
       const selectedIds = new Set(selectionStore.getSnapshot());
       const elementsToDelete = new Set(selectedIds);
       for (const id of selectedIds) {
@@ -852,10 +861,11 @@ export const selectionController = {
       }
       selectionStore.clear();
     });
+    commitHistoryEntry(changes, "local");
   },
 
   nudgeSelection(dx: number, dy: number): void {
-    historyStore.captureUpdate(() => {
+    const { changes: nudgeChanges } = historyStore.commitUpdate(() => {
       const selectedElements = [...selectionStore.getSnapshot()]
         .map((id) => scene.getElement(id))
         .filter(
@@ -863,6 +873,7 @@ export const selectionController = {
         );
       translateSnapshots(getMovementSnapshots(selectedElements), dx, dy);
     });
+    commitHistoryEntry(nudgeChanges, "local");
   },
 };
 

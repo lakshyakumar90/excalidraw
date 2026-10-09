@@ -12,6 +12,7 @@ import { scene } from "@/lib/scene/scene";
 import { toolManager } from "@/lib/tools/toolManager";
 import { styleStore } from "@/lib/styles/styleStore";
 import { historyStore } from "@/lib/history/historyStore";
+import { commitHistoryEntry } from "@/lib/sync/commits";
 import { selectionController } from "@/lib/selection/selectionController";
 import {
   commitTextElement,
@@ -36,7 +37,8 @@ export function createCanvasDoubleClickHandler({
   return (event: MouseEvent) => {
     if (toolManager.getActiveTool() === "multiPointLine") {
       event.preventDefault();
-      historyStore.captureUpdate(() => toolManager.commit());
+      const { changes } = historyStore.commitUpdate(() => toolManager.commit());
+      commitHistoryEntry(changes, "local");
       renderLoop.invalidateInteractive();
       return;
     }

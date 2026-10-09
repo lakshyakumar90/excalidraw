@@ -25,6 +25,9 @@ export function useCanvasPersistence(
     const document = savedScene ? Promise.resolve(savedScene) : loadScene();
 
     function startSaving() {
+      // Defer while a gesture capture is active so transient mid-drag
+      // geometry never persists; the ending commit reschedules.
+      const shouldDefer = () => scene.isCapturing();
       autosave = savedScene
         ? startAutosave(
             scene,
@@ -34,8 +37,9 @@ export function useCanvasPersistence(
               if (savedScene.saveData) await savedScene.saveData(data);
               else await updateSceneData(savedScene.id, data);
             },
+            shouldDefer,
           )
-        : startAutosave(scene, () => viewportRef.current);
+        : startAutosave(scene, () => viewportRef.current, undefined, shouldDefer);
       autosaveRef.current = autosave;
       setReadyFor(savedScene);
     }

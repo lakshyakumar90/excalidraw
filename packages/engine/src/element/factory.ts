@@ -59,6 +59,7 @@ export function createRectangleElement(
     version: options.version ?? 1,
     versionNonce: options.versionNonce ?? generateSeed(),
     isDeleted: options.isDeleted ?? false,
+    orderKey: options.orderKey,
     updated: options.updated ?? Date.now(),
   };
 }
@@ -102,6 +103,7 @@ export function createTextElement(
     version: 1,
     versionNonce: generateSeed(),
     isDeleted: false,
+    orderKey: options.orderKey,
     updated: Date.now(),
   };
 }
@@ -126,6 +128,7 @@ export function createImageElement(
     version: options.version ?? 1,
     versionNonce: options.versionNonce ?? generateSeed(),
     isDeleted: options.isDeleted ?? false,
+    orderKey: options.orderKey,
     updated: options.updated ?? Date.now(),
   };
 }
@@ -155,6 +158,7 @@ export function createEllipseElement(options: ElementOptions): EllipseElement {
     version: 1,
     versionNonce: generateSeed(),
     isDeleted: false,
+    orderKey: options.orderKey,
     updated: now,
   };
 }
@@ -184,6 +188,7 @@ export function createDiamondElement(options: ElementOptions): DiamondElement {
     version: 1,
     versionNonce: generateSeed(),
     isDeleted: false,
+    orderKey: options.orderKey,
     updated: now,
   };
 }
@@ -215,6 +220,7 @@ export function createLineElement(
     version: 1,
     versionNonce: generateSeed(),
     isDeleted: false,
+    orderKey: options.orderKey,
     updated: now,
     points: options.points,
     lineType: options.lineType ?? "straight",

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MAX_ZOOM, MIN_ZOOM } from "@repo/common";
 import { zoomAtPoint } from "@repo/engine";
 import { historyStore } from "@/lib/history/historyStore";
+import { commitUndoRedo } from "@/lib/sync/commits";
 import {
   getCurrentViewport,
   setCurrentViewport,
@@ -290,7 +291,7 @@ export function CanvasControls() {
             aria-label="Undo"
             title="Undo (Ctrl/⌘+Z)"
             disabled={!history.canUndo}
-            onClick={() => historyStore.undo()}
+            onClick={() => commitUndoRedo(historyStore.undo(), "undo")}
             className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
           >
             <Icon name="undo" />
@@ -300,7 +301,7 @@ export function CanvasControls() {
             aria-label="Redo"
             title="Redo (Ctrl/⌘+Shift+Z)"
             disabled={!history.canRedo}
-            onClick={() => historyStore.redo()}
+            onClick={() => commitUndoRedo(historyStore.redo(), "redo")}
             className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
           >
             <Icon name="redo" />
