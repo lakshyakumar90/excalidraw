@@ -1,10 +1,20 @@
 import dotenv from "dotenv";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import postgres from "@prisma/orm-postgres/runtime";
 import { Pool } from "pg";
 import type { Contract } from "./contract.js";
 import contractJson from "./contract.json" with { type: "json" };
 
-dotenv.config();
+// Services run with their own working directories under Turborepo. Load a
+// service-local .env first, then the workspace .env for shared credentials.
+dotenv.config({
+  path: [
+    resolve(process.cwd(), ".env"),
+    fileURLToPath(new URL("../../../../.env", import.meta.url)),
+  ],
+  quiet: true,
+});
 
 const databaseUrl = process.env["DATABASE_URL"];
 if (!databaseUrl) throw new Error("DATABASE_URL must be configured.");
@@ -20,4 +30,8 @@ export const authPool = new Pool({ connectionString: databaseUrl });
 
 export async function connectDatabase() {
   await Promise.all([db.connect(), authPool.query("SELECT 1")]);
+}
+
+export async function connectApplicationDatabase() {
+  await db.connect();
 }
