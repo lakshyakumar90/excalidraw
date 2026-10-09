@@ -18,6 +18,12 @@ export interface RoomSnapshot {
   lastDirtyAt: number;
 }
 
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  retryAfterMs: number;
+}
+
 const roomHashKey = (sceneId: string) =>
   `collab:room:${encodeURIComponent(sceneId)}:state`;
 const roomConnectionsKey = (sceneId: string) =>
@@ -308,6 +314,34 @@ export class RoomRedis {
 
   async publish(event: Record<string, unknown>): Promise<void> {
     await this.redis.publish(EVENTS_CHANNEL, JSON.stringify(event));
+  }
+
+  /** Shared fixed-window limit with bounded, non-identifying Redis keys. */
+  async consumeRateLimit(input: {
+    bucket: string;
+    subject: string;
+    limit: number;
+    windowMs: number;
+  }): Promise<RateLimitResult> {
+    const digest = createHash("sha256")
+      .update(`${input.bucket}\0${input.subject}`)
+      .digest("hex");
+    const result = (await this.redis.eval(
+      `local count=redis.call('INCR',KEYS[1])
+       if count==1 then redis.call('PEXPIRE',KEYS[1],ARGV[1]) end
+       local ttl=redis.call('PTTL',KEYS[1])
+       return {count,ttl}`,
+      1,
+      `collab:rate-limit:${digest}`,
+      Math.max(1, Math.floor(input.windowMs)),
+    )) as [number, number];
+    const count = Number(result[0]);
+    const retryAfterMs = Math.max(0, Number(result[1]));
+    return {
+      allowed: count <= input.limit,
+      remaining: Math.max(0, input.limit - count),
+      retryAfterMs,
+    };
   }
 
   async subscribe(
