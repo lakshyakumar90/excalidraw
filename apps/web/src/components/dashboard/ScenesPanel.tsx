@@ -2,6 +2,7 @@ import { useDashboardScenes } from "@/hooks/dashboard/useDashboardScenes";
 import { primaryButton, secondaryButton } from "./dashboardStyles";
 import { GuestDrawingOffer } from "./GuestDrawingOffer";
 import { SceneCard } from "./SceneCard";
+import { RoomsPanel } from "./RoomsPanel";
 import { useEffect, useRef } from "react";
 import type { SceneSummary } from "@/lib/api/scenes";
 
@@ -99,6 +100,7 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
           ))}
         </ul>
       )}
+      {!dashboard.loadingScenes && <RoomsPanel scenes={dashboard.scenes} />}
     </>
   );
 }
