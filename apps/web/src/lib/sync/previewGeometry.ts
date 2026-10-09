@@ -13,6 +13,7 @@ export function toPreviewElement(element: Element): PreviewWireElement | null {
     x: element.x,
     y: element.y,
   };
+  if (element.frameId) preview.frameId = element.frameId;
   if (typeof element.width === "number" && Number.isFinite(element.width)) {
     preview.width = element.width;
   }

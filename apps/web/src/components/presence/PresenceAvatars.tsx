@@ -26,6 +26,7 @@ export function PresenceAvatars({
 
   return (
     <div
+      data-editor-chrome
       aria-label="Room participants"
       className="fixed right-4 top-16 z-40 flex items-center gap-1.5"
     >
@@ -37,17 +38,17 @@ export function PresenceAvatars({
             type="button"
             title={
               entry.canJump
-                ? `Jump to ${entry.displayName}'s view`
+                ? `Follow ${entry.displayName}'s view`
                 : `${entry.displayName} hasn't shared a view yet`
             }
             aria-label={
               entry.canJump
-                ? `Jump to ${entry.displayName}'s view`
+                ? `Follow ${entry.displayName}'s view`
                 : entry.displayName
             }
             disabled={!entry.canJump}
             onClick={() => onJump(entry.connectionId)}
-            className="grid h-9 w-9 place-items-center rounded-full border-2 border-white text-xs font-semibold text-white shadow-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 enabled:hover:scale-105"
+            className="grid h-11 w-11 place-items-center rounded-full border-2 border-white text-xs font-semibold text-white shadow-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 enabled:hover:scale-105"
             style={{ backgroundColor: color }}
           >
             {initialsForName(entry.displayName)}

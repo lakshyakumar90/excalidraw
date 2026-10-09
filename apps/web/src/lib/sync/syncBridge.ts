@@ -6,9 +6,14 @@ import type { PreviewWireElement } from "@repo/common";
  * IndexedDB, HTTP saves, or the committed outbox.
  */
 export interface RoomSyncBridge {
-  preview: (gestureId: string, seq: number, elements: PreviewWireElement[]) => void;
+  preview: (
+    gestureId: string,
+    seq: number,
+    elements: PreviewWireElement[],
+  ) => void;
   endPreview: (gestureId: string) => void;
   select: (elementIds: readonly string[]) => void;
+  laser?: (frame: import("@repo/common").LaserFrame) => void;
 }
 
 let bridge: RoomSyncBridge | null = null;

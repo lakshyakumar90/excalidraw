@@ -123,6 +123,7 @@ function looksLikeCollabMessage(value: unknown): boolean {
     type === "elements.commit" ||
     type === "elements.preview" ||
     type === "elements.preview.end" ||
+    type === "laser.move" ||
     type === "selection.update"
   );
 }
@@ -213,14 +214,16 @@ export async function startPresenceServer(
   ): void {
     sendToRoom(rooms, roomId, message, sendOptions);
     if (options.roomRedis) {
-      void options.roomRedis.publish({
-        type: "room.broadcast",
-        roomId,
-        message,
-        origin: options.roomRedis.instanceId,
-      }).catch((error: unknown) => {
-        console.error("Room pub/sub broadcast failed:", error);
-      });
+      void options.roomRedis
+        .publish({
+          type: "room.broadcast",
+          roomId,
+          message,
+          origin: options.roomRedis.instanceId,
+        })
+        .catch((error: unknown) => {
+          console.error("Room pub/sub broadcast failed:", error);
+        });
     }
   }
 
@@ -234,7 +237,9 @@ export async function startPresenceServer(
     });
   };
 
-  async function currentRole(connection: RoomConnection): Promise<RoomRole | null> {
+  async function currentRole(
+    connection: RoomConnection,
+  ): Promise<RoomRole | null> {
     if (!options.getRole) return connection.role;
     try {
       const role = await options.getRole(connection.roomId, connection.userId);
@@ -259,7 +264,10 @@ export async function startPresenceServer(
   ): Promise<void> {
     const service = options.service;
     if (!connection.collab || !service || !connection.sceneId) {
-      sendError(connection, "Collaboration is not available on this connection");
+      sendError(
+        connection,
+        "Collaboration is not available on this connection",
+      );
       return;
     }
     if (message.type !== "elements.commit" && options.roomRedis) {
@@ -333,13 +341,17 @@ export async function startPresenceServer(
         // Final geometry is visible immediately, but remains display-only
         // until persistence succeeds. The sender still receives a durable ack.
         const pending = (elements: typeof message.elements) =>
-          broadcastRoom(connection.roomId, {
-            type: "elements.pending",
-            mutationId: message.mutationId,
-            connectionId: connection.connectionId,
-            userId: connection.userId,
-            elements,
-          }, { exceptConnectionId: connection.connectionId });
+          broadcastRoom(
+            connection.roomId,
+            {
+              type: "elements.pending",
+              mutationId: message.mutationId,
+              connectionId: connection.connectionId,
+              userId: connection.userId,
+              elements,
+            },
+            { exceptConnectionId: connection.connectionId },
+          );
         pending(message.elements);
         try {
           result = await service.applyCommit({
@@ -366,8 +378,12 @@ export async function startPresenceServer(
           mutationId: message.mutationId,
           revision: result.revision,
           saved: result.saved,
-          ...(result.persisted !== undefined ? { persisted: result.persisted } : {}),
-          ...(result.corrected.length > 0 ? { corrected: result.corrected } : {}),
+          ...(result.persisted !== undefined
+            ? { persisted: result.persisted }
+            : {}),
+          ...(result.corrected.length > 0
+            ? { corrected: result.corrected }
+            : {}),
           ...(result.missingFiles ? { missingFiles: result.missingFiles } : {}),
           ...(result.reason ? { reason: result.reason } : {}),
         });
@@ -423,6 +439,19 @@ export async function startPresenceServer(
             connectionId: connection.connectionId,
             userId: connection.userId,
             gestureId: message.gestureId,
+          },
+          { exceptConnectionId: connection.connectionId },
+        );
+        return;
+      }
+      case "laser.move": {
+        if (!consumeEphemeralBudget(connection)) return;
+        broadcastRoom(
+          connection.roomId,
+          {
+            ...message,
+            connectionId: connection.connectionId,
+            userId: connection.userId,
           },
           { exceptConnectionId: connection.connectionId },
         );
@@ -555,11 +584,17 @@ export async function startPresenceServer(
       let participants = snapshotParticipants(rooms, connection.roomId);
       if (connection.sceneId && options.roomRedis) {
         try {
-          await options.roomRedis.join(connection.sceneId, connection.connectionId, {
-            userId: connection.userId,
-            displayName: connection.displayName,
-          });
-          participants = await options.roomRedis.listParticipants(connection.sceneId);
+          await options.roomRedis.join(
+            connection.sceneId,
+            connection.connectionId,
+            {
+              userId: connection.userId,
+              displayName: connection.displayName,
+            },
+          );
+          participants = await options.roomRedis.listParticipants(
+            connection.sceneId,
+          );
         } catch (error) {
           console.error("Room connection lease failed:", error);
         }
@@ -627,17 +662,21 @@ export async function startPresenceServer(
         );
         return;
       }
-      void handleCollabMessage(connection, collab.message).catch((error: unknown) => {
-        console.error("Collaboration message failed:", error);
-        sendError(connection, "Sync unavailable right now");
-      });
+      void handleCollabMessage(connection, collab.message).catch(
+        (error: unknown) => {
+          console.error("Collaboration message failed:", error);
+          sendError(connection, "Sync unavailable right now");
+        },
+      );
     });
     ws.on("close", () => {
       detach(connection.roomId, connection.connectionId, connection.userId);
       if (connection.sceneId && options.roomRedis) {
-        void options.roomRedis.leave(connection.sceneId, connection.connectionId).catch((error: unknown) => {
-          console.error("Room connection lease release failed:", error);
-        });
+        void options.roomRedis
+          .leave(connection.sceneId, connection.connectionId)
+          .catch((error: unknown) => {
+            console.error("Room connection lease release failed:", error);
+          });
       }
     });
   });
@@ -651,7 +690,8 @@ export async function startPresenceServer(
         }
         const pathname = (() => {
           try {
-            return new URL(request.url ?? "/", "http://presence.local").pathname;
+            return new URL(request.url ?? "/", "http://presence.local")
+              .pathname;
           } catch {
             return null;
           }
@@ -725,7 +765,13 @@ export async function startPresenceServer(
         // Only after auth and membership pass does the socket join the room.
         (
           request as IncomingMessage & { presenceAuth?: AuthedUpgrade }
-        ).presenceAuth = { roomId, sceneId, userId: claims.userId, displayName, role };
+        ).presenceAuth = {
+          roomId,
+          sceneId,
+          userId: claims.userId,
+          displayName,
+          role,
+        };
         wss.handleUpgrade(request, socket, head, (upgraded) => {
           wss.emit("connection", upgraded, request);
         });
@@ -745,16 +791,20 @@ export async function startPresenceServer(
         userId: connection.userId,
       });
       if (connection.sceneId && options.roomRedis) {
-        void options.roomRedis.leave(connection.sceneId, connection.connectionId).catch(() => {});
+        void options.roomRedis
+          .leave(connection.sceneId, connection.connectionId)
+          .catch(() => {});
       }
     }
     if (options.roomRedis) {
       for (const [, room] of rooms) {
         for (const connection of room.values()) {
           if (connection.sceneId) {
-            void options.roomRedis.renew(connection.sceneId, connection.connectionId).catch((error: unknown) => {
-              console.error("Room connection lease renewal failed:", error);
-            });
+            void options.roomRedis
+              .renew(connection.sceneId, connection.connectionId)
+              .catch((error: unknown) => {
+                console.error("Room connection lease renewal failed:", error);
+              });
           }
         }
       }
@@ -845,9 +895,7 @@ export async function startPresenceServer(
         wss.close((error) => (error ? reject(error) : resolve()));
       });
       await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) =>
-          error ? reject(error) : resolve(),
-        );
+        httpServer.close((error) => (error ? reject(error) : resolve()));
       });
     },
   };

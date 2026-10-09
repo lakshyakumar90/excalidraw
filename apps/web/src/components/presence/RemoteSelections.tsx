@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useId, useSyncExternalStore } from "react";
 import type { Element } from "@repo/common";
 import { sceneToViewport } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
@@ -94,6 +94,10 @@ export function RemoteSelections({
 }: {
   selections: RemoteSelection[];
 }) {
+  const clipPrefix = useId();
+  const projected = new Map(
+    scene.getRenderableElements().map((e) => [e.id, e]),
+  );
   const viewport = useSyncExternalStore(
     subscribeViewport,
     getCurrentViewport,
@@ -105,7 +109,7 @@ export function RemoteSelections({
   for (const selection of selections) {
     const color = colorForUserId(selection.userId);
     for (const id of selection.elementIds) {
-      const element = scene.getElement(id);
+      const element = projected.get(id);
       if (!element || element.isDeleted) continue;
       outlines.push({ key: `${selection.connectionId}:${id}`, element, color });
     }
@@ -114,14 +118,35 @@ export function RemoteSelections({
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-30">
       <svg className="h-full w-full">
-        {outlines.map(({ key, element, color }) => (
-          <SelectionOutline
-            key={key}
-            element={element}
-            color={color}
-            project={(x, y) => sceneToViewport({ x, y }, viewport)}
-          />
-        ))}
+        {outlines.map(({ key, element, color }, index) => {
+          const frame = scene.getElement(element.frameId ?? "");
+          const f = frame?.type === "frame" && !frame.isDeleted ? frame : null;
+          const p = f ? sceneToViewport({ x: f.x, y: f.y }, viewport) : null;
+          const clip = clipPrefix + "-" + index;
+          return (
+            <g key={key}>
+              {f && p && (
+                <defs>
+                  <clipPath id={clip}>
+                    <rect
+                      x={p.x}
+                      y={p.y}
+                      width={(f.width ?? 0) * viewport.zoom}
+                      height={(f.height ?? 0) * viewport.zoom}
+                    />
+                  </clipPath>
+                </defs>
+              )}
+              <g clipPath={f ? "url(#" + clip + ")" : undefined}>
+                <SelectionOutline
+                  element={element}
+                  color={color}
+                  project={(x, y) => sceneToViewport({ x, y }, viewport)}
+                />
+              </g>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );

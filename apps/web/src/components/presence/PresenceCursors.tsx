@@ -63,9 +63,10 @@ export function PresenceCursors({
         for (const participant of targets.values()) {
           const target = participant.pointer!;
           const existing = previousById.get(participant.connectionId);
-          const displayed = existing
-            ? stepCursorTowards(existing.displayed, target, elapsed)
-            : { ...target };
+          const displayed =
+            existing && !matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? stepCursorTowards(existing.displayed, target, elapsed)
+              : { ...target };
           if (
             !existing ||
             displayed.x !== existing.displayed.x ||

@@ -47,7 +47,10 @@ interface Fixtures {
 
 function createFixtures(): Fixtures {
   const tickets = new Map<string, { userId: string; roomId: number }>();
-  const rooms = new Map<number, { sceneId: string; members: Map<string, RoomRole> }>();
+  const rooms = new Map<
+    number,
+    { sceneId: string; members: Map<string, RoomRole> }
+  >();
   const names = new Map<string, string>([
     ["alice", "Alice"],
     ["bob", "Bob"],
@@ -114,7 +117,13 @@ function createFakeService() {
       mutationId: string;
     }): Promise<CommitResult> => {
       if (input.role !== "owner" && input.role !== "editor") {
-        return { saved: false, revision: null, winners: [], corrected: [], reason: "forbidden" };
+        return {
+          saved: false,
+          revision: null,
+          winners: [],
+          corrected: [],
+          reason: "forbidden",
+        };
       }
       const cached = seen.get(input.mutationId);
       if (cached) return { ...cached, replayed: true };
@@ -124,7 +133,11 @@ function createFakeService() {
         revision: 0,
       };
       const incoming = input.elements as NormalizedElement[];
-      const merged = reconcileElements(state.elements, incoming, state.tombstones);
+      const merged = reconcileElements(
+        state.elements,
+        incoming,
+        state.tombstones,
+      );
       const tombstones: TombstoneMap = { ...state.tombstones };
       for (const [id, update] of Object.entries(merged.tombstoneUpdates)) {
         if (update === null) delete tombstones[id];
@@ -137,20 +150,26 @@ function createFakeService() {
         revision,
       });
       const sent = new Map(incoming.map((element) => [element.id, element]));
-      const storedById = new Map(merged.merged.map((element) => [element.id, element]));
+      const storedById = new Map(
+        merged.merged.map((element) => [element.id, element]),
+      );
       const winners: NormalizedElement[] = [];
       const corrected: NormalizedElement[] = [];
       for (const id of sent.keys()) {
         const authoritative = storedById.get(id);
         if (!authoritative) continue;
         winners.push(authoritative);
-        if (
-          JSON.stringify(authoritative) !== JSON.stringify(sent.get(id))
-        ) {
+        if (JSON.stringify(authoritative) !== JSON.stringify(sent.get(id))) {
           corrected.push(authoritative);
         }
       }
-      const result = { saved: true, revision, winners, corrected, replayed: false };
+      const result = {
+        saved: true,
+        revision,
+        winners,
+        corrected,
+        replayed: false,
+      };
       seen.set(input.mutationId, result);
       return result;
     },
@@ -257,7 +276,11 @@ test("sync request returns the authoritative snapshot", async () => {
   service.scenes.set("scene-1", {
     elements: [rect("a", { version: 3, versionNonce: 4 }) as NormalizedElement],
     tombstones: {
-      gone: { version: 2, versionNonce: 1, deletedAt: "2026-10-01T00:00:00.000Z" },
+      gone: {
+        version: 2,
+        versionNonce: 1,
+        deletedAt: "2026-10-01T00:00:00.000Z",
+      },
     },
     revision: 7,
   });
@@ -267,7 +290,9 @@ test("sync request returns the authoritative snapshot", async () => {
     const alice = await join(handle, 1, fixtures.ticket("alice", 1));
     clients.push(alice);
     assert.equal(alice.ws.protocol, COLLAB_WS_PROTOCOL);
-    alice.ws.send(JSON.stringify({ type: "scene.sync.request", requestId: "req-1" }));
+    alice.ws.send(
+      JSON.stringify({ type: "scene.sync.request", requestId: "req-1" }),
+    );
     const snapshot = (await waitFor(alice, isType("scene.sync.snapshot"))) as {
       requestId: string;
       revision: number;
@@ -295,7 +320,9 @@ test("commits acknowledge the sender and fan out winners to others", async () =>
   const service = createFakeService();
   const applyCommit = service.applyCommit;
   let releaseWrite!: () => void;
-  const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+  const writeGate = new Promise<void>((resolve) => {
+    releaseWrite = resolve;
+  });
   service.applyCommit = async (input) => {
     await writeGate;
     return applyCommit(input);
@@ -351,7 +378,10 @@ test("commits acknowledge the sender and fan out winners to others", async () =>
     // tab does.
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.equal(alice.messages.filter(isType("elements.committed")).length, 0);
-    const secondTab = (await waitFor(aliceTab2, isType("elements.committed"))) as {
+    const secondTab = (await waitFor(
+      aliceTab2,
+      isType("elements.committed"),
+    )) as {
       elements: { id: string }[];
     };
     assert.deepEqual(
@@ -536,7 +566,9 @@ test("previews and selections fan out ephemerally with identity", async () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(alice.messages.filter(isType("elements.preview")).length, 0);
 
-    alice.ws.send(JSON.stringify({ type: "elements.preview.end", gestureId: "drag-1" }));
+    alice.ws.send(
+      JSON.stringify({ type: "elements.preview.end", gestureId: "drag-1" }),
+    );
     const ended = (await waitFor(bob, isType("elements.preview.end"))) as {
       gestureId: string;
       userId: string;
@@ -544,7 +576,9 @@ test("previews and selections fan out ephemerally with identity", async () => {
     assert.equal(ended.gestureId, "drag-1");
     assert.equal(ended.userId, "alice");
 
-    alice.ws.send(JSON.stringify({ type: "selection.update", elementIds: ["a", "b"] }));
+    alice.ws.send(
+      JSON.stringify({ type: "selection.update", elementIds: ["a", "b"] }),
+    );
     const selection = (await waitFor(bob, isType("selection.update"))) as {
       userId: string;
       elementIds: string[];
@@ -580,7 +614,10 @@ test("commits stay isolated per room", async () => {
     await waitFor(alice, isType("elements.ack"));
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(carol.messages.filter(isType("elements.committed")).length, 0);
-    assert.ok(!service.scenes.has("scene-2") || service.scenes.get("scene-2")!.elements.length === 0);
+    assert.ok(
+      !service.scenes.has("scene-2") ||
+        service.scenes.get("scene-2")!.elements.length === 0,
+    );
   } finally {
     await closeAll(handle, clients);
   }
@@ -607,7 +644,9 @@ test("large scenes arrive as snapshot metadata plus ordered chunks", async () =>
   try {
     const alice = await join(handle, 1, fixtures.ticket("alice", 1));
     clients.push(alice);
-    alice.ws.send(JSON.stringify({ type: "scene.sync.request", requestId: "big-1" }));
+    alice.ws.send(
+      JSON.stringify({ type: "scene.sync.request", requestId: "big-1" }),
+    );
     const snapshot = (await waitFor(alice, isType("scene.sync.snapshot"))) as {
       requestId: string;
       revision: number;
@@ -646,7 +685,12 @@ test("presence-only connections cannot use collaboration messages", async () => 
   const handle = await startCollabServer(fixtures, service);
   const clients: TestClient[] = [];
   try {
-    const alice = await join(handle, 1, fixtures.ticket("alice", 1), PRESENCE_WS_PROTOCOL);
+    const alice = await join(
+      handle,
+      1,
+      fixtures.ticket("alice", 1),
+      PRESENCE_WS_PROTOCOL,
+    );
     clients.push(alice);
     assert.equal(alice.ws.protocol, PRESENCE_WS_PROTOCOL);
     alice.ws.send(
@@ -691,7 +735,10 @@ test("commit bursts beyond budget slow down instead of dropping", async () => {
     }
     const deadline = Date.now() + 5000;
     const count = (type: string) => alice.messages.filter(isType(type)).length;
-    while (Date.now() < deadline && count("elements.ack") + count("error") < 25) {
+    while (
+      Date.now() < deadline &&
+      count("elements.ack") + count("error") < 25
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     assert.equal(count("elements.ack") + count("error"), 25);
@@ -708,12 +755,17 @@ test("oversized frames are capped by the payload limit", async () => {
   const fixtures = createFixtures();
   addRoom(fixtures, 1, "scene-1", [["alice", "owner"]]);
   const service = createFakeService();
-  const handle = await startCollabServer(fixtures, service, { maxPayloadBytes: 1024 });
+  const handle = await startCollabServer(fixtures, service, {
+    maxPayloadBytes: 1024,
+  });
   try {
     const alice = await join(handle, 1, fixtures.ticket("alice", 1));
     try {
       const code = await new Promise<number>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("oversized frame was accepted")), 3000);
+        const timer = setTimeout(
+          () => reject(new Error("oversized frame was accepted")),
+          3000,
+        );
         alice.ws.once("close", (closeCode) => {
           clearTimeout(timer);
           resolve(closeCode);
@@ -734,5 +786,60 @@ test("oversized frames are capped by the payload limit", async () => {
     }
   } finally {
     await handle.close();
+  }
+});
+
+test("Phase 19 viewer laser is ephemeral, isolated, and carries server identity", async () => {
+  const fixtures = createFixtures();
+  addRoom(fixtures, 1, "scene-1", [
+    ["alice", "owner"],
+    ["bob", "viewer"],
+  ]);
+  addRoom(fixtures, 2, "scene-2", [["carol", "owner"]]);
+  const service = createFakeService();
+  let writes = 0;
+  const apply = service.applyCommit;
+  service.applyCommit = async (input) => {
+    writes++;
+    return apply(input);
+  };
+  const handle = await startCollabServer(fixtures, service);
+  const clients: TestClient[] = [];
+  try {
+    const alice = await join(handle, 1, fixtures.ticket("alice", 1)),
+      bob = await join(handle, 1, fixtures.ticket("bob", 1)),
+      carol = await join(handle, 2, fixtures.ticket("carol", 2));
+    clients.push(alice, bob, carol);
+    await waitFor(bob, isType("presence.snapshot"));
+    bob.ws.send(
+      JSON.stringify({
+        type: "laser.move",
+        gestureId: "laser",
+        seq: 1,
+        points: [{ x: 25, y: 50 }],
+      }),
+    );
+    const message = (await waitFor(alice, isType("laser.move"))) as Record<
+      string,
+      unknown
+    >;
+    assert.equal(message.userId, "bob");
+    assert.equal(typeof message.connectionId, "string");
+    assert.equal(writes, 0);
+    bob.ws.send(
+      JSON.stringify({
+        type: "laser.move",
+        gestureId: "laser",
+        seq: 2,
+        points: [{ x: 25, y: 50 }],
+        userId: "alice",
+      }),
+    );
+    await waitFor(bob, isType("error"));
+    assert.equal(bob.messages.filter(isType("laser.move")).length, 0);
+    assert.equal(carol.messages.filter(isType("laser.move")).length, 0);
+    assert.equal(writes, 0);
+  } finally {
+    await closeAll(handle, clients);
   }
 });

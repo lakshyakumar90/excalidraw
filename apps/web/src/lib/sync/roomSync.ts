@@ -17,6 +17,12 @@ import {
   type PresenceConnectionStatus,
 } from "@/lib/presence/presenceSocket";
 import { setCanvasPresencePublisher } from "@/lib/presence/presencePublisher";
+import {
+  removeLaser,
+  receiveLaser,
+  clearLaser,
+  followState,
+} from "@/lib/presence/laser";
 import { setRoomSyncBridge } from "@/lib/sync/syncBridge";
 import { createThrottledPublisher } from "@/lib/presence/throttle";
 import {
@@ -113,7 +119,8 @@ function applyPresenceMessage(
     case "presence.joined":
       return {
         participants: participants.some(
-          (participant) => participant.connectionId === message.participant.connectionId,
+          (participant) =>
+            participant.connectionId === message.participant.connectionId,
         )
           ? participants.map((participant) =>
               participant.connectionId === message.participant.connectionId
@@ -166,7 +173,12 @@ function applyPresenceMessage(
 }
 
 function unionTombstones(
-  ...maps: Record<string, { version: number; versionNonce: number; deletedAt: string } | null | undefined>[]
+  ...maps: Record<
+    string,
+    | { version: number; versionNonce: number; deletedAt: string }
+    | null
+    | undefined
+  >[]
 ): TombstoneMap {
   const union: TombstoneMap = {};
   for (const map of maps) {
@@ -176,7 +188,8 @@ function unionTombstones(
       if (
         !existing ||
         entry.version > existing.version ||
-        (entry.version === existing.version && entry.versionNonce > existing.versionNonce)
+        (entry.version === existing.version &&
+          entry.versionNonce > existing.versionNonce)
       ) {
         union[id] = { ...entry };
       } else if (existing.deletedAt === "" && entry.deletedAt !== "") {
@@ -190,7 +203,10 @@ function unionTombstones(
 function normalizeAll(elements: readonly Element[]): NormalizedElement[] {
   const out: NormalizedElement[] = [];
   for (const element of elements) {
-    const normalized = normalizeElement(element, { strict: false, orderFallback: 0 });
+    const normalized = normalizeElement(element, {
+      strict: false,
+      orderFallback: 0,
+    });
     if (normalized) out.push(normalized);
   }
   return out;
@@ -247,7 +263,10 @@ export class RoomSync {
   private selfUserId: string | null;
   /** Ephemeral remote gesture previews (rendered, never persisted). */
   readonly previews = new PreviewStore();
-  private remoteSelections = new Map<string, { userId: string; elementIds: string[] }>();
+  private remoteSelections = new Map<
+    string,
+    { userId: string; elementIds: string[] }
+  >();
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
   private retryTimer: ReturnType<typeof setInterval> | null = null;
   private previewPruneTimer: ReturnType<typeof setInterval> | null = null;
@@ -277,16 +296,22 @@ export class RoomSync {
   );
   private previewPublisher = createThrottledPublisher(
     PRESENCE_THROTTLE_MS,
-    (frame: { gestureId: string; seq: number; elements: PreviewWireElement[] }) => {
+    (frame: {
+      gestureId: string;
+      seq: number;
+      elements: PreviewWireElement[];
+    }) => {
       if (!this.connection?.isOpen) return;
-      const base: Record<string, { version: number; versionNonce: number }> = {};
+      const base: Record<string, { version: number; versionNonce: number }> =
+        {};
       for (const element of frame.elements) {
         const current = this.deps.scene.getElement(element.id);
         if (current && Number.isSafeInteger(current.version)) {
           base[element.id] = {
             version: current.version as number,
             versionNonce:
-              Number.isSafeInteger(current.versionNonce) && (current.versionNonce ?? -1) >= 0
+              Number.isSafeInteger(current.versionNonce) &&
+              (current.versionNonce ?? -1) >= 0
                 ? (current.versionNonce as number)
                 : 0,
           };
@@ -318,7 +343,11 @@ export class RoomSync {
   }
 
   private get roomKey(): string {
-    return draftKey(this.selfUserId ?? "anon", this.deps.roomId, this.deps.sceneId);
+    return draftKey(
+      this.selfUserId ?? "anon",
+      this.deps.roomId,
+      this.deps.sceneId,
+    );
   }
 
   private get clock(): () => number {
@@ -405,7 +434,8 @@ export class RoomSync {
       // The draft replays over the HTTP base: its offline commits carry
       // higher versions and survive the merge deterministically.
       this.deps.scene.replaceAll(
-        reconcileElements(http.elements, draft.elements, this.tombstones).merged,
+        reconcileElements(http.elements, draft.elements, this.tombstones)
+          .merged,
       );
     } else {
       this.tombstones = httpTombstones;
@@ -454,6 +484,9 @@ export class RoomSync {
         this.publishLocalPreview(gestureId, seq, elements),
       endPreview: (gestureId) => this.endLocalPreview(gestureId),
       select: (elementIds) => this.publishSelection(elementIds),
+      laser: (frame) => {
+        if (this.connection?.isOpen) this.connection.send(frame);
+      },
     });
     this.unsubscribeViewport = subscribeViewport(() => this.publishViewport());
     this.connection = this.deps.createConnection({
@@ -462,11 +495,12 @@ export class RoomSync {
         if (generation !== this.generation) return;
         if (message.type === "room.access.changed") {
           this.readOnly = message.role !== "owner" && message.role !== "editor";
-          this.notice = message.role === null
-            ? "Room access was removed. Pending edits remain on this device."
-            : this.readOnly
-              ? "This room is now view-only. Pending edits remain on this device."
-              : null;
+          this.notice =
+            message.role === null
+              ? "Room access was removed. Pending edits remain on this device."
+              : this.readOnly
+                ? "This room is now view-only. Pending edits remain on this device."
+                : null;
           if (typeof window !== "undefined")
             window.dispatchEvent(
               new CustomEvent("room-access-changed", {
@@ -490,10 +524,12 @@ export class RoomSync {
             }
           }
           for (const connectionId of [...this.remoteSelections.keys()]) {
-            if (!live.has(connectionId)) this.remoteSelections.delete(connectionId);
+            if (!live.has(connectionId))
+              this.remoteSelections.delete(connectionId);
           }
         }
         if (applied.leftConnectionId) {
+          removeLaser(applied.leftConnectionId);
           this.previews.clearConnection(applied.leftConnectionId);
           this.remoteSelections.delete(applied.leftConnectionId);
         }
@@ -521,7 +557,10 @@ export class RoomSync {
       if (generation !== this.generation) return;
       if (this.status === "live") void this.replayOutbox();
     }, OUTBOX_RETRY_MS);
-    if (this.retryTimer && typeof (this.retryTimer as { unref?: () => void }).unref === "function") {
+    if (
+      this.retryTimer &&
+      typeof (this.retryTimer as { unref?: () => void }).unref === "function"
+    ) {
       (this.retryTimer as unknown as { unref: () => void }).unref();
     }
     this.previewPruneTimer = setInterval(() => {
@@ -530,7 +569,8 @@ export class RoomSync {
     }, PREVIEW_PRUNE_MS);
     if (
       this.previewPruneTimer &&
-      typeof (this.previewPruneTimer as { unref?: () => void }).unref === "function"
+      typeof (this.previewPruneTimer as { unref?: () => void }).unref ===
+        "function"
     ) {
       (this.previewPruneTimer as unknown as { unref: () => void }).unref();
     }
@@ -542,9 +582,14 @@ export class RoomSync {
     if (this.unsubscribeScene) this.unsubscribeScene();
     if (this.unsubscribeCommit) this.unsubscribeCommit();
     if (this.unsubscribeViewport) this.unsubscribeViewport();
-    this.unsubscribeScene = this.unsubscribeCommit = this.unsubscribeViewport = null;
+    this.unsubscribeScene =
+      this.unsubscribeCommit =
+      this.unsubscribeViewport =
+        null;
     setCanvasPresencePublisher(null);
     setRoomSyncBridge(null);
+    clearLaser();
+    followState.active = false;
     this.pointerPublisher.cancel();
     this.viewportPublisher.cancel();
     this.previewPublisher.cancel();
@@ -573,13 +618,17 @@ export class RoomSync {
   }
 
   private publishViewport(): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || followState.active) return;
     const viewport = getCurrentViewport();
     const center = viewportToScene(
       { x: window.innerWidth / 2, y: window.innerHeight / 2 },
       viewport,
     );
-    this.viewportPublisher.push({ x: center.x, y: center.y, zoom: viewport.zoom });
+    this.viewportPublisher.push({
+      x: center.x,
+      y: center.y,
+      zoom: viewport.zoom,
+    });
   }
 
   private async requestSync(): Promise<void> {
@@ -608,25 +657,39 @@ export class RoomSync {
       case "elements.pending": {
         const gestureId = `commit:${message.mutationId}`;
         this.previews.clearGesture(message.connectionId, gestureId);
-        const active = new Set(this.deps.scene.isCapturing()
-          ? this.deps.scene.getCapturedIds() : []);
+        const active = new Set(
+          this.deps.scene.isCapturing() ? this.deps.scene.getCapturedIds() : [],
+        );
         const elements = message.elements.filter((element) => {
           if (active.has(element.id) || element.isDeleted) return false;
           const local = this.deps.scene.getElement(element.id);
-          const normalized = local && normalizeElement(local, { strict: false, orderFallback: 0 });
-          return !normalized || pickElementWinner(normalized, element).winner === element;
+          const normalized =
+            local &&
+            normalizeElement(local, { strict: false, orderFallback: 0 });
+          return (
+            !normalized ||
+            pickElementWinner(normalized, element).winner === element
+          );
         });
         if (elements.length > 0) {
           const ids = new Set(elements.map((element) => element.id));
           for (const preview of this.previews.getPreviews()) {
-            if (preview.connectionId === message.connectionId &&
-              preview.elements.some((element) => ids.has(element.id))) {
-              this.previews.clearGesture(preview.connectionId, preview.gestureId);
+            if (
+              preview.connectionId === message.connectionId &&
+              preview.elements.some((element) => ids.has(element.id))
+            ) {
+              this.previews.clearGesture(
+                preview.connectionId,
+                preview.gestureId,
+              );
             }
           }
           this.previews.setPreview({
-            connectionId: message.connectionId, gestureId, seq: 0,
-            elements, receivedAt: this.clock(),
+            connectionId: message.connectionId,
+            gestureId,
+            seq: 0,
+            elements,
+            receivedAt: this.clock(),
           });
         }
         return;
@@ -659,6 +722,12 @@ export class RoomSync {
         return;
       case "elements.preview.end":
         this.previews.clearGesture(message.connectionId, message.gestureId);
+        return;
+      case "laser.move":
+        if (
+          this.participants.some((p) => p.connectionId === message.connectionId)
+        )
+          receiveLaser(message);
         return;
       case "selection.update":
         if (message.elementIds.length === 0) {
@@ -696,7 +765,8 @@ export class RoomSync {
         : 0;
       return !(
         (current.version as number) > base.version ||
-        ((current.version as number) === base.version && nonce > base.versionNonce)
+        ((current.version as number) === base.version &&
+          nonce > base.versionNonce)
       );
     });
     // A fully filtered frame leaves no ghost behind.
@@ -737,7 +807,12 @@ export class RoomSync {
     this.selectionPublisher.push([...elementIds]);
   }
 
-  private async handleSnapshot(message: Extract<ServerToClientCollabMessage, { type: "scene.sync.snapshot" }>): Promise<void> {
+  private async handleSnapshot(
+    message: Extract<
+      ServerToClientCollabMessage,
+      { type: "scene.sync.snapshot" }
+    >,
+  ): Promise<void> {
     const pending = this.pendingSync;
     if (!pending || message.requestId !== pending.requestId) return;
     if (message.chunks && message.chunks.count > 1) {
@@ -757,9 +832,12 @@ export class RoomSync {
     ]);
   }
 
-  private async handleChunk(message: Extract<ServerToClientCollabMessage, { type: "scene.sync.chunk" }>): Promise<void> {
+  private async handleChunk(
+    message: Extract<ServerToClientCollabMessage, { type: "scene.sync.chunk" }>,
+  ): Promise<void> {
     const pending = this.pendingSync;
-    if (!pending || !pending.chunks || message.requestId !== pending.requestId) return;
+    if (!pending || !pending.chunks || message.requestId !== pending.requestId)
+      return;
     if (message.count !== pending.chunkCount) return;
     pending.chunks.set(message.index, [...message.elements]);
     if (pending.chunks.size !== pending.chunkCount) {
@@ -782,7 +860,9 @@ export class RoomSync {
   ): Promise<void> {
     const generation = this.generation;
     // Deltas that arrived during assembly and supersede the snapshot.
-    const fresh = this.bufferedDeltas.filter((delta) => delta.revision > revision);
+    const fresh = this.bufferedDeltas.filter(
+      (delta) => delta.revision > revision,
+    );
     const freshRevisions = fresh.map((delta) => delta.revision);
     const freshElements = fresh.flatMap((delta) => delta.elements);
     this.pendingSync = null;
@@ -790,7 +870,11 @@ export class RoomSync {
     this.tombstones = unionTombstones(this.tombstones, tombstones);
     this.revision = Math.max(this.revision, revision, ...freshRevisions);
     const local = this.deps.scene.getElements();
-    const result = reconcileElements(local, [...elements, ...freshElements], this.tombstones);
+    const result = reconcileElements(
+      local,
+      [...elements, ...freshElements],
+      this.tombstones,
+    );
     this.confirmTriples(elements);
     this.confirmTriples(freshElements);
     this.tombstones = unionTombstones(this.tombstones, result.tombstoneUpdates);
@@ -807,7 +891,10 @@ export class RoomSync {
     }
     if (now.length > 0) {
       const applied = this.deps.scene.applyRemote(now, this.tombstones);
-      this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      this.tombstones = unionTombstones(
+        this.tombstones,
+        applied.tombstoneUpdates,
+      );
       void this.deps.fileSync?.download(now).catch(() => {});
     }
     if (generation !== this.generation) return;
@@ -817,10 +904,21 @@ export class RoomSync {
     this.emit();
   }
 
-  private async handleCommitted(message: Extract<ServerToClientCollabMessage, { type: "elements.committed" }>): Promise<void> {
-    this.previews.clearGesture(message.connectionId, `commit:${message.mutationId}`);
+  private async handleCommitted(
+    message: Extract<
+      ServerToClientCollabMessage,
+      { type: "elements.committed" }
+    >,
+  ): Promise<void> {
+    this.previews.clearGesture(
+      message.connectionId,
+      `commit:${message.mutationId}`,
+    );
     if (this.pendingSync) {
-      this.bufferedDeltas.push({ revision: message.revision, elements: [...message.elements] });
+      this.bufferedDeltas.push({
+        revision: message.revision,
+        elements: [...message.elements],
+      });
       this.emit();
       return;
     }
@@ -835,7 +933,10 @@ export class RoomSync {
     }
     if (now.length > 0) {
       const applied = this.deps.scene.applyRemote(now, this.tombstones);
-      this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      this.tombstones = unionTombstones(
+        this.tombstones,
+        applied.tombstoneUpdates,
+      );
       void this.deps.fileSync?.download(now).catch(() => {});
     }
     await this.coverOutbox();
@@ -843,12 +944,20 @@ export class RoomSync {
     this.emit();
   }
 
-  private async handleAck(message: Extract<ServerToClientCollabMessage, { type: "elements.ack" }>): Promise<void> {
+  private async handleAck(
+    message: Extract<ServerToClientCollabMessage, { type: "elements.ack" }>,
+  ): Promise<void> {
     const entry = this.outbox.get(message.mutationId);
     if (message.corrected && message.corrected.length > 0) {
       this.confirmTriples(message.corrected);
-      const applied = this.deps.scene.applyRemote(message.corrected, this.tombstones);
-      this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      const applied = this.deps.scene.applyRemote(
+        message.corrected,
+        this.tombstones,
+      );
+      this.tombstones = unionTombstones(
+        this.tombstones,
+        applied.tombstoneUpdates,
+      );
       void this.deps.fileSync?.download(message.corrected).catch(() => {});
     }
     if (message.revision !== null && message.revision !== undefined) {
@@ -871,7 +980,8 @@ export class RoomSync {
       this.notice = null;
     } else if (message.reason === "forbidden") {
       this.readOnly = true;
-      this.notice = "This room is now view-only, so new edits stay on this device.";
+      this.notice =
+        "This room is now view-only, so new edits stay on this device.";
     } else if (message.missingFiles && message.missingFiles.length > 0) {
       this.filesBlocked.add(message.mutationId);
       this.notice = "Uploading image files before retrying the pending edit.";
@@ -898,7 +1008,8 @@ export class RoomSync {
     if (elements.length === 0) return;
     if (this.readOnly) {
       await this.outbox.enqueue(this.roomKey, elements, this.revision);
-      this.notice = "This room is now view-only. Pending edits remain on this device.";
+      this.notice =
+        "This room is now view-only. Pending edits remain on this device.";
       await this.persistDraftSoon();
       this.emit();
       return;
@@ -912,7 +1023,10 @@ export class RoomSync {
         survivors.push(committed);
         continue;
       }
-      const local = normalizeElement(committed, { strict: false, orderFallback: 0 });
+      const local = normalizeElement(committed, {
+        strict: false,
+        orderFallback: 0,
+      });
       if (!local) {
         survivors.push(committed);
         continue;
@@ -937,7 +1051,11 @@ export class RoomSync {
     } catch {
       // Offline or missing local bytes: the authority reports missingFiles.
     }
-    const entry = await this.outbox.enqueue(this.roomKey, survivors, this.revision);
+    const entry = await this.outbox.enqueue(
+      this.roomKey,
+      survivors,
+      this.revision,
+    );
     // Send immediately; the draft persist stays debounced and unordered.
     this.sendEntry(entry);
     this.emit();
@@ -1023,7 +1141,8 @@ export class RoomSync {
       ),
     );
     for (const triple of [...this.confirmedTriples]) {
-      if (!pendingIds.has(triple.split(":")[0]!)) this.confirmedTriples.delete(triple);
+      if (!pendingIds.has(triple.split(":")[0]!))
+        this.confirmedTriples.delete(triple);
     }
   }
 
@@ -1042,7 +1161,10 @@ export class RoomSync {
   private async flushDeferredAsCancel(): Promise<void> {
     if (this.deferred.size === 0) return;
     const current = new Map(
-      normalizeAll(this.deps.scene.getElements()).map((element) => [element.id, element]),
+      normalizeAll(this.deps.scene.getElements()).map((element) => [
+        element.id,
+        element,
+      ]),
     );
     const winners: NormalizedElement[] = [];
     for (const deferred of this.deferred.values()) {
@@ -1052,12 +1174,16 @@ export class RoomSync {
         continue;
       }
       const { winner, source } = pickElementWinner(local, deferred);
-      if (source !== "local") winners.push(winner === deferred ? deferred : winner);
+      if (source !== "local")
+        winners.push(winner === deferred ? deferred : winner);
     }
     this.deferred.clear();
     if (winners.length > 0) {
       const applied = this.deps.scene.applyRemote(winners, this.tombstones);
-      this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      this.tombstones = unionTombstones(
+        this.tombstones,
+        applied.tombstoneUpdates,
+      );
       await this.persistDraftSoon();
     }
     this.emit();

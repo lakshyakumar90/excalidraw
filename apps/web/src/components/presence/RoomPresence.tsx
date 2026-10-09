@@ -1,10 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import type { Element, TombstoneMap } from "@repo/common";
 import type { RoomRole } from "@repo/common";
 import { useRoomSync } from "@/hooks/sync/useRoomSync";
-import { setCurrentViewport } from "@/lib/persistence/viewportStore";
+import { easeFollowViewport } from "@/lib/presence/follow";
+import { followState } from "@/lib/presence/laser";
+import {
+  getCurrentViewport,
+  setCurrentViewport,
+} from "@/lib/persistence/viewportStore";
 import { computeJumpViewport } from "@/lib/presence/viewportJump";
 import { PresenceAvatars } from "@/components/presence/PresenceAvatars";
 import { PresenceCursors } from "@/components/presence/PresenceCursors";
@@ -35,9 +40,97 @@ export function RoomPresence({
 }) {
   const syncHttpScene = useMemo(() => httpScene, [httpScene]);
   const sync = useRoomSync({ roomId, sceneId, httpScene: syncHttpScene, role });
-  const { status, detail, participants, selfUserId, selections, previews } = sync;
+  const { status, detail, participants, selfUserId, selections, previews } =
+    sync;
 
+  const [following, setFollowing] = useState<string | null>(null);
+  const participantsRef = useRef(participants);
+  participantsRef.current = participants;
+  useEffect(() => {
+    followState.active = Boolean(following);
+    if (!following) return;
+    let frame = 0,
+      last = performance.now(),
+      lastUpdate = last,
+      lastTarget = "";
+    const stop = () => {
+      followState.active = false;
+      setFollowing(null);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (
+        e.key === "Escape" ||
+        (!e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey &&
+          [
+            " ",
+            "+",
+            "-",
+            "ArrowLeft",
+            "ArrowRight",
+            "ArrowUp",
+            "ArrowDown",
+          ].includes(e.key))
+      )
+        stop();
+    };
+    const tick = (now: number) => {
+      if (!followState.active) return;
+      const target = participantsRef.current.find(
+        (p) => p.connectionId === following,
+      )?.viewport;
+      if (!target) {
+        stop();
+        return;
+      }
+      const signature = JSON.stringify(target);
+      if (signature !== lastTarget) {
+        lastTarget = signature;
+        lastUpdate = now;
+      }
+      if (now - lastUpdate > 30000) {
+        stop();
+        return;
+      }
+      const desired = computeJumpViewport(target, {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }),
+        current = getCurrentViewport();
+      const next = easeFollowViewport(
+        current,
+        desired,
+        now - last,
+        matchMedia("(prefers-reduced-motion: reduce)").matches,
+      );
+      last = now;
+      if (
+        Math.abs(next.zoom - current.zoom) > 1e-5 ||
+        Math.abs(next.scrollX - current.scrollX) > 1e-3 ||
+        Math.abs(next.scrollY - current.scrollY) > 1e-3
+      )
+        setCurrentViewport(next);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    window.addEventListener("canvas-user-interaction", stop);
+    window.addEventListener("wheel", stop, { passive: true });
+    window.addEventListener("keydown", key);
+    return () => {
+      cancelAnimationFrame(frame);
+      followState.active = false;
+      window.removeEventListener("canvas-user-interaction", stop);
+      window.removeEventListener("wheel", stop);
+      window.removeEventListener("keydown", key);
+    };
+  }, [following]);
+  useEffect(() => {
+    if (status !== "live") setFollowing(null);
+  }, [status]);
   const handleJump = (connectionId: string) => {
+    followState.active = true;
+    setFollowing(connectionId);
     const target = participants.find(
       (participant) => participant.connectionId === connectionId,
     )?.viewport;
@@ -52,6 +145,19 @@ export function RoomPresence({
 
   return (
     <>
+      {following && (
+        <button
+          className="fixed right-4 top-28 z-50 min-h-11 rounded-lg bg-white px-3 text-sm shadow-sm focus-visible:outline-2 focus-visible:outline-violet-600"
+          onClick={() => {
+            followState.active = false;
+            setFollowing(null);
+          }}
+        >
+          Following{" "}
+          {participants.find((p) => p.connectionId === following)?.displayName}{" "}
+          · Stop
+        </button>
+      )}
       <PresenceCursors participants={participants} selfUserId={selfUserId} />
       <RemotePreviews previews={previews} participants={participants} />
       <RemoteSelections selections={selections} />
