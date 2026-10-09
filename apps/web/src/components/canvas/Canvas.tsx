@@ -19,6 +19,7 @@ import {
   zoomAtPoint,
 } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
+import { getCanvasPresencePublisher } from "@/lib/presence/presencePublisher";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
 import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
@@ -422,6 +423,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
 
       pointerRef.current = point;
       scenePointerRef.current = viewportToScene(point, viewportRef.current);
+      getCanvasPresencePublisher()?.pointer(scenePointerRef.current);
 
       if (eyedropperPointerIdRef.current === event.pointerId) return;
 
@@ -758,6 +760,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
     };
 
     const handlePointerLeave = () => {
+      getCanvasPresencePublisher()?.leave();
       if (eraserPointerId !== null) return;
       eraserCursor = null;
       renderLoop.invalidateInteractive();

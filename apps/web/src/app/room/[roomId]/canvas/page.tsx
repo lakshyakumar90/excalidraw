@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Element } from "@repo/common";
 import { CanvasWorkspace } from "@/components/canvas/CanvasWorkspace";
+import { RoomPresence } from "@/components/presence/RoomPresence";
 import { getRoom, saveRoomScene } from "@/lib/api/rooms";
 import { viewportFromSceneData } from "@/lib/api/scenes";
 import { cacheSavedSceneFiles } from "@/lib/persistence/savedScene";
@@ -32,14 +33,17 @@ export default function RoomCanvasPage() {
   }, [roomId]);
   if (room?.scene && room.role !== "viewer")
     return (
-      <CanvasWorkspace
-        savedScene={{
-          id: room.scene.id,
-          elements: room.scene.data.elements as Element[],
-          viewport: viewportFromSceneData(room.scene.data),
-          saveData: (data) => saveRoomScene(roomId, data),
-        }}
-      />
+      <>
+        <CanvasWorkspace
+          savedScene={{
+            id: room.scene.id,
+            elements: room.scene.data.elements as Element[],
+            viewport: viewportFromSceneData(room.scene.data),
+            saveData: (data) => saveRoomScene(roomId, data),
+          }}
+        />
+        <RoomPresence key={roomId} roomId={roomId} />
+      </>
     );
   return (
     <main className="grid min-h-screen place-items-center bg-[#faf9f6] p-5 text-neutral-900">
