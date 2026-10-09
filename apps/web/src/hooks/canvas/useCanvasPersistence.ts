@@ -30,10 +30,9 @@ export function useCanvasPersistence(
             scene,
             () => viewportRef.current,
             async (elements, viewport) => {
-              await updateSceneData(
-                savedScene.id,
-                await buildSavedSceneData(elements, viewport),
-              );
+              const data = await buildSavedSceneData(elements, viewport);
+              if (savedScene.saveData) await savedScene.saveData(data);
+              else await updateSceneData(savedScene.id, data);
             },
           )
         : startAutosave(scene, () => viewportRef.current);
