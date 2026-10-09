@@ -1,162 +1,59 @@
-# Turborepo starter
+# Collaborative drawing workspace
 
-## Local collaboration services
+A TypeScript drawing application with guest storage, authenticated scenes, real-time rooms, a hand-drawn renderer, Redis write-behind persistence, and the Phase 19 editor features.
 
-Room collaboration uses Redis for live snapshots and the write-behind queue. Set `REDIS_URL` in the workspace `.env` (see `.env.example`), then start local Redis with `docker compose up -d redis`. The workspace dev command starts the HTTP server, WebSocket server, web app, and snapshot flush worker. Postgres remains the durable store and is accessed through `packages/db`.
+## Requirements
 
-This Turborepo starter is maintained by the Turborepo core team.
+Node.js 24+, pnpm 11.25.0, PostgreSQL 15+, and Redis. Email delivery is needed for verification and invites; Google OAuth is optional.
 
-## Using this example
+## Setup
 
-Run the following command:
+1. Run `pnpm install` at the repository root.
+2. Copy `.env.example` to `.env`. Configure PostgreSQL, Redis, web origin, HTTP URL, and independent random authentication/presence secrets of at least 32 characters. Service-local environment files override shared settings.
+3. Copy `apps/web/.env.example` to `apps/web/.env.local`, and configure public API/WebSocket URLs. Public variables must never contain secrets.
+4. Start PostgreSQL and Redis. Use an existing local Redis or `docker compose up -d redis`.
+5. From `packages/db`, run `pnpm db:emit`, `pnpm db:migration-check`, and `pnpm db:migrate` for a fresh database. For an existing database, verify migration/schema state before applying changes; do not blindly sign or reset it.
+6. Run `pnpm dev` at the root. Turbo starts the web app, HTTP server, WebSocket server, and snapshot flush worker with their build dependencies.
 
-```sh
-npx create-turbo@latest
-```
+Default URLs: [editor](http://localhost:3000/), [dashboard/sign-in](http://localhost:3000/dashboard), HTTP at port 5000, and WebSocket at port 8080. Redis defaults to port 6379. See environment examples for email and OAuth settings.
 
-## What's inside?
+## Architecture
 
-This Turborepo includes the following packages/apps:
+| Workspace                                           | Ownership                                                   |
+| --------------------------------------------------- | ----------------------------------------------------------- |
+| [web](apps/web/README.md)                           | Editor, account/room pages, IndexedDB, collaboration client |
+| [HTTP server](apps/http-server/README.md)           | Authenticated scene, room, invite, file, and library APIs   |
+| [WebSocket server](apps/ws-server/README.md)        | Authenticated room messages and presence                    |
+| [flush worker](apps/flush-worker/README.md)         | BullMQ durable room snapshot flushes                        |
+| [common](packages/common/README.md)                 | Cross-platform types, protocols, validation, reconciliation |
+| [engine](packages/engine/README.md)                 | Geometry, tools, rendering, scene capture, history          |
+| [backend-common](packages/backend-common/README.md) | Backend-only shared collaboration/access operations         |
+| [db](packages/db/README.md)                         | Sole Prisma schema/client/repositories/migration graph      |
+| [auth](packages/auth/README.md)                     | Authentication client/server and email integration          |
+| [redis](packages/redis/README.md)                   | Live state, pub/sub, queue and rate limiting                |
 
-### Apps and Packages
+Each maintained source folder has a README listing files and child folders. Generated output, dependencies, migration snapshots, and build caches are excluded.
 
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Data and editor behavior
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+Guest drawings/stamps stay on the device; account scenes/stamps are private authenticated records. Room commits reconcile deterministically per element, update Redis, and flush through Prisma to versioned durable snapshots. Presence, previews, selections, viewport updates, and laser trails are ephemeral. Servers enforce owner/editor/viewer permissions.
 
-### Utilities
+Frames are flat and axis-aligned. Library insertion remaps element identities and carries image data. Compact screens open tools/styles on demand; panels scroll within bounded space. The canvas fills its dynamic viewport, while account and room pages retain document scrolling.
 
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
-```
-
-Without global `turbo`, use your package manager:
+## Development checks
 
 ```sh
-cd my-turborepo
-npx turbo build
-pnpm exec turbo build
-pnpm exec turbo build
+pnpm check-types
+pnpm --filter web test
+pnpm --filter @repo/common test
+pnpm --filter @repo/engine test
+pnpm --filter web build
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Use the service package scripts for focused server checks. Run relevant tests once, then resolve concrete failures. Browser checks should cover phone portrait/landscape, tablet, 1024px, and desktop. Physical touch/pen and screen-reader behavior require real-device verification.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Contributing
 
-```sh
-turbo build --filter=docs
-```
+Keep commits small and coherent. Put cross-platform reuse in common, server-only reuse in backend-common, authentication in auth, and durable database operations in db. Do not initialize a database inside a server app, commit environment credentials, edit generated output, or change a protocol without its validators/tests.
 
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+[Phase records](docs/README.md) document implementation and testing scope. [Phase 19 summary](docs/phase-19-implementation-summary.md) includes manual verification limits. Phase branches are retained after integration for inspectable history.

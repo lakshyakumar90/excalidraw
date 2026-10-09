@@ -1,24 +1,15 @@
-# web
+# ws-server
 
-Next.js editor, account dashboard, and room access interface.
+Authenticated room WebSocket transport for presence, scene changes, selections, and laser trails.
 
 ## Subfolders
 
-- [public](./public/README.md)
 - [src](./src/README.md)
 
 ## Files
 
-- `AGENTS.md`
-- `CLAUDE.md`
-- `eslint.config.mjs`
-- `next-env.d.ts`
-- `next.config.ts`
 - `package.json` — workspace scripts and dependencies.
-- `pnpm-lock.yaml`
-- `postcss.config.mjs`
 - `tsconfig.json`
-- `vitest.config.ts`
 
 ## Working here
 
@@ -29,10 +20,10 @@ Keep changes within this folder’s responsibility. Follow the owning app/packag
 From the repository root:
 
 ```sh
-pnpm --filter web dev
-pnpm --filter web build
-pnpm --filter web test
-pnpm --filter web check-types
+pnpm --filter ws-server dev
+pnpm --filter ws-server build
+pnpm --filter ws-server test
+pnpm --filter ws-server check-types
 ```
 
 Use root `pnpm dev` to start all services with build dependencies. See [workspace setup](../../README.md) for environment and migration guidance.
