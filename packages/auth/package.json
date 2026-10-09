@@ -4,10 +4,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/server.ts",
-    "./client": "./src/client.ts"
+    ".": {
+      "types": "./src/server.ts",
+      "default": "./dist/server.js"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./dist/client.js"
+    }
   },
   "scripts": {
+    "build": "tsc -b",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
   },

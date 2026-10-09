@@ -39,11 +39,39 @@
   not durable.
 - Configure the frontend to call the HTTP server through an explicit API
   origin. Configure credentialed CORS and cookie/CSRF protections for the
-  chosen deployment origins. In Phase 14, have the WebSocket server validate
-  this same session cookie during the upgrade; never put session tokens in
-  WebSocket query strings.
+  chosen deployment origins. In Phase 14, the WebSocket server validates a
+  short-lived presence ticket during the upgrade; never put session tokens
+  in WebSocket query strings.
 - Derive the current user from the server-validated session. API callers must
   not be allowed to choose an `ownerId` for scene or room operations.
+
+## Phase 14 presence authentication (supersedes the cookie-upgrade note)
+
+**Status:** Accepted for Phase 14. This section supersedes the older Phase 13
+guidance that the WebSocket server should validate the session cookie during
+the upgrade.
+
+- The browser calls `POST /room/:roomId/presence-ticket` with credentials.
+  The HTTP server validates the Better Auth session through `packages/auth`
+  and checks current room ownership/membership through `@repo/db`, then
+  `packages/auth` signs a JWT valid for roughly 60 seconds with explicit
+  issuer (`excalidraw-presence`), audience (`excalidraw-ws`), expiry,
+  issued-at time, user ID (subject), room ID, and a unique ticket ID
+  (`PRESENCE_TICKET_SECRET`, at least 32 characters, required at startup
+  with no hard-coded fallback). Tickets live in browser memory only.
+- The browser opens `/room/:roomId` over `ws`/`wss` with the native
+  `WebSocket` API, offering `[excalidraw-presence.v1, auth.<ticket>]` in
+  `Sec-WebSocket-Protocol`. The server negotiates only the stable protocol;
+  the path room ID is a routing hint, not authorization.
+- Before `handleUpgrade`, the WebSocket server verifies request `Origin`,
+  ticket signature/issuer/audience/expiry/room scope, then re-checks room
+  ownership/membership through `@repo/db`. Invalid upgrades get HTTP errors;
+  the socket joins the in-memory room only afterwards. Membership is
+  re-checked on a bounded interval so revoked users are closed promptly.
+- This keeps the older rules intact — no session token or ticket in a URL
+  query, no ticket logging — while meeting the Phase 14 requirement for a
+  short-lived WebSocket JWT. The cookie session is used only at the HTTP
+  issuance step.
 
 ## Scene privacy and persistence
 
