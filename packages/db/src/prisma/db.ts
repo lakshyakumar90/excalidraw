@@ -27,6 +27,12 @@ export const db = postgres<Contract>({
 // Better Auth's built-in PostgreSQL adapter requires a pg Pool. Keep it next
 // to the Prisma runtime so application packages never initialize databases.
 export const authPool = new Pool({ connectionString: databaseUrl });
+// Idle connections can be terminated by the database (sleeping tiers,
+// network blips). A pool-level error must never crash the service; the
+// failing query itself still rejects and is handled at the call site.
+authPool.on("error", (error) => {
+  console.error("Database pool idle-client error:", error);
+});
 
 export async function connectDatabase() {
   await Promise.all([db.connect(), authPool.query("SELECT 1")]);

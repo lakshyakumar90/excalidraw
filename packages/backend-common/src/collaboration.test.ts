@@ -81,6 +81,18 @@ const serviceWith = (store: ReturnType<typeof fakeStore>) =>
     clock: () => new Date("2026-10-20T00:00:00.000Z"),
   });
 
+it("accepts a durable write without waiting for revision cleanup", async () => {
+  const store = fakeStore();
+  let releaseCleanup!: () => void;
+  store.queries.pruneRevisions = () => new Promise<void>((resolve) => { releaseCleanup = resolve; });
+  const result = await serviceWith(store).applyCommit({
+    sceneId: "s1", userId: "u1", role: "editor", elements: [rect("a")], mutationId: "fast-1",
+  });
+  expect(result.saved).toBe(true);
+  expect(store.writes).toBe(1);
+  releaseCleanup();
+});
+
 describe("applyCommit authorization and validation", () => {
   it("rejects viewer commits without touching storage", async () => {
     const store = fakeStore();
@@ -363,5 +375,73 @@ describe("attachFile", () => {
       }),
     ).toMatchObject({ saved: false, reason: "invalid" });
     expect(store.writes).toBe(0);
+  });
+});
+
+describe("pruning and stale replay", () => {
+  it("keeps pruned deletions deleted against older live replays", async () => {
+    const store = fakeStore({
+      data: {
+        elements: [rect("old", { version: 2, versionNonce: 2, isDeleted: true })],
+        sync: {
+          revision: 1,
+          tombstones: {
+            old: { version: 2, versionNonce: 2, deletedAt: "2026-10-01T00:00:00.000Z" },
+          },
+        },
+      },
+    });
+    const service = serviceWith(store);
+    // A stale offline draft replays the long-deleted live body.
+    const result = await service.applyCommit({
+      sceneId: "s1",
+      userId: "u1",
+      role: "editor",
+      elements: [rect("old", { version: 1, versionNonce: 1, x: 5 })],
+      mutationId: "stale-replay",
+    });
+    expect(result.saved).toBe(true);
+    const data = store.data as {
+      elements: { id: string }[];
+      sync: { tombstones: Record<string, unknown> };
+    };
+    // The body stays pruned and the tombstone entry survives the write.
+    expect(data.elements.map((element) => element.id)).not.toContain("old");
+    expect(data.sync.tombstones["old"]).toMatchObject({ version: 2 });
+    expect(result.winners).toHaveLength(1);
+    expect(result.winners[0]).toMatchObject({ id: "old", isDeleted: true });
+    expect(result.corrected).toHaveLength(1);
+  });
+
+  it("lets a higher-version undelete win atomically with its tombstone", async () => {
+    const store = fakeStore({
+      data: {
+        elements: [rect("back", { version: 2, versionNonce: 2, isDeleted: true })],
+        sync: {
+          revision: 1,
+          tombstones: {
+            back: { version: 2, versionNonce: 2, deletedAt: "2026-10-01T00:00:00.000Z" },
+          },
+        },
+      },
+    });
+    const service = serviceWith(store);
+    const result = await service.applyCommit({
+      sceneId: "s1",
+      userId: "u1",
+      role: "editor",
+      elements: [rect("back", { version: 3, versionNonce: 1, isDeleted: false })],
+      mutationId: "undelete",
+    });
+    expect(result.saved).toBe(true);
+    expect(result.corrected).toEqual([]);
+    const data = store.data as {
+      elements: { id: string; isDeleted: boolean }[];
+      sync: { tombstones: Record<string, unknown> };
+    };
+    expect(
+      data.elements.find((element) => element.id === "back")?.isDeleted,
+    ).toBe(false);
+    expect(data.sync.tombstones["back"]).toBeUndefined();
   });
 });

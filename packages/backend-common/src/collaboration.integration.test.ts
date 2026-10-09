@@ -165,7 +165,8 @@ describeIntegration("collaboration against a dedicated test database", () => {
     };
     const first = await service.applyCommit(input);
     const second = await service.applyCommit(input);
-    expect(first).toEqual(second);
+    expect(second.replayed).toBe(true);
+    expect({ ...second, replayed: false }).toEqual({ ...first, replayed: false });
     const scene = await service.readSyncScene(sceneId);
     expect(
       scene?.elements.filter((element) => element.id === "replay"),
@@ -186,4 +187,50 @@ describeIntegration("collaboration against a dedicated test database", () => {
     });
     expect(result).toMatchObject({ saved: false, reason: "forbidden" });
   });
+
+  it("survives a service restart: a new instance reads durable commits", async () => {
+    const sceneId = await createRoomScene("restart");
+    const writer = createCollaborationService({ store: db });
+    const saved = await writer.applyCommit({
+      sceneId,
+      userId: ownerId,
+      role: "owner",
+      elements: [rect("durable", { version: 2, versionNonce: 8, x: 3 })],
+      mutationId: `restart-${tag}`,
+    });
+    expect(saved.saved).toBe(true);
+    // A fresh service (new process) sees the same durable state.
+    const reader = createCollaborationService({ store: db });
+    const scene = await reader.readSyncScene(sceneId);
+    expect(scene?.revision).toBe(saved.revision);
+    expect(
+      scene?.elements.find((element) => element.id === "durable"),
+    ).toMatchObject({ version: 2, versionNonce: 8, x: 3 });
+  });
+
+  it("never stores preview or selection frames in scene JSON", async () => {
+    const sceneId = await createRoomScene("clean");
+    const service = createCollaborationService({ store: db });
+    await service.applyCommit({
+      sceneId,
+      userId: ownerId,
+      role: "owner",
+      elements: [rect("clean-1")],
+      mutationId: `clean-${tag}`,
+    });
+    const rows = (await db.orm!.public!.SceneRevision.where({ sceneId }).select(
+      "data",
+    ).all()) as { data: unknown }[];
+    expect(rows.length).toBeGreaterThan(0);
+    const serialized = JSON.stringify(rows.map((row) => row.data));
+    for (const forbidden of [
+      "gestureId",
+      '"seq"',
+      "selection.update",
+      "elements.preview",
+      "connectionId",
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  }, 120_000);
 });

@@ -226,6 +226,30 @@ export function createCollaborationService(options: CollaborationServiceOptions)
   const queries = options.queries ?? dbQueries(options.store);
   const clock = options.clock ?? (() => new Date());
   const seenMutations = new Map<string, CommitResult>();
+  const compactions = new Map<string, { revision: number }>();
+
+  function scheduleCompaction(sceneId: string, revision: number): void {
+    const active = compactions.get(sceneId);
+    if (active) {
+      active.revision = Math.max(active.revision, revision);
+      return;
+    }
+    const work = { revision };
+    compactions.set(sceneId, work);
+    void (async () => {
+      try {
+        let completed: number;
+        do {
+          completed = work.revision;
+          await queries.pruneRevisions(sceneId, completed);
+        } while (work.revision > completed);
+      } catch (error) {
+        console.error("Scene revision compaction failed:", error);
+      } finally {
+        compactions.delete(sceneId);
+      }
+    })();
+  }
 
   function remember(mutationId: string, result: CommitResult): CommitResult {
     seenMutations.set(mutationId, result);
@@ -278,12 +302,9 @@ export function createCollaborationService(options: CollaborationServiceOptions)
         }
         throw error;
       }
-      try {
-        await queries.pruneRevisions(sceneId, current.revision + 1);
-      } catch (error) {
-        // Compaction is best effort; rows accumulate until a later write.
-        console.error("Scene revision compaction failed:", error);
-      }
+      // Compaction is maintenance, not part of durable commit acceptance.
+      // Coalesce concurrent writes so cleanup cannot build an unbounded queue.
+      scheduleCompaction(sceneId, current.revision + 1);
       return { ok: true, revision: current.revision + 1, data: computed.data };
     }
     return { ok: false, exhausted: true };
