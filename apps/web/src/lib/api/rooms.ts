@@ -66,6 +66,19 @@ export async function saveRoomScene(
   });
 }
 
+/**
+ * Fetch a short-lived presence ticket for the WebSocket handshake.
+ * The ticket is kept in memory only — never persisted to storage —
+ * and a fresh one is fetched on every reconnect.
+ */
+export async function fetchPresenceTicket(roomId: string): Promise<string> {
+  const result = await apiRequest<{ ticket: string }>(
+    `/room/${encodeURIComponent(roomId)}/presence-ticket`,
+    { method: "POST" },
+  );
+  return result.ticket;
+}
+
 export interface RoomMember {
   id: string;
   name: string;
