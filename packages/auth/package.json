@@ -11,6 +11,10 @@
     "./client": {
       "types": "./src/client.ts",
       "default": "./dist/client.js"
+    },
+    "./presence-ticket": {
+      "types": "./src/presenceTicket.ts",
+      "default": "./dist/presenceTicket.js"
     }
   },
   "scripts": {

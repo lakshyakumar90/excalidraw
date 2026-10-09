@@ -1,6 +1,6 @@
-import { verifyPresenceTicket, assertPresenceTicketConfiguration } from "@repo/auth";
+import { verifyPresenceTicket, assertPresenceTicketConfiguration } from "@repo/auth/presence-ticket";
 import { getAllowedWsOrigins } from "@repo/backend-common";
-import { connectDatabase, db } from "@repo/db";
+import { connectApplicationDatabase, db } from "@repo/db";
 import { startPresenceServer } from "./server.js";
 
 async function hasRoomAccess(roomId: number, userId: string): Promise<boolean> {
@@ -27,7 +27,7 @@ async function startServer() {
   assertPresenceTicketConfiguration();
 
   try {
-    await connectDatabase();
+    await connectApplicationDatabase();
   } catch (error) {
     console.error("Failed to connect to the database:", error);
     process.exit(1);
