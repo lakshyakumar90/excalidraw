@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { Element, TombstoneMap } from "@repo/common";
+import type { RoomRole } from "@repo/common";
 import { useRoomSync } from "@/hooks/sync/useRoomSync";
 import { setCurrentViewport } from "@/lib/persistence/viewportStore";
 import { computeJumpViewport } from "@/lib/presence/viewportJump";
@@ -21,9 +22,11 @@ export function RoomPresence({
   roomId,
   sceneId,
   httpScene,
+  role,
 }: {
   roomId: string;
   sceneId: string;
+  role: RoomRole;
   httpScene: {
     elements: Element[];
     tombstones: TombstoneMap;
@@ -31,7 +34,7 @@ export function RoomPresence({
   } | null;
 }) {
   const syncHttpScene = useMemo(() => httpScene, [httpScene]);
-  const sync = useRoomSync({ roomId, sceneId, httpScene: syncHttpScene });
+  const sync = useRoomSync({ roomId, sceneId, httpScene: syncHttpScene, role });
   const { status, detail, participants, selfUserId, selections, previews } = sync;
 
   const handleJump = (connectionId: string) => {

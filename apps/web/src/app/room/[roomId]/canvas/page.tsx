@@ -34,7 +34,7 @@ export default function RoomCanvasPage() {
       cancelled = true;
     };
   }, [roomId]);
-  if (room?.scene && room.role !== "viewer") {
+  if (room?.scene) {
     const data = room.scene.data as {
       elements: Element[];
       files?: Record<string, unknown>;
@@ -52,16 +52,21 @@ export default function RoomCanvasPage() {
         <CanvasWorkspace
           savedScene={{
             id: room.scene.id,
+            title: room.name,
             elements: room.scene.data.elements as Element[],
             viewport: viewportFromSceneData(room.scene.data),
-            saveData: (sceneData) => saveRoomScene(roomId, sceneData),
+            ...(room.role === "viewer"
+              ? {}
+              : { saveData: (sceneData: Parameters<typeof saveRoomScene>[1]) => saveRoomScene(roomId, sceneData) }),
             roomSync: { roomId, sceneId: room.scene.id },
           }}
+          roomRole={room.role}
         />
         <RoomPresence
           key={`${roomId}:${room.scene.id}`}
           roomId={roomId}
           sceneId={room.scene.id}
+          role={room.role}
           httpScene={httpScene}
         />
       </>

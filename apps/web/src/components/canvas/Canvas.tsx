@@ -84,7 +84,13 @@ const INITIAL_VIEWPORT: Viewport = {
   zoom: 1,
 };
 
-export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
+export function Canvas({
+  savedScene,
+  readOnly = false,
+}: {
+  savedScene?: SavedCanvasScene;
+  readOnly?: boolean;
+} = {}) {
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
     null,
   );
@@ -117,6 +123,15 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
     contextMenuRef.current = null;
     setContextMenu(null);
   }, []);
+
+  useEffect(() => {
+    if (!readOnly) return;
+    closeContextMenu();
+    eyedropperStore.cancel();
+    if (scene.isCapturing()) {
+      commitHistoryEntry(historyStore.endCapture(), "local");
+    }
+  }, [closeContextMenu, readOnly]);
 
   const insertImage = useCallback(async (file: File, point: Point) => {
     try {
@@ -495,6 +510,11 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
         return;
       }
 
+      if (readOnly) {
+        interactiveCanvas.style.cursor = "default";
+        return;
+      }
+
       const scenePoint = viewportToScene(point, viewportRef.current);
 
       if (toolManager.getActiveTool() === "eraser") {
@@ -621,6 +641,17 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
         return;
       }
 
+      if (readOnly) {
+        event.preventDefault();
+        const point = viewportToScene(
+          getPointerPosition(event),
+          viewportRef.current,
+        );
+        selectionController.selectAtContextMenu(point, viewportRef.current.zoom);
+        renderLoop.invalidateInteractive();
+        return;
+      }
+
       if (event.button !== 0) return;
 
       const viewportPoint = getPointerPosition(event);
@@ -727,6 +758,8 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
         return;
       }
 
+      if (readOnly) return;
+
       if (eraserPointerId === event.pointerId) {
         eraserPointerId = null;
         lastEraserScenePoint = null;
@@ -819,8 +852,15 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       setTextEditorPosition,
       renderLoop,
     });
+    const guardedDoubleClick = (event: MouseEvent) => {
+      if (!readOnly) handleDoubleClick(event);
+    };
 
     const handleContextMenu = (event: MouseEvent) => {
+      if (readOnly) {
+        event.preventDefault();
+        return;
+      }
       if (eyedropperStore.getTarget()) return;
       event.preventDefault();
 
@@ -861,7 +901,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       setContextMenu(next);
     };
 
-    const handleKeyDown = createCanvasKeyboardHandler({
+    const editorKeyDown = createCanvasKeyboardHandler({
       renderLoop,
       spacePressRef,
       contextMenuRef,
@@ -889,6 +929,21 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
         return true;
       },
     });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!readOnly) {
+        editorKeyDown(event);
+        return;
+      }
+      const target = event.target;
+      const isTextEntry =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.matches("input, textarea, select, [role=\"textbox\"]"));
+      if (event.code === "Space" && !isTextEntry) {
+        spacePressRef.current = true;
+        event.preventDefault();
+      }
+    };
 
     const handleKeyUp = (event: KeyboardEvent) => {
       if (event.code === "Space") {
@@ -943,7 +998,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
     window.addEventListener("resize", resizeCanvas);
     interactiveCanvas.addEventListener("pointerdown", handlePointerDown);
     interactiveCanvas.addEventListener("contextmenu", handleContextMenu);
-    interactiveCanvas.addEventListener("dblclick", handleDoubleClick);
+    interactiveCanvas.addEventListener("dblclick", guardedDoubleClick);
     interactiveCanvas.addEventListener("pointermove", handlePointerMove);
     interactiveCanvas.addEventListener("pointerup", handlePointerUp);
     interactiveCanvas.addEventListener("pointercancel", handlePointerCancel);
@@ -968,7 +1023,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       window.removeEventListener("resize", resizeCanvas);
       interactiveCanvas.removeEventListener("pointerdown", handlePointerDown);
       interactiveCanvas.removeEventListener("contextmenu", handleContextMenu);
-      interactiveCanvas.removeEventListener("dblclick", handleDoubleClick);
+      interactiveCanvas.removeEventListener("dblclick", guardedDoubleClick);
       interactiveCanvas.removeEventListener("pointermove", handlePointerMove);
       interactiveCanvas.removeEventListener("pointerup", handlePointerUp);
       interactiveCanvas.removeEventListener(
@@ -983,7 +1038,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [autosaveRef, closeContextMenu, insertImage, persistenceReady]);
+  }, [autosaveRef, closeContextMenu, insertImage, persistenceReady, readOnly]);
 
   return (
     <div
@@ -991,9 +1046,11 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       style={{ visibility: persistenceReady ? "visible" : "hidden" }}
       aria-busy={!persistenceReady}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+        if (!readOnly && event.dataTransfer.types.includes("Files"))
+          event.preventDefault();
       }}
       onDrop={(event) => {
+        if (readOnly) return;
         const file = event.dataTransfer.files[0];
         if (!file) return;
         event.preventDefault();

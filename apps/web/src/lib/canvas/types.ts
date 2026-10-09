@@ -3,6 +3,7 @@ import type { SceneData } from "@/lib/api/scenes";
 
 export interface SavedCanvasScene {
   id: string;
+  title?: string;
   elements: Element[];
   viewport: Viewport;
   saveData?: (data: SceneData) => Promise<void>;

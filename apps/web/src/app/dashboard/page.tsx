@@ -1,13 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { safeRoomAuthReturnPath } from "@repo/common";
 import { authClient } from "@repo/auth/client";
 import { AuthPanel } from "@/components/dashboard/AuthPanel";
 import { ScenesPanel } from "@/components/dashboard/ScenesPanel";
 import { secondaryButton } from "@/components/dashboard/dashboardStyles";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+  useEffect(() => {
+    if (!session?.user) return;
+    const target = safeRoomAuthReturnPath(
+      new URLSearchParams(window.location.search).get("returnTo"),
+    );
+    if (target !== "/dashboard") router.replace(target);
+  }, [router, session?.user]);
   return (
     <main className="min-h-screen bg-[#faf9f6] px-5 py-10 text-neutral-900">
       <div className="mx-auto w-full max-w-4xl">

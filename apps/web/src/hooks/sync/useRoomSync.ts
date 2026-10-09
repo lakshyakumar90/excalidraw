@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { authClient } from "@repo/auth/client";
 import type { Element, TombstoneMap } from "@repo/common";
+import type { RoomRole } from "@repo/common";
 import { scene } from "@/lib/scene/scene";
 import { fetchPresenceTicket } from "@/lib/api/rooms";
 import { PresenceConnection } from "@/lib/presence/presenceSocket";
@@ -22,6 +23,7 @@ export interface UseRoomSyncOptions {
   roomId: string;
   sceneId: string;
   httpScene: HttpRoomScene | null;
+  role?: RoomRole;
   drafts?: DraftStore;
   outboxStore?: OutboxStore;
   createConnection?: RoomSyncDeps["createConnection"];
@@ -40,6 +42,7 @@ export function useRoomSync({
   roomId,
   sceneId,
   httpScene,
+  role,
   drafts,
   outboxStore,
   createConnection,
@@ -54,6 +57,7 @@ export function useRoomSync({
         roomId,
         sceneId,
         userId: selfUserId,
+        role,
         baseUrl: WS_BASE_URL,
         scene,
         createConnection:
@@ -66,7 +70,7 @@ export function useRoomSync({
       }),
     // One sync instance per room+scene; session changes reconnect via key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [roomId, sceneId],
+    [roomId, sceneId, role],
   );
 
   const state = useSyncExternalStore(

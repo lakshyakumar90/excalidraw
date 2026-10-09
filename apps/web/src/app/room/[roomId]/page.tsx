@@ -6,13 +6,19 @@ import { useEffect, useState } from "react";
 import { cacheSavedSceneFiles } from "@/lib/persistence/savedScene";
 import {
   createInvite,
+  createJoinCode,
   deleteRoom,
   getRoom,
   listInvites,
   listMembers,
+  listJoinCodes,
   removeMember,
   revokeInvite,
+  resendInvite,
+  revokeJoinCode,
+  updateMemberRole,
   type RoomInvite,
+  type RoomJoinCode,
   type RoomMember,
 } from "@/lib/api/rooms";
 
@@ -29,6 +35,12 @@ export default function RoomPage() {
   const [inviting, setInviting] = useState(false);
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [invites, setInvites] = useState<RoomInvite[]>([]);
+  const [joinCodes, setJoinCodes] = useState<RoomJoinCode[]>([]);
+  const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
+  const [joinCodeRole, setJoinCodeRole] = useState<"editor" | "viewer">("editor");
+  const [joinCodeLink, setJoinCodeLink] = useState("");
+  const [joinCodeValue, setJoinCodeValue] = useState("");
+  const [deliveryState, setDeliveryState] = useState("");
   const [pendingAction, setPendingAction] = useState("");
 
   useEffect(() => {
@@ -39,11 +51,16 @@ export default function RoomPage() {
         if (!cancelled) setRoom(loaded);
         const [people, pendingInvites] = await Promise.all([
           listMembers(roomId),
-          loaded.role === "owner" ? listInvites(roomId) : Promise.resolve([]),
+          loaded.role === "owner"
+            ? Promise.all([listInvites(roomId), listJoinCodes(roomId)])
+            : Promise.resolve([[], []] as [RoomInvite[], RoomJoinCode[]]),
         ]);
         if (!cancelled) {
           setMembers(people);
-          setInvites(pendingInvites);
+          if (loaded.role === "owner") {
+            setInvites((pendingInvites as [RoomInvite[], RoomJoinCode[]])[0]);
+            setJoinCodes((pendingInvites as [RoomInvite[], RoomJoinCode[]])[1]);
+          }
         }
       })
       .catch((reason: unknown) => {
@@ -61,8 +78,15 @@ export default function RoomPage() {
     setInviting(true);
     setError("");
     try {
-      const code = await createInvite(roomId, email.trim());
-      setInviteUrl(new URL(`/invite/${code}`, window.location.origin).href);
+      const result = await createInvite(roomId, email.trim(), inviteRole);
+      setInviteUrl(result.inviteUrl);
+      setDeliveryState(
+        result.delivery === "sent"
+          ? "Invitation email sent."
+          : result.delivery === "failed"
+            ? "Invite created, but email delivery failed. Copy and send this link manually."
+            : "Email is not configured. Copy and send this invitation link manually.",
+      );
       setInviteEmail(email.trim());
       setInvites(await listInvites(roomId));
       setEmail("");
@@ -74,6 +98,34 @@ export default function RoomPage() {
       );
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function makeJoinCode() {
+    setPendingAction("join-code");
+    setError("");
+    try {
+      const result = await createJoinCode(roomId, joinCodeRole);
+      setJoinCodeValue(result.code);
+      setJoinCodeLink(result.url);
+      setJoinCodes(await listJoinCodes(roomId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not create join code");
+    } finally {
+      setPendingAction("");
+    }
+  }
+
+  async function changeRole(userId: string, role: "editor" | "viewer") {
+    setPendingAction(userId);
+    setError("");
+    try {
+      await updateMemberRole(roomId, userId, role);
+      setMembers(await listMembers(roomId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not update member role");
+    } finally {
+      setPendingAction("");
     }
   }
 
@@ -104,6 +156,40 @@ export default function RoomPage() {
           ? reason.message
           : "Could not revoke invitation",
       );
+    } finally {
+      setPendingAction("");
+    }
+  }
+
+  async function resend(inviteId: string) {
+    setPendingAction(inviteId);
+    setError("");
+    try {
+      const result = await resendInvite(roomId, inviteId);
+      setInviteUrl(result.inviteUrl);
+      setDeliveryState(
+        result.delivery === "sent"
+          ? "Invitation email sent."
+          : result.delivery === "failed"
+            ? "Email delivery failed. Copy and send this link manually."
+            : "Email is not configured. Copy and send this link manually.",
+      );
+      setInvites(await listInvites(roomId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not resend invitation");
+    } finally {
+      setPendingAction("");
+    }
+  }
+
+  async function revokeCode(codeId: string) {
+    setPendingAction(codeId);
+    setError("");
+    try {
+      await revokeJoinCode(roomId, codeId);
+      setJoinCodes(await listJoinCodes(roomId));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not revoke join code");
     } finally {
       setPendingAction("");
     }
@@ -182,6 +268,17 @@ export default function RoomPage() {
                       onChange={(event) => setEmail(event.target.value)}
                       className="min-w-60 flex-1 rounded-lg border border-neutral-300 px-3 py-2"
                     />
+                    <select
+                      aria-label="Invitation role"
+                      value={inviteRole}
+                      onChange={(event) =>
+                        setInviteRole(event.target.value as "editor" | "viewer")
+                      }
+                      className="rounded-lg border border-neutral-300 px-3 py-2"
+                    >
+                      <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
                     <button
                       disabled={inviting}
                       className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
@@ -191,13 +288,62 @@ export default function RoomPage() {
                   </div>
                   {inviteUrl && (
                     <p className="mt-3 text-sm break-all">
-                      Share this link with {inviteEmail}:{" "}
+                      {deliveryState} Share this {inviteRole} link with {inviteEmail}:{" "}
                       <a className="text-violet-700 underline" href={inviteUrl}>
                         {inviteUrl}
                       </a>
+                      <button
+                        type="button"
+                        className="ml-2 text-violet-700 underline"
+                        onClick={() => void navigator.clipboard.writeText(inviteUrl)}
+                      >Copy link</button>
                     </p>
                   )}
                 </form>
+              )}
+              {room.role === "owner" && (
+                <section className="mt-5 border-t border-neutral-200 pt-5">
+                  <h2 className="font-semibold">Short join code</h2>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <select
+                      aria-label="Join code role"
+                      value={joinCodeRole}
+                      onChange={(event) =>
+                        setJoinCodeRole(event.target.value as "editor" | "viewer")
+                      }
+                      className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={pendingAction === "join-code"}
+                      onClick={() => void makeJoinCode()}
+                      className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {pendingAction === "join-code" ? "Creating…" : "Create 24-hour code"}
+                    </button>
+                  </div>
+                  {joinCodeLink && (
+                    <p role="status" className="mt-3 break-all text-sm">
+                      Code <strong className="font-mono">{joinCodeValue}</strong> · Link: <a className="text-violet-700 underline" href={joinCodeLink}>{joinCodeLink}</a>
+                      <button type="button" className="ml-2 text-violet-700 underline" onClick={() => void navigator.clipboard.writeText(joinCodeLink)}>Copy link</button>
+                    </p>
+                  )}
+                  {joinCodes.length > 0 && (
+                    <ul className="mt-3 space-y-2 text-sm">
+                      {joinCodes.map((code) => (
+                        <li key={code.id} className="flex flex-wrap items-center justify-between gap-2">
+                          <span>{code.role} · {code.revokedAt ? "Revoked" : new Date(code.expiresAt) < new Date() ? "Expired" : "Active"} · expires {new Date(code.expiresAt).toLocaleString()}</span>
+                          {!code.revokedAt && new Date(code.expiresAt) > new Date() && (
+                            <button disabled={pendingAction === code.id} onClick={() => void revokeCode(code.id)} className="text-red-700">Revoke</button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
               )}
               <section className="mt-5 border-t border-neutral-200 pt-5">
                 <h2 className="font-semibold">Members</h2>
@@ -208,9 +354,20 @@ export default function RoomPage() {
                       className="flex flex-wrap items-center justify-between gap-2 text-sm"
                     >
                       <span>
-                        {member.name} ({member.email}) · {member.role}
+                        {member.name}{member.email ? ` (${member.email})` : ""} · {member.role}
                       </span>
                       {room.role === "owner" && member.role !== "owner" && (
+                        <div className="flex items-center gap-3">
+                          <select
+                            aria-label={`Role for ${member.name}`}
+                            value={member.role}
+                            disabled={pendingAction === member.id}
+                            onChange={(event) => void changeRole(member.id, event.target.value as "editor" | "viewer")}
+                            className="rounded border border-neutral-300 px-2 py-1"
+                          >
+                            <option value="editor">Editor</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
                         <button
                           disabled={pendingAction === member.id}
                           onClick={() => void remove(member.id)}
@@ -218,6 +375,7 @@ export default function RoomPage() {
                         >
                           Remove
                         </button>
+                        </div>
                       )}
                     </li>
                   ))}
@@ -238,9 +396,11 @@ export default function RoomPage() {
                           className="flex flex-wrap items-center justify-between gap-2 text-sm"
                         >
                           <span>
-                            {entry.email} ·{" "}
+                            {entry.email} · {entry.role} · {entry.deliveryError === "not-configured" ? "Manual link" : entry.deliveryError ? "Email failed" : entry.sentAt ? "Email sent" : "Preparing email"} ·{" "}
                             {entry.usedAt
                               ? "Used"
+                              : entry.revokedAt
+                                ? "Revoked"
                               : new Date(entry.expiresAt) < new Date()
                                 ? "Expired"
                                 : "Pending"}
@@ -252,6 +412,15 @@ export default function RoomPage() {
                           >
                             Revoke
                           </button>
+                          {!entry.usedAt && !entry.revokedAt &&
+                            new Date(entry.expiresAt) > new Date() &&
+                            (!entry.sentAt || entry.deliveryError) && (
+                              <button
+                                disabled={pendingAction === entry.id}
+                                onClick={() => void resend(entry.id)}
+                                className="text-violet-700 disabled:opacity-60"
+                              >Resend</button>
+                            )}
                         </li>
                       ))}
                     </ul>

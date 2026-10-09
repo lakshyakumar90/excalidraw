@@ -106,6 +106,8 @@ function applyPresenceMessage(
   message: ServerToClientPresenceMessage,
 ): { participants: PresenceParticipant[]; leftConnectionId: string | null } {
   switch (message.type) {
+    case "room.access.changed":
+      return { participants, leftConnectionId: null };
     case "presence.snapshot":
       return { participants: message.participants, leftConnectionId: null };
     case "presence.joined":
@@ -198,6 +200,7 @@ export interface RoomSyncDeps {
   roomId: string;
   sceneId: string;
   userId: string | null;
+  role?: "owner" | "editor" | "viewer";
   baseUrl: string;
   scene: Scene;
   createConnection: (
@@ -310,6 +313,7 @@ export class RoomSync {
 
   constructor(private readonly deps: RoomSyncDeps) {
     this.selfUserId = deps.userId;
+    this.readOnly = deps.role === "viewer";
     this.outbox = new OutboxManager(deps.outboxStore, deps.clock ?? Date.now);
   }
 
@@ -456,6 +460,23 @@ export class RoomSync {
       getTicket: this.deps.getTicket,
       onMessage: (message) => {
         if (generation !== this.generation) return;
+        if (message.type === "room.access.changed") {
+          this.readOnly = message.role !== "owner" && message.role !== "editor";
+          this.notice = message.role === null
+            ? "Room access was removed. Pending edits remain on this device."
+            : this.readOnly
+              ? "This room is now view-only. Pending edits remain on this device."
+              : null;
+          if (typeof window !== "undefined")
+            window.dispatchEvent(
+              new CustomEvent("room-access-changed", {
+                detail: { role: message.role },
+              }),
+            );
+          if (!this.readOnly) void this.replayOutbox();
+          this.emit();
+          return;
+        }
         const applied = applyPresenceMessage(this.participants, message);
         this.participants = applied.participants;
         if (message.type === "presence.snapshot") {
@@ -875,6 +896,13 @@ export class RoomSync {
 
   private async handleLocalCommit(elements: Element[]): Promise<void> {
     if (elements.length === 0) return;
+    if (this.readOnly) {
+      await this.outbox.enqueue(this.roomKey, elements, this.revision);
+      this.notice = "This room is now view-only. Pending edits remain on this device.";
+      await this.persistDraftSoon();
+      this.emit();
+      return;
+    }
     // Reconcile deferred remotes against the just-committed records first:
     // local winners proceed to the outbox, remote winners apply exactly.
     const survivors: Element[] = [];

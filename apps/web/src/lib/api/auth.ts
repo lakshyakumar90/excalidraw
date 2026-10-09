@@ -1,4 +1,5 @@
 import { authClient } from "@repo/auth/client";
+import { safeRoomAuthReturnPath } from "@repo/common";
 
 export interface SignUpInput {
   email: string;
@@ -8,7 +9,8 @@ export interface SignUpInput {
 }
 
 function dashboardCallbackURL(): string {
-  return new URL("/dashboard", window.location.origin).href;
+  const requested = new URLSearchParams(window.location.search).get("returnTo");
+  return new URL(safeRoomAuthReturnPath(requested), window.location.origin).href;
 }
 
 export function signUpWithEmail(input: SignUpInput) {
@@ -19,7 +21,11 @@ export function signUpWithEmail(input: SignUpInput) {
 }
 
 export function signInWithEmail(email: string, password: string) {
-  return authClient.signIn.email({ email, password });
+  return authClient.signIn.email({
+    email,
+    password,
+    callbackURL: dashboardCallbackURL(),
+  });
 }
 
 export function signInWithGoogle() {

@@ -224,7 +224,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function CanvasControls() {
+export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
   const viewport = useSyncExternalStore(
     subscribeViewport,
     getCurrentViewport,
@@ -280,8 +280,8 @@ export function CanvasControls() {
             <Icon name="plus" />
           </button>
         </div>
-        <span aria-hidden="true" className="h-6 w-px bg-neutral-200" />
-        <div
+        {!readOnly && <span aria-hidden="true" className="h-6 w-px bg-neutral-200" />}
+        {!readOnly && <div
           role="group"
           aria-label="Undo and redo"
           className="flex h-9 items-center"
@@ -306,7 +306,7 @@ export function CanvasControls() {
           >
             <Icon name="redo" />
           </button>
-        </div>
+        </div>}
       </div>
 
       <button
