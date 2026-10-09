@@ -94,6 +94,14 @@ export class HistoryManager {
     return changes;
   }
 
+  /** Restore a provisional gesture without recording history or emitting a commit. */
+  cancelCapture(): void {
+    if (!this.captureOrigin) return;
+    this.captureOrigin = null;
+    this.scene.cancelCapture();
+    this.restoreSelection(this.beforeSelection);
+  }
+
   captureUpdate<T>(action: () => T, origin: HistoryOrigin = "local"): T {
     return this.commitUpdate(action, origin).result;
   }
@@ -166,7 +174,9 @@ export class HistoryManager {
       this.scene.mutateElement(id, {
         ...next,
         isDeleted:
-          typeof next.isDeleted === "boolean" ? next.isDeleted : current.isDeleted,
+          typeof next.isDeleted === "boolean"
+            ? next.isDeleted
+            : current.isDeleted,
       } as Partial<Omit<Element, "id" | "type">>);
       if (targetIndex !== undefined) {
         this.scene.moveElementToIndex(id, targetIndex);

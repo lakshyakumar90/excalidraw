@@ -4,6 +4,8 @@
 - elementIntersectsRect(...) implements the plan’s marquee rule: an element is selected when its full bounding box is inside the dragged rectangle.
 */
 
+import { framePaintOrder } from "../scene/layout";
+import { projectBindings } from "./binding";
 import type { Element, Point } from "@repo/common";
 import { getElementBounds } from "./element";
 import { getBoundsCenter, isPointInsideBounds } from "./bounds";
@@ -115,7 +117,7 @@ function isPointInPolygon(point: Point, polygon: readonly Point[]): boolean {
 }
 
 function hitRectangle(
-  element: Extract<Element, { type: "rectangle" | "text" | "image" }>,
+  element: Extract<Element, { type: "frame" | "rectangle" | "text" | "image" }>,
   point: Point,
   tolerance: number,
 ): boolean {
@@ -261,10 +263,7 @@ function hitFreedraw(
     const end = points[index]!;
     const pressure = (start.pressure + end.pressure) / 2;
     const radius = getPressureWidth(strokeWidth, pressure) / 2;
-    if (
-      distanceToSegment(point, start, end) <=
-      pointerTolerance + radius
-    ) {
+    if (distanceToSegment(point, start, end) <= pointerTolerance + radius) {
       return true;
     }
   }
@@ -293,7 +292,8 @@ export function isPointOnElement(
     element.lineType === "curved";
 
   const boundsTolerance =
-    tolerance + (element.type === "freedraw" ? (element.strokeWidth ?? 1) / 2 : 0);
+    tolerance +
+    (element.type === "freedraw" ? (element.strokeWidth ?? 1) / 2 : 0);
   if (
     !isCurvedLine &&
     !isPointInsideBounds(worldPoint, bounds, boundsTolerance)
@@ -304,6 +304,7 @@ export function isPointOnElement(
   const point = getLocalPoint(element, worldPoint);
 
   switch (element.type) {
+    case "frame":
     case "rectangle":
     case "text":
     case "image":
@@ -345,12 +346,25 @@ export function getElementsAtPosition(
   point: Point,
   zoom: number,
 ): Element[] {
+  elements = framePaintOrder(projectBindings(elements));
+  const frames = new Map(
+    elements
+      .filter((e) => e.type === "frame" && !e.isDeleted)
+      .map((e) => [e.id, e]),
+  );
   const hits: Element[] = [];
   // Elements later in the array are drawn on top, so check them first.
   for (let i = elements.length - 1; i >= 0; i -= 1) {
     const element = elements[i];
 
-    if (element && isPointOnElement(element, point, zoom)) {
+    const frame = frames.get(element?.frameId ?? "");
+    const inFrame =
+      !frame ||
+      (point.x >= frame.x &&
+        point.x <= frame.x + (frame.width ?? 0) &&
+        point.y >= frame.y &&
+        point.y <= frame.y + (frame.height ?? 0));
+    if (element && inFrame && isPointOnElement(element, point, zoom)) {
       hits.push(element);
     }
   }

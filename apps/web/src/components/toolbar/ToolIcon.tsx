@@ -5,6 +5,17 @@ export function ToolIcon({ type }: { type: ToolType }) {
   let shape: ReactNode;
 
   switch (type) {
+    case "frame":
+      shape = <path d="M4 8V4h4m8 0h4v4m0 8v4h-4M8 20H4v-4M4 9h16M9 4v16" />;
+      break;
+    case "laser":
+      shape = (
+        <>
+          <path d="m4 20 8-8m2-8v3m6 3h-3m-7-6 2 2m8 10-2-2" />
+          <circle cx="14" cy="10" r="2" />
+        </>
+      );
+      break;
     case "selection":
       shape = (
         <path

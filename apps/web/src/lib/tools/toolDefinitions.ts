@@ -7,15 +7,19 @@ export const TOOL_LABELS: Record<ToolType, string> = {
   rectangle: "Rectangle",
   ellipse: "Ellipse",
   diamond: "Diamond",
+  frame: "Frame",
   line: "Line",
   multiPointLine: "Multi-point line",
   arrow: "Arrow",
   "curved-line": "Curve",
   freedraw: "Pencil",
   eraser: "Eraser",
+  laser: "Laser pointer",
 };
 
 export const TOOL_SHORTCUTS: Record<ToolType, string> = {
+  frame: "S",
+  laser: "K",
   selection: "V",
   text: "T",
   hand: "H",

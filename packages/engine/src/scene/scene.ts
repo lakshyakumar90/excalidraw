@@ -1,3 +1,4 @@
+import { projectBindings } from "../geometry/binding";
 import type { Element } from "@repo/common";
 import {
   assignOrderKeys,
@@ -40,7 +41,10 @@ interface PendingElementChange {
 
 function cloneElement(element: Element): Element {
   return "points" in element
-    ? ({ ...element, points: element.points.map((point) => ({ ...point })) } as Element)
+    ? ({
+        ...element,
+        points: element.points.map((point) => ({ ...point })),
+      } as Element)
     : { ...element };
 }
 
@@ -120,18 +124,25 @@ export class Scene {
    * Committed (version, nonce) base for captured IDs, for preview frames.
    * Falls back to (1, 0) for elements created inside the capture.
    */
-  getCaptureBaseVersions(): Map<string, { version: number; versionNonce: number }> {
+  getCaptureBaseVersions(): Map<
+    string,
+    { version: number; versionNonce: number }
+  > {
     const base = new Map<string, { version: number; versionNonce: number }>();
     if (!this.pendingChanges) return base;
     for (const [id, change] of this.pendingChanges) {
       const before = change.before;
       base.set(id, {
         version:
-          before && Number.isSafeInteger(before.version) && (before.version ?? 0) >= 1
+          before &&
+          Number.isSafeInteger(before.version) &&
+          (before.version ?? 0) >= 1
             ? (before.version as number)
             : 1,
         versionNonce:
-          before && Number.isSafeInteger(before.versionNonce) && (before.versionNonce ?? -1) >= 0
+          before &&
+          Number.isSafeInteger(before.versionNonce) &&
+          (before.versionNonce ?? -1) >= 0
             ? (before.versionNonce as number)
             : 0,
       });
@@ -143,6 +154,7 @@ export class Scene {
   endCapture(): SceneElementChange[] {
     const pending = this.pendingChanges;
     this.pendingChanges = null;
+    this.projectedVersion = -1;
     if (!pending) return [];
 
     const changes: SceneElementChange[] = [];
@@ -158,7 +170,9 @@ export class Scene {
               afterElement[field as keyof Element],
             ),
         );
-        const afterIndex = this.elements.findIndex((element) => element.id === id);
+        const afterIndex = this.elements.findIndex(
+          (element) => element.id === id,
+        );
         const indexChanged =
           change.beforeIndex !== undefined && change.beforeIndex !== afterIndex;
         if (changedFields.length === 0 && !indexChanged) continue;
@@ -183,6 +197,33 @@ export class Scene {
     // on both commit and cancel paths (commitChanges notifies again itself).
     this.notify();
     return changes;
+  }
+
+  cancelCapture(): void {
+    const pending = this.pendingChanges;
+    if (!pending) return;
+    for (const [id, change] of pending) {
+      const current = this.elementMap.get(id);
+      if (!change.before) {
+        this.elementMap.delete(id);
+        this.elements = this.elements.filter((e) => e.id !== id);
+        continue;
+      }
+      const restored = current ? { ...current } : cloneElement(change.before);
+      for (const field of change.changedFields)
+        (restored as unknown as Record<string, unknown>)[field] = (
+          change.before as unknown as Record<string, unknown>
+        )[field];
+      this.elementMap.set(id, restored);
+      const index = this.elements.findIndex((e) => e.id === id);
+      if (index < 0) this.elements.push(restored);
+      else this.elements[index] = restored;
+    }
+    this.elements = sortElementsByOrder(this.elements);
+    this.pendingChanges = null;
+    this.sceneVersion++;
+    this.dirty = true;
+    this.notify();
   }
 
   private recordChange(
@@ -219,11 +260,17 @@ export class Scene {
     if (!Number.isSafeInteger(stored.version) || (stored.version ?? 0) < 1) {
       stored.version = 1;
     }
-    if (!Number.isSafeInteger(stored.versionNonce) || (stored.versionNonce ?? -1) < 0) {
+    if (
+      !Number.isSafeInteger(stored.versionNonce) ||
+      (stored.versionNonce ?? -1) < 0
+    ) {
       stored.versionNonce = freshNonce();
     }
     if (stored.isDeleted !== true) stored.isDeleted = false;
-    if (typeof stored.updated !== "number" || !Number.isFinite(stored.updated)) {
+    if (
+      typeof stored.updated !== "number" ||
+      !Number.isFinite(stored.updated)
+    ) {
       stored.updated = Date.now();
     }
     if (
@@ -247,13 +294,34 @@ export class Scene {
     return this.elementMap.get(id);
   }
 
+  private projectedVersion = -1;
+  private projected: readonly Element[] = [];
+  private projectedMap = new Map<string, Element>();
+  getEffectiveElement(id: string) {
+    this.getRenderableElements();
+    return this.projectedMap.get(id);
+  }
+  getRenderableElements(): readonly Element[] {
+    if (this.projectedVersion !== this.sceneVersion) {
+      this.projected = projectBindings(
+        this.elements,
+        new Set(this.getCapturedIds()),
+      );
+      this.projectedVersion = this.sceneVersion;
+      this.projectedMap = new Map(this.projected.map((e) => [e.id, e]));
+    }
+    return this.projected;
+  }
+
   getElements(): readonly Element[] {
     return this.elements;
   }
 
   replaceAll(elements: readonly Element[]): void {
     const replacement = assignOrderKeys(structuredClone([...elements]));
-    const elementMap = new Map(replacement.map((element) => [element.id, element]));
+    const elementMap = new Map(
+      replacement.map((element) => [element.id, element]),
+    );
     if (elementMap.size !== replacement.length) {
       throw new Error("Scene elements must have unique ids");
     }
@@ -261,8 +329,12 @@ export class Scene {
     this.elementMap = elementMap;
     this.maxObservedVersions.clear();
     for (const element of replacement) {
-      const normalized = normalizeElement(element, { strict: false, orderFallback: 0 });
-      if (normalized) this.maxObservedVersions.set(element.id, normalized.version);
+      const normalized = normalizeElement(element, {
+        strict: false,
+        orderFallback: 0,
+      });
+      if (normalized)
+        this.maxObservedVersions.set(element.id, normalized.version);
     }
     this.sceneVersion += 1;
     this.dirty = true;
@@ -365,7 +437,9 @@ export class Scene {
       const moved = next.filter((element) => selectedIds.has(element.id));
       moved.forEach((element, offset) => {
         element.orderKey =
-          action === "front" ? bound + 1 + offset : bound - (moved.length - offset);
+          action === "front"
+            ? bound + 1 + offset
+            : bound - (moved.length - offset);
       });
     }
 
@@ -424,7 +498,9 @@ export class Scene {
   }
 
   moveElementToIndex(id: string, index: number): boolean {
-    const currentIndex = this.elements.findIndex((element) => element.id === id);
+    const currentIndex = this.elements.findIndex(
+      (element) => element.id === id,
+    );
     if (currentIndex < 0) return false;
     const targetIndex = Math.max(0, Math.min(index, this.elements.length - 1));
     if (currentIndex === targetIndex) return false;

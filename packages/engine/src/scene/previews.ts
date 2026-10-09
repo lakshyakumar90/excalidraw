@@ -1,4 +1,5 @@
-export interface PreviewGeometry {
+import type { PreviewWireElement } from "@repo/common";
+export interface PreviewGeometry extends PreviewWireElement {
   id: string;
   x: number;
   y: number;

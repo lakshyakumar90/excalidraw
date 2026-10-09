@@ -1,3 +1,5 @@
+import { framePaintOrder, visibleBounds } from "../scene/layout";
+import { projectBindings } from "../geometry/binding";
 import type { Element, Point } from "@repo/common";
 import { getBoundsCenter } from "../geometry/bounds";
 import { getArrowHeadPoints } from "../geometry/arrow";
@@ -102,6 +104,9 @@ function renderElement(
   const attrs = styleAttributes(element);
   const groupStart = `<g data-element-id="${escapeXml(element.id)}" transform="${elementTransform(element)}" ${attrs}>`;
   switch (element.type) {
+    case "frame": {
+      return `<g transform="${elementTransform(element)}"><rect width="${element.width ?? 0}" height="${element.height ?? 0}" fill="none" stroke="#868e96"/><text y="-6" font-size="14" fill="#495057">${escapeXml(element.name || "Frame")}</text></g>`;
+    }
     case "rectangle": {
       return `${groupStart}${renderSketchShape(element)}</g>`;
     }
@@ -214,9 +219,12 @@ export function renderSceneToSvg(
   inputElements: readonly Element[],
   options: SvgRenderOptions = {},
 ): string {
-  const elements = inputElements.filter((element) => !element.isDeleted);
+  const projected = projectBindings(inputElements);
+  const elements = framePaintOrder(projected).filter(
+    (element) => !element.isDeleted && visibleBounds(element, projected),
+  );
   if (elements.length === 0) throw new Error("There is nothing to export yet");
-  const bounds = elements.map(getElementAxisAlignedBounds);
+  const bounds = elements.map((e) => visibleBounds(e, elements)!);
   const minX = Math.min(
     ...bounds.map((item, index) => item.minX - paintPadding(elements[index]!)),
   );
@@ -235,7 +243,15 @@ export function renderSceneToSvg(
   const defs: string[] = [];
   const imageFiles = options.imageFiles ?? new Map<string, string>();
   const rendered = elements
-    .map((element) => renderElement(element, imageFiles))
+    .map((element, index) => {
+      const frame = elements.find(
+        (e) => e.id === element.frameId && e.type === "frame" && !e.isDeleted,
+      );
+      const output = renderElement(element, imageFiles);
+      return frame
+        ? `<defs><clipPath id="frame-clip-${index}"><rect x="${frame.x}" y="${frame.y}" width="${frame.width ?? 0}" height="${frame.height ?? 0}"/></clipPath></defs><g clip-path="url(#frame-clip-${index})">${output}</g>`
+        : output;
+    })
     .join("");
   const background = options.background
     ? `<rect width="100%" height="100%" fill="${escapeXml(options.background)}"/>`
@@ -244,6 +260,7 @@ export function renderSceneToSvg(
 }
 
 function paintPadding(element: Element): number {
+  if(element.type==="frame")return 24;
   const settings = sketchSettings(element.roughness);
   const arrowExtra =
     element.type === "arrow" ? Math.max(10, (element.strokeWidth ?? 1) * 4) : 0;

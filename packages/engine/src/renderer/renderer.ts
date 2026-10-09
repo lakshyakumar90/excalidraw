@@ -1,3 +1,4 @@
+import { visibleBounds, framePaintOrder } from "../scene/layout";
 import type {
   ArrowElement,
   Element,
@@ -608,6 +609,21 @@ function drawElement(
   imageAssets: ReadonlyMap<string, CanvasImageSource> = new Map(),
 ): void {
   switch (element.type) {
+    case "frame":
+      context.save();
+      context.strokeStyle = "#868e96";
+      context.lineWidth = 1;
+      context.strokeRect(
+        element.x,
+        element.y,
+        element.width ?? 0,
+        element.height ?? 0,
+      );
+      context.fillStyle = "#495057";
+      context.font = "14px sans-serif";
+      context.fillText(element.name || "Frame", element.x, element.y - 6);
+      context.restore();
+      break;
     case "rectangle":
       drawRectangle(context, element);
       break;
@@ -831,12 +847,27 @@ export function renderStatic(
   if (options.origin !== false) drawOrigin(context, viewport);
 
   const viewportBounds = viewportToSceneBounds({ width, height }, viewport);
-  const visibleElements = getVisibleElements(elements, viewportBounds);
+  const frameMap = new Map(
+    elements
+      .filter((e) => e.type === "frame" && !e.isDeleted)
+      .map((e) => [e.id, e]),
+  );
+  const visibleElements = getVisibleElements(
+    framePaintOrder(elements),
+    viewportBounds,
+  ).filter((e) => visibleBounds(e, elements, frameMap));
   context.save();
 
   applyViewportTransform(context, viewport);
 
   for (const element of visibleElements) {
+    const frame = frameMap.get(element.frameId ?? "");
+    context.save();
+    if (frame) {
+      context.beginPath();
+      context.rect(frame.x, frame.y, frame.width ?? 0, frame.height ?? 0);
+      context.clip();
+    }
     const cached =
       !options.bypassBitmapCache && options.bitmapCache
         ? drawCachedShape(
@@ -849,6 +880,7 @@ export function renderStatic(
           )
         : false;
     if (!cached) drawElement(context, element, elements, imageAssets);
+    context.restore();
   }
   context.restore();
   return visibleElements.length;
