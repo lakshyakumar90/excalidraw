@@ -41,6 +41,12 @@ export interface BaseElement {
   versionNonce?: number;
   isDeleted?: boolean;
   updated?: number;
+  /**
+   * Fractional stacking key shared across collaborators. Render order is
+   * (orderKey, id); see packages/common/src/sync.ts. Absent on legacy
+   * records and transient previews; assigned deterministically at load.
+   */
+  orderKey?: number;
 }
 
 export interface RectangleElement extends BaseElement {
