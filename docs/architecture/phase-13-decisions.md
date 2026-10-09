@@ -8,21 +8,21 @@
   endpoints as Next.js route handlers.
 - Extend the existing Express server in `apps/http-server` for account,
   session, scene CRUD, room, membership, and invitation HTTP endpoints.
-- Use Better Auth in `apps/http-server` for email/password, the chosen OAuth
-  provider, and session management. `apps/web` remains a frontend and calls the
-  HTTP server; it does not host auth or data API routes.
+- Keep Better Auth configuration, email delivery, session validation, and the
+  browser auth client in `packages/auth`. The HTTP server mounts its handler;
+  `apps/web` calls the HTTP server and does not host auth or data API routes.
 - Mount Better Auth's Express handler in `apps/http-server` before global body
   parsing middleware, following Better Auth's Express integration requirements.
   Keep browser requests credentialed and restrict CORS to the configured web
   origin.
 - Use the existing `packages/db` Prisma/PostgreSQL package for application
   models and the checked-in migration graph.
-- Use Better Auth's built-in PostgreSQL adapter through a `pg.Pool` for auth
-  persistence. The current `@repo/db` runtime is Prisma ORM 8's contract query
-  runtime, not the conventional `PrismaClient` expected by Better Auth's Prisma
-  adapter. Both clients use the same `DATABASE_URL`; auth tables are also
-  represented in the Prisma contract so schema changes stay in one migration
-  history.
+- `packages/db/src/prisma/db.ts` owns the Prisma ORM 8 runtime used by
+  application queries and the `pg.Pool` required by Better Auth's built-in
+  PostgreSQL adapter. The contract query runtime is not the conventional
+  `PrismaClient` expected by Better Auth's Prisma adapter. Both clients use
+  the same `DATABASE_URL`; auth tables remain in the Prisma contract and its
+  migration history. Apps do not initialize database clients.
 - Use Google as the first OAuth provider. Keep it disabled until both Google
   credentials are present in the HTTP server environment.
 - Keep database use provider-neutral: local Docker PostgreSQL and Neon

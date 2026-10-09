@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@repo/auth/client";
 import { AuthPanel } from "@/components/dashboard/AuthPanel";
 import { ScenesPanel } from "@/components/dashboard/ScenesPanel";
 import { secondaryButton } from "@/components/dashboard/dashboardStyles";

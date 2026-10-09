@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@repo/auth/client";
 import { createScene, listScenes, type SceneSummary } from "@/lib/api/scenes";
 import { errorMessage } from "@/lib/errors";
 

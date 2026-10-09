@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@repo/auth/client";
 import { acceptInvite } from "@/lib/api/rooms";
 
 export default function AcceptInvitePage() {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@repo/auth/client";
 
 export function AccountLink() {
   const { data: session, isPending } = authClient.useSession();

@@ -5,10 +5,11 @@ API modules make requests, and the drawing engine stays independent of React.
 
 ## HTTP server
 
-- `apps/http-server/src/index.ts`: validates startup settings, connects to PostgreSQL, and starts listening.
-- `apps/http-server/src/app.ts`: configures Express, CORS, Better Auth, and route mounting. Auth stays before the JSON body parser.
-- `apps/http-server/src/auth.ts`: configures Better Auth, password hashing, username validation, Google, and email verification.
-- `apps/http-server/src/services/email.ts`: delivers verification links with Resend, or logs a development link when mail is unconfigured.
+- `apps/http-server/src/index.ts`: validates startup settings, connects through `@repo/db`, and starts listening.
+- `apps/http-server/src/app.ts`: configures Express, CORS, and route mounting. The auth handler stays before the JSON body parser.
+- `packages/db/src/prisma/db.ts`: owns the Prisma runtime and Better Auth's PostgreSQL pool.
+- `packages/auth/src/server.ts`: configures Better Auth, password hashing, username validation, Google, session validation, and verification email delivery.
+- `packages/auth/src/client.ts`: configures the browser Better Auth client.
 - `apps/http-server/src/routes/rooms.ts`: room reads and creation, including room membership checks.
 - `apps/http-server/src/routes/scenes.ts`: scene CRUD and ownership checks.
 - `apps/http-server/src/routes/guestImport.ts`: account-scoped, idempotent guest imports. A deterministic scene primary key prevents duplicate requests from creating multiple scenes.

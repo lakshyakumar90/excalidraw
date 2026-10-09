@@ -1,4 +1,4 @@
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@repo/auth/client";
 
 export interface SignUpInput {
   email: string;
