@@ -138,6 +138,7 @@ export function sendToRoom(
     message.type === "viewport.update" ||
     message.type === "pointer.leave" ||
     message.type === "elements.preview" ||
+    message.type === "elements.pending" ||
     message.type === "elements.preview.end" ||
     message.type === "selection.update";
   for (const connection of room.values()) {

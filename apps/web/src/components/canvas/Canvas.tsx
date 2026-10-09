@@ -26,6 +26,7 @@ import {
   getRoomSyncBridge,
   pushGesturePreview,
 } from "@/lib/sync/syncBridge";
+import { subscribeRoomFilesAvailable } from "@/lib/sync/roomFiles";
 import { toPreviewElement } from "@/lib/sync/previewGeometry";
 import { commitHistoryEntry } from "@/lib/sync/commits";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
@@ -332,6 +333,10 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
     const imageCache = createImageAssetCache(imageAssets, () =>
       renderLoop.invalidateStatic(),
     );
+    const unsubscribeRoomFiles = subscribeRoomFilesAvailable(() => {
+      imageCache.sync();
+      renderLoop.invalidateStatic();
+    });
 
     const updateCanvasCursor = () => {
       const activeTool = toolManager.getActiveTool();
@@ -955,6 +960,7 @@ export function Canvas({ savedScene }: { savedScene?: SavedCanvasScene } = {}) {
       unsubscribeSelectionStore();
       unsubscribeStyleStore();
       unsubscribeViewport();
+      unsubscribeRoomFiles();
       clearInterval(diagnosticsInterval);
       unsubscribe();
       renderLoop.stop();

@@ -83,7 +83,15 @@ interface Harness {
   conn: () => FakeConnection;
 }
 
-function harness(http: HttpRoomScene, clockValue = 1000): Harness {
+function harness(
+  http: HttpRoomScene,
+  clockValue = 1000,
+  fileSync?: {
+    upload: (elements: readonly never[]) => Promise<void>;
+    download: (elements: readonly never[]) => Promise<void>;
+    seedKnown: (fileIds: readonly string[]) => void;
+  },
+) {
   const scene = new Scene();
   const drafts = createMemoryDraftStore();
   const outboxStore = createMemoryOutboxStore();
@@ -100,6 +108,7 @@ function harness(http: HttpRoomScene, clockValue = 1000): Harness {
     drafts,
     outboxStore,
     clock: () => clock,
+    ...(fileSync ? { fileSync: fileSync as never } : {}),
   });
   syncs.push(sync);
   return {
@@ -143,6 +152,27 @@ async function completeSync(
 }
 
 const HTTP_EMPTY: HttpRoomScene = { elements: [], tombstones: {}, revision: 0 };
+
+it("shows finished geometry before saving without persisting the pending overlay", async () => {
+  const h = harness(HTTP_EMPTY);
+  await startWithHttp(h, HTTP_EMPTY);
+  await completeSync(h);
+  const element = rect("instant", { x: 42, strokeColor: "#ff0000" });
+  h.conn().receiveCollab({
+    type: "elements.pending", mutationId: "pending-1", connectionId: "bob-tab",
+    userId: "bob", elements: [element],
+  });
+  expect(h.sync.previews.getPreviews()[0]?.elements[0]?.x).toBe(42);
+  expect(h.scene.getElement("instant")).toBeUndefined();
+  await h.sync.flushDraft();
+  expect((await h.drafts.load(draftKey("alice", "1", "scene-1")))?.elements).toEqual([]);
+  h.conn().receiveCollab({
+    type: "elements.committed", mutationId: "pending-1", connectionId: "bob-tab",
+    userId: "bob", revision: 1, elements: [element],
+  });
+  expect(h.scene.getElement("instant")?.x).toBe(42);
+  expect(h.sync.previews.size).toBe(0);
+});
 
 describe("RoomSync initial sync", () => {
   it("seeds the draft, requests a snapshot, and merges it", async () => {
@@ -584,5 +614,117 @@ describe("RoomSync tombstones", () => {
     await h.sync.flushDraft();
     const draft = await h.drafts.load(draftKey("alice", "1", "scene-1"));
     expect(draft?.tombstones["gone"]).toMatchObject({ version: 4 });
+  });
+});
+
+describe("RoomSync image files", () => {
+  function image(id: string, fileId = "file-1") {
+    return {
+      id,
+      type: "image",
+      x: 0,
+      y: 0,
+      fileId,
+      version: 2,
+      versionNonce: 2,
+    };
+  }
+
+  interface FakeFiles {
+    uploaded: unknown[][];
+    downloaded: unknown[][];
+    seeded: string[][];
+    upload: (elements: readonly unknown[]) => Promise<void>;
+    download: (elements: readonly unknown[]) => Promise<void>;
+    seedKnown: (fileIds: readonly string[]) => void;
+  }
+
+  function filesHarness(): ReturnType<typeof harness> & { files: FakeFiles } {
+    const files: FakeFiles = {
+      uploaded: [],
+      downloaded: [],
+      seeded: [],
+      upload: async (elements) => {
+        files.uploaded.push([...elements]);
+      },
+      download: async (elements) => {
+        files.downloaded.push([...elements]);
+      },
+      seedKnown: (fileIds) => {
+        files.seeded.push([...fileIds]);
+      },
+    };
+    const h = harness(HTTP_EMPTY, 1000, files as never);
+    return { ...h, files };
+  }
+
+  it("seeds known files, uploads before commit, and downloads remotes", async () => {
+    const h = filesHarness();
+    await startWithHttp(h, { ...HTTP_EMPTY, knownFileIds: ["file-0"] });
+    expect(h.files.seeded).toEqual([["file-0"]]);
+    await completeSync(h);
+
+    h.scene.addElement(image("img") as never);
+    h.scene.commitChanges(["img"], "local");
+    await sleep(5);
+    expect(h.files.uploaded).toHaveLength(1);
+    const commit = h.conn().sent.find(
+      (message) => message.type === "elements.commit",
+    ) as { mutationId: string };
+    expect(commit).toBeDefined();
+
+    h.conn().receiveCollab({
+      type: "elements.committed",
+      mutationId: "remote-img",
+      connectionId: "c-bob",
+      userId: "bob",
+      revision: 2,
+      elements: [image("img2", "file-2") as never],
+    });
+    await sleep(5);
+    expect(h.files.downloaded).toHaveLength(1);
+
+    h.conn().receiveCollab({
+      type: "elements.ack",
+      mutationId: commit.mutationId,
+      revision: 1,
+      saved: true,
+    });
+    await sleep(5);
+    expect(h.sync.getSnapshot().scene).toBe("synced");
+  });
+
+  it("retries blocked entries after uploading missing files", async () => {
+    const h = filesHarness();
+    await startWithHttp(h, HTTP_EMPTY);
+    await completeSync(h);
+    h.scene.addElement(image("img") as never);
+    h.scene.commitChanges(["img"], "local");
+    await sleep(5);
+    const commit = h.conn().sent.find(
+      (message) => message.type === "elements.commit",
+    ) as { mutationId: string };
+    const sendsBefore = h.conn().sent.filter(
+      (message) => message.type === "elements.commit",
+    ).length;
+    h.conn().receiveCollab({
+      type: "elements.ack",
+      mutationId: commit.mutationId,
+      revision: null,
+      saved: false,
+      missingFiles: ["file-1"],
+    });
+    await sleep(10);
+    // Upload retried, entry unblocked, same mutation replayed.
+    expect(h.files.uploaded.length).toBeGreaterThanOrEqual(2);
+    const replays = h.conn().sent.filter(
+      (message) =>
+        message.type === "elements.commit" &&
+        (message as { mutationId: string }).mutationId === commit.mutationId,
+    );
+    expect(replays.length).toBeGreaterThan(sendsBefore - 1);
+    expect(
+      await h.outboxStore.list(draftKey("alice", "1", "scene-1")),
+    ).toHaveLength(1);
   });
 });

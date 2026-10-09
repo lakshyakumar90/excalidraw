@@ -12,6 +12,7 @@ import {
   type OutboxStore,
   type DraftStore,
 } from "@/lib/persistence/roomDraft";
+import { createRoomFileSync } from "@/lib/sync/roomFiles";
 import { RoomSync, type HttpRoomScene, type RoomSyncDeps, type RoomSyncState } from "@/lib/sync/roomSync";
 import type { PreviewStore } from "@repo/engine";
 
@@ -24,6 +25,7 @@ export interface UseRoomSyncOptions {
   drafts?: DraftStore;
   outboxStore?: OutboxStore;
   createConnection?: RoomSyncDeps["createConnection"];
+  fileSync?: RoomSyncDeps["fileSync"];
 }
 
 export interface UseRoomSyncResult extends RoomSyncState {
@@ -41,6 +43,7 @@ export function useRoomSync({
   drafts,
   outboxStore,
   createConnection,
+  fileSync,
 }: UseRoomSyncOptions): UseRoomSyncResult {
   const { data: session } = authClient.useSession();
   const selfUserId = session?.user?.id ?? null;
@@ -59,6 +62,7 @@ export function useRoomSync({
         getTicket: () => fetchPresenceTicket(roomId),
         drafts: drafts ?? createIndexedDbDraftStore(),
         outboxStore: outboxStore ?? createIndexedDbOutboxStore(),
+        fileSync: fileSync ?? createRoomFileSync(roomId),
       }),
     // One sync instance per room+scene; session changes reconnect via key.
     // eslint-disable-next-line react-hooks/exhaustive-deps

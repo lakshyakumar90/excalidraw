@@ -15,7 +15,15 @@ describe("toPreviewElement", () => {
       version: 5,
       versionNonce: 6,
     } as never);
-    expect(preview).toEqual({ id: "a", x: 1, y: 2, width: 30, height: 40, angle: 15 });
+    expect(preview).toEqual({ id: "a", type: "rectangle", x: 1, y: 2, width: 30, height: 40, angle: 15 });
+  });
+
+  it("preserves ellipse and diamond types for the live preview renderer", () => {
+    for (const type of ["ellipse", "diamond"] as const) {
+      expect(toPreviewElement({
+        id: type, type, x: 1, y: 2, width: 30, height: 40, version: 1, versionNonce: 1,
+      } as never)?.type).toBe(type);
+    }
   });
 
   it("strips points to x/y and passes text through", () => {

@@ -246,6 +246,17 @@ export async function startPresenceServer(
           return;
         }
         let result: Awaited<ReturnType<typeof service.applyCommit>>;
+        // Final geometry is visible immediately, but remains display-only
+        // until persistence succeeds. The sender still receives a durable ack.
+        const pending = (elements: typeof message.elements) =>
+          sendToRoom(rooms, connection.roomId, {
+            type: "elements.pending",
+            mutationId: message.mutationId,
+            connectionId: connection.connectionId,
+            userId: connection.userId,
+            elements,
+          }, { exceptConnectionId: connection.connectionId });
+        pending(message.elements);
         try {
           result = await service.applyCommit({
             sceneId: connection.sceneId,
@@ -255,6 +266,7 @@ export async function startPresenceServer(
             mutationId: message.mutationId,
           });
         } catch (error) {
+          pending([]);
           console.error("Sync commit failed:", error);
           sendToConnection(connection, {
             type: "elements.ack",
@@ -274,6 +286,7 @@ export async function startPresenceServer(
           ...(result.missingFiles ? { missingFiles: result.missingFiles } : {}),
           ...(result.reason ? { reason: result.reason } : {}),
         });
+        if (!result.saved || result.replayed) pending([]);
         // Replays are acknowledged but never rebroadcast: every replica
         // already converged on the first delivery.
         if (result.saved && !result.replayed) {

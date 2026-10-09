@@ -43,6 +43,7 @@ export const WS_COLLAB_MAX_PAYLOAD_BYTES = 256 * 1024;
 
 export interface PreviewWireElement {
   id: string;
+  type?: NormalizedElement["type"];
   x: number;
   y: number;
   width?: number;
@@ -71,6 +72,14 @@ export type ClientToServerCollabMessage =
   | { type: "selection.update"; elementIds: string[] };
 
 export type ServerToClientCollabMessage =
+  | {
+      /** Display-only final geometry while the durable write is pending. */
+      type: "elements.pending";
+      mutationId: string;
+      connectionId: string;
+      userId: string;
+      elements: NormalizedElement[];
+    }
   | {
       type: "scene.sync.snapshot";
       requestId: string;
@@ -151,6 +160,7 @@ function isBoundedString(value: unknown, max: number): value is string {
 
 const PREVIEW_KEYS = new Set([
   "id",
+  "type",
   "x",
   "y",
   "width",
@@ -169,6 +179,10 @@ function isPreviewElement(value: unknown): value is PreviewWireElement {
     if (!PREVIEW_KEYS.has(key)) return false;
   }
   if (!isIdString(value.id)) return false;
+  if (
+    value.type !== undefined &&
+    !["rectangle", "ellipse", "diamond", "line", "arrow", "freedraw", "text", "image"].includes(String(value.type))
+  ) return false;
   if (
     !isFiniteNumber(value.x) ||
     Math.abs(value.x) > 10_000_000 ||
@@ -403,6 +417,13 @@ export function isServerCollabMessage(value: unknown): value is ServerToClientCo
         (value.count as number) > 0 &&
         (value.index as number) < (value.count as number) &&
         checkElements(value.elements, SYNC_MAX_ELEMENTS)
+      );
+    case "elements.pending":
+      return (
+        isBoundedString(value.mutationId, SYNC_MAX_MUTATION_ID_LENGTH) &&
+        typeof value.connectionId === "string" &&
+        typeof value.userId === "string" &&
+        checkElements(value.elements, SYNC_MAX_COMMIT_ELEMENTS)
       );
     case "elements.committed":
       return (

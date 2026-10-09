@@ -28,7 +28,7 @@ import {
   type DraftStore,
   type OutboxStore,
 } from "@/lib/persistence/roomDraft";
-import { OutboxManager, isCoveredBy } from "@/lib/sync/outbox";
+import { OutboxManager } from "@/lib/sync/outbox";
 
 /**
  * Room synchronization orchestrator (Phase 15).
@@ -67,6 +67,13 @@ export interface HttpRoomScene {
   elements: Element[];
   tombstones: TombstoneMap;
   revision: number;
+  knownFileIds?: string[];
+}
+
+export interface RoomFileSync {
+  upload: (elements: readonly Element[]) => Promise<void>;
+  download: (elements: readonly Element[]) => Promise<void>;
+  seedKnown: (fileIds: readonly string[]) => void;
 }
 
 export interface RoomSyncEvents {
@@ -200,6 +207,8 @@ export interface RoomSyncDeps {
   drafts: DraftStore;
   outboxStore: OutboxStore;
   clock?: () => number;
+  /** Image byte sync; tests inject fakes, browsers use HTTP + IndexedDB. */
+  fileSync?: RoomFileSync;
 }
 
 export class RoomSync {
@@ -215,6 +224,18 @@ export class RoomSync {
   private revision = 0;
   private tombstones: TombstoneMap = {};
   private deferred = new Map<string, NormalizedElement>();
+  /** Triples witnessed in authoritative input (snapshot/delta/correction). */
+  private confirmedTriples = new Set<string>();
+
+  private confirmTriples(elements: readonly Element[]): void {
+    for (const element of elements) {
+      if (Number.isSafeInteger(element.version)) {
+        this.confirmedTriples.add(
+          `${element.id}:${element.version}:${Number.isSafeInteger(element.versionNonce) ? element.versionNonce : 0}`,
+        );
+      }
+    }
+  }
   private pendingSync: PendingSnapshot | null = null;
   private bufferedDeltas: BufferedDelta[] = [];
   private syncCounter = 0;
@@ -306,20 +327,30 @@ export class RoomSync {
     };
   };
 
-  getSnapshot = (): RoomSyncState => ({
-    status: this.status,
-    detail: this.detail,
-    participants: this.participants,
-    selfUserId: this.selfUserId,
-    selections: this.selectionSnapshot(),
-    scene: this.deriveSceneState(),
-    pending: this.outbox.size,
-    revision: this.revision,
-    notice: this.notice,
-  });
+  private snapshotCache: RoomSyncState | null = null;
+
+  getSnapshot = (): RoomSyncState => {
+    if (!this.snapshotCache) this.snapshotCache = this.buildSnapshot();
+    return this.snapshotCache;
+  };
+
+  private buildSnapshot(): RoomSyncState {
+    return {
+      status: this.status,
+      detail: this.detail,
+      participants: this.participants,
+      selfUserId: this.selfUserId,
+      selections: this.selectionSnapshot(),
+      scene: this.deriveSceneState(),
+      pending: this.outbox.size,
+      revision: this.revision,
+      notice: this.notice,
+    };
+  }
 
   private emit(): void {
     this.snapshotVersion += 1;
+    this.snapshotCache = null;
     for (const listener of this.listeners) listener();
   }
 
@@ -360,6 +391,7 @@ export class RoomSync {
   async initializeWithHttpScene(http: HttpRoomScene): Promise<void> {
     if (this.initialized) return;
     this.initialized = true;
+    this.deps.fileSync?.seedKnown(http.knownFileIds ?? []);
     const draft = await this.deps.drafts.load(this.roomKey).catch(() => null);
     const httpTombstones = { ...http.tombstones };
     if (draft) {
@@ -551,6 +583,32 @@ export class RoomSync {
     message: ServerToClientCollabMessage,
   ): Promise<void> {
     switch (message.type) {
+      case "elements.pending": {
+        const gestureId = `commit:${message.mutationId}`;
+        this.previews.clearGesture(message.connectionId, gestureId);
+        const active = new Set(this.deps.scene.isCapturing()
+          ? this.deps.scene.getCapturedIds() : []);
+        const elements = message.elements.filter((element) => {
+          if (active.has(element.id) || element.isDeleted) return false;
+          const local = this.deps.scene.getElement(element.id);
+          const normalized = local && normalizeElement(local, { strict: false, orderFallback: 0 });
+          return !normalized || pickElementWinner(normalized, element).winner === element;
+        });
+        if (elements.length > 0) {
+          const ids = new Set(elements.map((element) => element.id));
+          for (const preview of this.previews.getPreviews()) {
+            if (preview.connectionId === message.connectionId &&
+              preview.elements.some((element) => ids.has(element.id))) {
+              this.previews.clearGesture(preview.connectionId, preview.gestureId);
+            }
+          }
+          this.previews.setPreview({
+            connectionId: message.connectionId, gestureId, seq: 0,
+            elements, receivedAt: this.clock(),
+          });
+        }
+        return;
+      }
       case "scene.sync.snapshot":
         await this.handleSnapshot(message);
         return;
@@ -629,8 +687,14 @@ export class RoomSync {
     this.previewPublisher.push({ gestureId, seq, elements });
   }
 
-  /** End a local gesture: flush the pending frame and clear remotes. */
+  /** Keep committed gesture geometry visible through the final-frame handoff. */
   endLocalPreview(gestureId: string): void {
+    if (this.commitSeenSinceCaptureEnd) {
+      this.previewPublisher.flush();
+      // The final display-only frame replaces this gesture when the server
+      // accepts the commit for saving. Avoid a blank gap during that handoff.
+      return;
+    }
     this.previewPublisher.cancel();
     this.connection?.send({ type: "elements.preview.end", gestureId });
   }
@@ -694,6 +758,8 @@ export class RoomSync {
     this.revision = Math.max(this.revision, revision, ...freshRevisions);
     const local = this.deps.scene.getElements();
     const result = reconcileElements(local, [...elements, ...freshElements], this.tombstones);
+    this.confirmTriples(elements);
+    this.confirmTriples(freshElements);
     this.tombstones = unionTombstones(this.tombstones, result.tombstoneUpdates);
     const captured = new Set(
       this.deps.scene.isCapturing() ? this.deps.scene.getCapturedIds() : [],
@@ -709,6 +775,7 @@ export class RoomSync {
     if (now.length > 0) {
       const applied = this.deps.scene.applyRemote(now, this.tombstones);
       this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      void this.deps.fileSync?.download(now).catch(() => {});
     }
     if (generation !== this.generation) return;
     await this.coverOutbox();
@@ -718,12 +785,14 @@ export class RoomSync {
   }
 
   private async handleCommitted(message: Extract<ServerToClientCollabMessage, { type: "elements.committed" }>): Promise<void> {
+    this.previews.clearGesture(message.connectionId, `commit:${message.mutationId}`);
     if (this.pendingSync) {
       this.bufferedDeltas.push({ revision: message.revision, elements: [...message.elements] });
       this.emit();
       return;
     }
     this.revision = Math.max(this.revision, message.revision);
+    this.confirmTriples(message.elements);
     const captured = new Set(
       this.deps.scene.isCapturing() ? this.deps.scene.getCapturedIds() : [],
     );
@@ -734,6 +803,7 @@ export class RoomSync {
     if (now.length > 0) {
       const applied = this.deps.scene.applyRemote(now, this.tombstones);
       this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      void this.deps.fileSync?.download(now).catch(() => {});
     }
     await this.coverOutbox();
     void this.persistDraftSoon();
@@ -743,8 +813,10 @@ export class RoomSync {
   private async handleAck(message: Extract<ServerToClientCollabMessage, { type: "elements.ack" }>): Promise<void> {
     const entry = this.outbox.get(message.mutationId);
     if (message.corrected && message.corrected.length > 0) {
+      this.confirmTriples(message.corrected);
       const applied = this.deps.scene.applyRemote(message.corrected, this.tombstones);
       this.tombstones = unionTombstones(this.tombstones, applied.tombstoneUpdates);
+      void this.deps.fileSync?.download(message.corrected).catch(() => {});
     }
     if (message.revision !== null && message.revision !== undefined) {
       this.revision = Math.max(this.revision, message.revision);
@@ -765,6 +837,17 @@ export class RoomSync {
     } else if (message.missingFiles && message.missingFiles.length > 0) {
       this.filesBlocked.add(message.mutationId);
       this.notice = "Uploading image files before retrying the pending edit.";
+      // Upload now, then unblock and replay the same mutation.
+      if (entry) {
+        try {
+          await this.deps.fileSync?.upload(entry.elements);
+          this.filesBlocked.delete(message.mutationId);
+          this.notice = null;
+          this.sendEntry({ ...entry, elements: entry.elements });
+        } catch {
+          // Still offline: stays blocked until the next sync or retry tick.
+        }
+      }
     } else {
       this.notice = "Saving failed — retrying in the background.";
     }
@@ -802,6 +885,13 @@ export class RoomSync {
       this.emit();
       return;
     }
+    // Image bytes attach before the referencing commit is reported saved;
+    // upload failures keep the entry files-blocked for a later retry.
+    try {
+      await this.deps.fileSync?.upload(survivors);
+    } catch {
+      // Offline or missing local bytes: the authority reports missingFiles.
+    }
     const entry = await this.outbox.enqueue(this.roomKey, survivors, this.revision);
     // Send immediately; the draft persist stays debounced and unordered.
     this.sendEntry(entry);
@@ -823,17 +913,36 @@ export class RoomSync {
 
   private async replayOutbox(): Promise<void> {
     if (this.status !== "live") return;
+    await this.retryBlockedEntries();
     for (const entry of this.outbox.all()) {
       if (this.readOnly || this.filesBlocked.has(entry.mutationId)) continue;
       this.sendEntry(entry);
     }
   }
 
+  /** Upload bytes for files-blocked entries, then let them replay. */
+  private async retryBlockedEntries(): Promise<void> {
+    for (const mutationId of [...this.filesBlocked]) {
+      const entry = this.outbox.get(mutationId);
+      if (!entry) {
+        this.filesBlocked.delete(mutationId);
+        continue;
+      }
+      try {
+        await this.deps.fileSync?.upload(entry.elements);
+        this.filesBlocked.delete(mutationId);
+        if (!this.readOnly) this.notice = null;
+      } catch {
+        // Still offline: stays blocked until the next sync or retry tick.
+      }
+    }
+  }
+
   /**
-   * Drop entries the authority has absorbed. Content coverage alone is not
-   * enough: an unacked local commit covers itself. Removal additionally
-   * requires durable progress past the entry's base revision (every save
-   * bumps the revision) or an explicit saved acknowledgement.
+   * Drop entries the authority has absorbed: exact triples witnessed in
+   * authoritative input (our save echoed back), or strictly newer records
+   * (we lost and the winner already applied). Local-only content never
+   * completes an entry on its own.
    */
   private async coverOutbox(): Promise<void> {
     const state = new Map<string, NormalizedElement>();
@@ -841,14 +950,35 @@ export class RoomSync {
       state.set(element.id, element);
     }
     for (const entry of this.outbox.all()) {
-      if (this.revision <= entry.baseRevision) continue;
-      const uncovered = entry.elements.filter(
-        (element) => !isCoveredBy(element, state),
-      );
+      const uncovered = entry.elements.filter((element) => {
+        const current = state.get(element.id);
+        if (!current) return true;
+        const version = element.version ?? 0;
+        const nonce = element.versionNonce ?? 0;
+        if (
+          current.version > version ||
+          (current.version === version && current.versionNonce > nonce)
+        ) {
+          return false;
+        }
+        if (current.version !== version || current.versionNonce !== nonce) {
+          return true;
+        }
+        return !this.confirmedTriples.has(`${element.id}:${version}:${nonce}`);
+      });
       if (uncovered.length === 0) {
         this.filesBlocked.delete(entry.mutationId);
         await this.outbox.remove(entry.mutationId);
       }
+    }
+    // Triples only matter while their entry is still pending.
+    const pendingIds = new Set(
+      (await this.outbox.all()).flatMap((entry) =>
+        entry.elements.map((element) => element.id),
+      ),
+    );
+    for (const triple of [...this.confirmedTriples]) {
+      if (!pendingIds.has(triple.split(":")[0]!)) this.confirmedTriples.delete(triple);
     }
   }
 

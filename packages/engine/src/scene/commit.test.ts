@@ -181,3 +181,48 @@ describe("Scene ordering invariant", () => {
     expect(scene.getElements().map((element) => element.orderKey)).toEqual([0, 1]);
   });
 });
+
+describe("Scene remote isolation", () => {
+  it("applies remotes during an open capture without disturbing it", () => {
+    const scene = new Scene();
+    scene.addElement(rectangle("local", { x: 0 }));
+    scene.addElement(rectangle("remote", { x: 0 }));
+    scene.beginCapture();
+    scene.mutateElement("local", { x: 5 });
+    const applied = scene.applyRemote([
+      { ...rectangle("remote", { x: 50 }), version: 9, versionNonce: 9, updated: 7 },
+    ]);
+    expect(applied.appliedIds).toEqual(["remote"]);
+    expect(scene.getElement("remote")).toMatchObject({
+      x: 50,
+      version: 9,
+      versionNonce: 9,
+      updated: 7,
+    });
+    // The local capture still yields exactly the local delta.
+    const changes = scene.endCapture();
+    expect(changes.map((change) => change.id)).toEqual(["local"]);
+    const commit = scene.commitChanges(
+      changes.map((change) => change.id),
+      "local",
+    );
+    expect(commit.elements).toHaveLength(1);
+    expect(commit.elements[0]?.id).toBe("local");
+  });
+
+  it("exposes capture base versions for preview frames", () => {
+    const scene = new Scene();
+    scene.addElement(rectangle("a", { x: 0 }));
+    scene.commitChanges(["a"], "local");
+    const committed = scene.getElement("a")!;
+    scene.beginCapture();
+    scene.mutateElement("a", { x: 3 });
+    expect(scene.getCapturedIds()).toEqual(["a"]);
+    const base = scene.getCaptureBaseVersions().get("a");
+    expect(base).toEqual({
+      version: committed.version,
+      versionNonce: committed.versionNonce,
+    });
+    scene.endCapture();
+  });
+});

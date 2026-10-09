@@ -1,4 +1,4 @@
-import type { Element, NormalizedElement } from "@repo/common";
+import type { Element } from "@repo/common";
 import type { OutboxEntry, OutboxStore } from "@/lib/persistence/roomDraft";
 
 /**
@@ -79,18 +79,4 @@ export class OutboxManager {
   clear(): void {
     this.entries.clear();
   }
-}
-
-export function isCoveredBy(
-  entryElement: Element,
-  state: Map<string, NormalizedElement>,
-): boolean {
-  const current = state.get(entryElement.id);
-  if (!current) return false;
-  const version = entryElement.version ?? 0;
-  const nonce = entryElement.versionNonce ?? 0;
-  return (
-    current.version > version ||
-    (current.version === version && current.versionNonce >= nonce)
-  );
 }

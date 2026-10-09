@@ -7,7 +7,12 @@ import type { Element, PreviewWireElement } from "@repo/common";
  */
 export function toPreviewElement(element: Element): PreviewWireElement | null {
   if (element.isDeleted === true) return null;
-  const preview: PreviewWireElement = { id: element.id, x: element.x, y: element.y };
+  const preview: PreviewWireElement = {
+    id: element.id,
+    type: element.type,
+    x: element.x,
+    y: element.y,
+  };
   if (typeof element.width === "number" && Number.isFinite(element.width)) {
     preview.width = element.width;
   }

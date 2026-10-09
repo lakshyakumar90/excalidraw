@@ -1,8 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import type { PresenceParticipant, PreviewWireElement } from "@repo/common";
-import { sceneToViewport } from "@repo/engine";
+import { useMemo, useSyncExternalStore } from "react";
+import type { Element, PresenceParticipant, PreviewWireElement } from "@repo/common";
+import { getElementAxisAlignedBounds, renderSceneToSvg, sceneToViewport } from "@repo/engine";
 import type { PreviewStore } from "@repo/engine";
 import {
   getCurrentViewport,
@@ -55,8 +55,13 @@ function PreviewShape({
       </text>
     );
   }
-  // Shape ghosts keyed only by geometry: rectangles, ellipses, diamonds,
-  // and images (dashed placeholder) all render from their bounds.
+  if (element.type === "ellipse") {
+    return <ellipse cx={origin.x + w / 2} cy={origin.y + h / 2} rx={w / 2} ry={h / 2} {...common} transform={rotate} />;
+  }
+  if (element.type === "diamond") {
+    return <polygon points={`${origin.x + w / 2},${origin.y} ${origin.x + w},${origin.y + h / 2} ${origin.x + w / 2},${origin.y + h} ${origin.x},${origin.y + h / 2}`} {...common} transform={rotate} />;
+  }
+  // Rectangles and image placeholders use the same bounds preview.
   return (
     <g transform={rotate}>
       <rect x={origin.x} y={origin.y} width={w} height={h} rx={3} {...common} />
@@ -76,17 +81,19 @@ export function RemotePreviews({
   previews: PreviewStore;
   participants: PresenceParticipant[];
 }) {
-  const version = useSyncExternalStore(
-    previews.subscribe,
-    previews.getSnapshot,
-    previews.getSnapshot,
+  const { subscribe, getSnapshot } = useMemo(
+    () => ({
+      subscribe: (listener: () => void) => previews.subscribe(listener),
+      getSnapshot: () => previews.getSnapshot(),
+    }),
+    [previews],
   );
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const viewport = useSyncExternalStore(
     subscribeViewport,
     getCurrentViewport,
     getInitialViewport,
   );
-  void version;
   const names = new Map(
     participants.map((participant) => [participant.connectionId, participant]),
   );
@@ -101,15 +108,36 @@ export function RemotePreviews({
             participant?.userId ?? entry.connectionId,
           );
           return entry.elements.map((element) => (
+            entry.gestureId.startsWith("commit:") && "type" in element ? (
+              <FinishedPreview key={`${entry.key}:${element.id}`} element={element as Element} zoom={viewport.zoom}
+                project={(x, y) => sceneToViewport({ x, y }, viewport)} />
+            ) : (
             <PreviewShape
               key={`${entry.key}:${element.id}`}
               element={element}
               color={color}
               project={(x, y) => sceneToViewport({ x, y }, viewport)}
             />
+            )
           ));
         })}
       </svg>
     </div>
   );
+}
+
+/** Final styles render immediately; this overlay never enters the scene/save. */
+function FinishedPreview({ element, zoom, project }: {
+  element: Element;
+  zoom: number;
+  project: (x: number, y: number) => { x: number; y: number };
+}) {
+  const bounds = getElementAxisAlignedBounds(element);
+  const padding = 8;
+  const origin = project(bounds.minX - padding, bounds.minY - padding);
+  const svg = renderSceneToSvg([element], { padding });
+  return <image x={origin.x} y={origin.y}
+    width={Math.ceil(bounds.maxX - bounds.minX + padding * 2) * zoom}
+    height={Math.ceil(bounds.maxY - bounds.minY + padding * 2) * zoom}
+    href={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`} />;
 }

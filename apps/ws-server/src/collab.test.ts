@@ -293,6 +293,13 @@ test("commits acknowledge the sender and fan out winners to others", async () =>
     ["bob", "editor"],
   ]);
   const service = createFakeService();
+  const applyCommit = service.applyCommit;
+  let releaseWrite!: () => void;
+  const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+  service.applyCommit = async (input) => {
+    await writeGate;
+    return applyCommit(input);
+  };
   const handle = await startCollabServer(fixtures, service);
   const clients: TestClient[] = [];
   try {
@@ -310,6 +317,11 @@ test("commits acknowledge the sender and fan out winners to others", async () =>
         elements: [rect("a", { version: 2, versionNonce: 9, x: 11 })],
       }),
     );
+    const pending = await waitFor(bob, isType("elements.pending"));
+    assert.equal((pending as { mutationId: string }).mutationId, "op-1");
+    assert.equal(alice.messages.filter(isType("elements.ack")).length, 0);
+    assert.equal(bob.messages.filter(isType("elements.committed")).length, 0);
+    releaseWrite();
     const ack = (await waitFor(alice, isType("elements.ack"))) as {
       mutationId: string;
       revision: number;
