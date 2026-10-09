@@ -1,17 +1,12 @@
-import { db } from "@repo/db";
-import { authPool } from "./database.js";
+import { connectDatabase } from "@repo/db";
+import { assertAuthConfiguration } from "@repo/auth";
 import { app } from "./app.js";
 
 async function startServer() {
-  const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error(
-      "Set BETTER_AUTH_SECRET to a random value of at least 32 characters.",
-    );
-  }
+  assertAuthConfiguration();
 
   try {
-    await Promise.all([db.connect(), authPool.query("SELECT 1")]);
+    await connectDatabase();
 
     const port = Number(process.env.PORT ?? 5000);
     app.listen(port, () => {
