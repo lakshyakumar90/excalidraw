@@ -1,4 +1,9 @@
 import {
+  isLaserFrame,
+  type LaserFrame,
+  type RemoteLaserFrame,
+} from "./laser.js";
+import {
   SYNC_MAX_COMMIT_BYTES,
   SYNC_MAX_COMMIT_ELEMENTS,
   SYNC_MAX_ELEMENTS,
@@ -43,6 +48,7 @@ export const WS_COLLAB_MAX_PAYLOAD_BYTES = 256 * 1024;
 
 export interface PreviewWireElement {
   id: string;
+  frameId?: string | null;
   type?: NormalizedElement["type"];
   x: number;
   y: number;
@@ -54,6 +60,7 @@ export interface PreviewWireElement {
 }
 
 export type ClientToServerCollabMessage =
+  | LaserFrame
   | { type: "scene.sync.request"; requestId: string }
   | {
       type: "elements.commit";
@@ -72,6 +79,7 @@ export type ClientToServerCollabMessage =
   | { type: "selection.update"; elementIds: string[] };
 
 export type ServerToClientCollabMessage =
+  | RemoteLaserFrame
   | {
       /** Display-only final geometry while the durable write is pending. */
       type: "elements.pending";
@@ -162,6 +170,7 @@ function isBoundedString(value: unknown, max: number): value is string {
 
 const PREVIEW_KEYS = new Set([
   "id",
+  "frameId",
   "type",
   "x",
   "y",
@@ -182,9 +191,26 @@ function isPreviewElement(value: unknown): value is PreviewWireElement {
   }
   if (!isIdString(value.id)) return false;
   if (
+    value.frameId !== undefined &&
+    value.frameId !== null &&
+    !isIdString(value.frameId)
+  )
+    return false;
+  if (
     value.type !== undefined &&
-    !["rectangle", "ellipse", "diamond", "line", "arrow", "freedraw", "text", "image"].includes(String(value.type))
-  ) return false;
+    ![
+      "frame",
+      "rectangle",
+      "ellipse",
+      "diamond",
+      "line",
+      "arrow",
+      "freedraw",
+      "text",
+      "image",
+    ].includes(String(value.type))
+  )
+    return false;
   if (
     !isFiniteNumber(value.x) ||
     Math.abs(value.x) > 10_000_000 ||
@@ -231,7 +257,9 @@ function isPreviewElement(value: unknown): value is PreviewWireElement {
   return true;
 }
 
-function isVersionBase(value: unknown): value is Record<string, { version: number; versionNonce: number }> {
+function isVersionBase(
+  value: unknown,
+): value is Record<string, { version: number; versionNonce: number }> {
   if (!isRecord(value)) return false;
   const entries = Object.entries(value);
   if (entries.length > SYNC_MAX_COMMIT_ELEMENTS) return false;
@@ -244,7 +272,9 @@ function isVersionBase(value: unknown): value is Record<string, { version: numbe
       !isSafeInt(base.versionNonce) ||
       base.versionNonce < 0 ||
       base.versionNonce > SYNC_MAX_NONCE ||
-      Object.keys(base).some((key) => key !== "version" && key !== "versionNonce")
+      Object.keys(base).some(
+        (key) => key !== "version" && key !== "versionNonce",
+      )
     ) {
       return false;
     }
@@ -264,7 +294,8 @@ function isTombstoneMap(value: unknown): value is TombstoneMap {
       typeof entry.deletedAt !== "string" ||
       entry.deletedAt.length > 64 ||
       Object.keys(entry).some(
-        (key) => key !== "version" && key !== "versionNonce" && key !== "deletedAt",
+        (key) =>
+          key !== "version" && key !== "versionNonce" && key !== "deletedAt",
       )
     ) {
       return false;
@@ -273,7 +304,10 @@ function isTombstoneMap(value: unknown): value is TombstoneMap {
   return true;
 }
 
-function checkElements(value: unknown, max: number): value is NormalizedElement[] {
+function checkElements(
+  value: unknown,
+  max: number,
+): value is NormalizedElement[] {
   if (!Array.isArray(value) || value.length > max) return false;
   return value.every((entry) => validateSyncElement(entry).ok);
 }
@@ -283,21 +317,35 @@ export type CollabValidationResult =
   | { ok: false; error: string };
 
 /** Validate an untrusted client collaboration payload. Never throws. */
-export function validateClientCollabMessage(value: unknown): CollabValidationResult {
-  if (!isRecord(value)) return { ok: false, error: "Message must be an object" };
-  if (typeof value.type !== "string") return { ok: false, error: "Unknown message type" };
+export function validateClientCollabMessage(
+  value: unknown,
+): CollabValidationResult {
+  if (!isRecord(value))
+    return { ok: false, error: "Message must be an object" };
+  if (typeof value.type !== "string")
+    return { ok: false, error: "Unknown message type" };
   switch (value.type) {
     case "scene.sync.request": {
       if (
-        Object.keys(value).some((key) => key !== "type" && key !== "requestId") ||
+        Object.keys(value).some(
+          (key) => key !== "type" && key !== "requestId",
+        ) ||
         !isBoundedString(value.requestId, SYNC_MAX_REQUEST_ID_LENGTH)
       ) {
         return { ok: false, error: "Invalid sync request" };
       }
-      return { ok: true, message: { type: "scene.sync.request", requestId: value.requestId } };
+      return {
+        ok: true,
+        message: { type: "scene.sync.request", requestId: value.requestId },
+      };
     }
     case "elements.commit": {
-      if (Object.keys(value).some((key) => !["type", "mutationId", "baseRevision", "elements"].includes(key))) {
+      if (
+        Object.keys(value).some(
+          (key) =>
+            !["type", "mutationId", "baseRevision", "elements"].includes(key),
+        )
+      ) {
         return { ok: false, error: "Unexpected field in message" };
       }
       if (!isBoundedString(value.mutationId, SYNC_MAX_MUTATION_ID_LENGTH)) {
@@ -309,7 +357,9 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
       const batch = validateSyncBatch(value.elements, SYNC_MAX_COMMIT_ELEMENTS);
       if (!batch.ok) return batch;
       try {
-        if ((JSON.stringify(value.elements)?.length ?? 0) > SYNC_MAX_COMMIT_BYTES) {
+        if (
+          (JSON.stringify(value.elements)?.length ?? 0) > SYNC_MAX_COMMIT_BYTES
+        ) {
           return { ok: false, error: "Commit batch too large" };
         }
       } catch {
@@ -328,7 +378,8 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
     case "elements.preview": {
       if (
         Object.keys(value).some(
-          (key) => !["type", "gestureId", "seq", "base", "elements"].includes(key),
+          (key) =>
+            !["type", "gestureId", "seq", "base", "elements"].includes(key),
         )
       ) {
         return { ok: false, error: "Unexpected field in message" };
@@ -339,7 +390,8 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
       if (!isSafeInt(value.seq) || value.seq < 0) {
         return { ok: false, error: "Invalid preview sequence" };
       }
-      if (!isVersionBase(value.base)) return { ok: false, error: "Invalid preview base" };
+      if (!isVersionBase(value.base))
+        return { ok: false, error: "Invalid preview base" };
       if (
         !Array.isArray(value.elements) ||
         value.elements.length > SYNC_MAX_PREVIEW_ELEMENTS ||
@@ -348,7 +400,9 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
         return { ok: false, error: "Invalid preview geometry" };
       }
       try {
-        if ((JSON.stringify(value.elements)?.length ?? 0) > SYNC_MAX_PREVIEW_BYTES) {
+        if (
+          (JSON.stringify(value.elements)?.length ?? 0) > SYNC_MAX_PREVIEW_BYTES
+        ) {
           return { ok: false, error: "Preview frame too large" };
         }
       } catch {
@@ -360,23 +414,43 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
           type: "elements.preview",
           gestureId: value.gestureId,
           seq: value.seq,
-          base: value.base as Record<string, { version: number; versionNonce: number }>,
+          base: value.base as Record<
+            string,
+            { version: number; versionNonce: number }
+          >,
           elements: value.elements as PreviewWireElement[],
         },
       };
     }
     case "elements.preview.end": {
       if (
-        Object.keys(value).some((key) => key !== "type" && key !== "gestureId") ||
+        Object.keys(value).some(
+          (key) => key !== "type" && key !== "gestureId",
+        ) ||
         !isBoundedString(value.gestureId, SYNC_MAX_GESTURE_ID_LENGTH)
       ) {
         return { ok: false, error: "Invalid preview end" };
       }
-      return { ok: true, message: { type: "elements.preview.end", gestureId: value.gestureId } };
+      return {
+        ok: true,
+        message: { type: "elements.preview.end", gestureId: value.gestureId },
+      };
+    }
+    case "laser.move": {
+      if (
+        !isLaserFrame(value) ||
+        Object.keys(value).some(
+          (k) => !["type", "gestureId", "seq", "points"].includes(k),
+        )
+      )
+        return { ok: false, error: "Invalid laser frame" };
+      return { ok: true, message: value };
     }
     case "selection.update": {
       if (
-        Object.keys(value).some((key) => key !== "type" && key !== "elementIds") ||
+        Object.keys(value).some(
+          (key) => key !== "type" && key !== "elementIds",
+        ) ||
         !Array.isArray(value.elementIds) ||
         value.elementIds.length > SYNC_MAX_SELECTION_IDS ||
         !value.elementIds.every(isIdString)
@@ -385,7 +459,10 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
       }
       return {
         ok: true,
-        message: { type: "selection.update", elementIds: [...value.elementIds] },
+        message: {
+          type: "selection.update",
+          elementIds: [...value.elementIds],
+        },
       };
     }
     default:
@@ -394,9 +471,17 @@ export function validateClientCollabMessage(value: unknown): CollabValidationRes
 }
 
 /** Guard server collaboration payloads before the browser applies them. */
-export function isServerCollabMessage(value: unknown): value is ServerToClientCollabMessage {
+export function isServerCollabMessage(
+  value: unknown,
+): value is ServerToClientCollabMessage {
   if (!isRecord(value) || typeof value.type !== "string") return false;
   switch (value.type) {
+    case "laser.move":
+      return (
+        isLaserFrame(value) &&
+        typeof value.connectionId === "string" &&
+        typeof value.userId === "string"
+      );
     case "scene.sync.snapshot":
       return (
         isBoundedString(value.requestId, SYNC_MAX_REQUEST_ID_LENGTH) &&
@@ -442,11 +527,14 @@ export function isServerCollabMessage(value: unknown): value is ServerToClientCo
         (value.revision === null ||
           (isSafeInt(value.revision) && (value.revision as number) >= 0)) &&
         typeof value.saved === "boolean" &&
-        (value.persisted === undefined || typeof value.persisted === "boolean") &&
+        (value.persisted === undefined ||
+          typeof value.persisted === "boolean") &&
         (value.corrected === undefined ||
           (Array.isArray(value.corrected) &&
             value.corrected.length <= SYNC_MAX_COMMIT_ELEMENTS &&
-            (value.corrected as unknown[]).every((entry) => validateSyncElement(entry).ok))) &&
+            (value.corrected as unknown[]).every(
+              (entry) => validateSyncElement(entry).ok,
+            ))) &&
         (value.missingFiles === undefined ||
           (Array.isArray(value.missingFiles) &&
             (value.missingFiles as unknown[]).every(isIdString))) &&

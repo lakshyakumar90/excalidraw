@@ -24,13 +24,34 @@ const MAX_STYLE_STRING = 100;
 const MAX_ARRAY_REF = 50;
 
 const BASE_KEYS = new Set([
-  "id", "type", "x", "y", "width", "height", "angle",
-  "strokeColor", "backgroundColor", "fillStyle", "strokeStyle", "edgeStyle",
-  "strokeWidth", "roughness", "opacity", "seed", "groupIds", "boundElements",
-  "frameId", "version", "versionNonce", "isDeleted", "updated", "orderKey",
+  "id",
+  "type",
+  "x",
+  "y",
+  "width",
+  "height",
+  "angle",
+  "strokeColor",
+  "backgroundColor",
+  "fillStyle",
+  "strokeStyle",
+  "edgeStyle",
+  "strokeWidth",
+  "roughness",
+  "opacity",
+  "seed",
+  "groupIds",
+  "boundElements",
+  "frameId",
+  "version",
+  "versionNonce",
+  "isDeleted",
+  "updated",
+  "orderKey",
 ]);
 
 const TYPE_KEYS: Record<string, string[]> = {
+  frame: ["name"],
   rectangle: [],
   ellipse: [],
   diamond: [],
@@ -38,7 +59,12 @@ const TYPE_KEYS: Record<string, string[]> = {
   arrow: ["lineType", "points", "startBinding", "endBinding"],
   freedraw: ["points"],
   text: [
-    "text", "containerId", "wrapText", "fontSize", "fontFamily", "textAlign",
+    "text",
+    "containerId",
+    "wrapText",
+    "fontSize",
+    "fontFamily",
+    "textAlign",
     "verticalAlign",
   ],
   image: ["fileId", "status", "scale", "crop"],
@@ -119,12 +145,12 @@ function isPoints(value: unknown, withPressure: boolean): boolean {
 }
 
 export type SyncValidationResult =
-  | { ok: true; element: NormalizedElement }
-  | { ok: false; error: string };
+  { ok: true; element: NormalizedElement } | { ok: false; error: string };
 
 /** Validate one untrusted element record; returns a normalized clone. */
 export function validateSyncElement(value: unknown): SyncValidationResult {
-  if (!isRecord(value)) return { ok: false, error: "Element must be an object" };
+  if (!isRecord(value))
+    return { ok: false, error: "Element must be an object" };
   for (const key of Object.keys(value)) {
     if (key === "__proto__" || key === "constructor" || key === "prototype") {
       return { ok: false, error: "Unsafe element field" };
@@ -135,7 +161,8 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
   }
   const allowed = new Set([...BASE_KEYS, ...TYPE_KEYS[value.type]!]);
   for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) return { ok: false, error: `Unexpected field ${key}` };
+    if (!allowed.has(key))
+      return { ok: false, error: `Unexpected field ${key}` };
   }
   if (!isIdString(value.id)) return { ok: false, error: "Invalid element id" };
   if (!isGeometry(value.x) || !isGeometry(value.y)) {
@@ -153,7 +180,11 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
   if (value.angle !== undefined && !isFiniteNumber(value.angle)) {
     return { ok: false, error: "Invalid element angle" };
   }
-  for (const field of ["strokeColor", "backgroundColor", "fontFamily"] as const) {
+  for (const field of [
+    "strokeColor",
+    "backgroundColor",
+    "fontFamily",
+  ] as const) {
     const text = value[field];
     if (
       text !== undefined &&
@@ -162,13 +193,22 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       return { ok: false, error: `Invalid element ${field}` };
     }
   }
-  if (value.fillStyle !== undefined && !FILL_STYLES.has(value.fillStyle as string)) {
+  if (
+    value.fillStyle !== undefined &&
+    !FILL_STYLES.has(value.fillStyle as string)
+  ) {
     return { ok: false, error: "Invalid fill style" };
   }
-  if (value.strokeStyle !== undefined && !STROKE_STYLES.has(value.strokeStyle as string)) {
+  if (
+    value.strokeStyle !== undefined &&
+    !STROKE_STYLES.has(value.strokeStyle as string)
+  ) {
     return { ok: false, error: "Invalid stroke style" };
   }
-  if (value.edgeStyle !== undefined && !EDGE_STYLES.has(value.edgeStyle as string)) {
+  if (
+    value.edgeStyle !== undefined &&
+    !EDGE_STYLES.has(value.edgeStyle as string)
+  ) {
     return { ok: false, error: "Invalid edge style" };
   }
   for (const field of ["strokeWidth", "roughness", "seed"] as const) {
@@ -213,6 +253,15 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
   }
 
   switch (value.type) {
+    case "frame":
+      if (
+        (value.angle ?? 0) !== 0 ||
+        value.frameId ||
+        (value.name !== undefined &&
+          (typeof value.name !== "string" || value.name.length > 100))
+      )
+        return { ok: false, error: "Invalid frame" };
+      break;
     case "line":
       if (!LINE_TYPES.has(value.lineType as string)) {
         return { ok: false, error: "Invalid line type" };
@@ -222,7 +271,10 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       }
       break;
     case "arrow":
-      if (value.lineType !== undefined && !LINE_TYPES.has(value.lineType as string)) {
+      if (
+        value.lineType !== undefined &&
+        !LINE_TYPES.has(value.lineType as string)
+      ) {
         return { ok: false, error: "Invalid line type" };
       }
       if (!isPoints(value.points, false)) {
@@ -238,7 +290,10 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       }
       break;
     case "text": {
-      if (typeof value.text !== "string" || value.text.length > SYNC_MAX_TEXT_LENGTH) {
+      if (
+        typeof value.text !== "string" ||
+        value.text.length > SYNC_MAX_TEXT_LENGTH
+      ) {
         return { ok: false, error: "Invalid text content" };
       }
       if (
@@ -248,7 +303,10 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       ) {
         return { ok: false, error: "Invalid font size" };
       }
-      if (typeof value.fontFamily !== "string" || value.fontFamily.length === 0) {
+      if (
+        typeof value.fontFamily !== "string" ||
+        value.fontFamily.length === 0
+      ) {
         return { ok: false, error: "Invalid font family" };
       }
       if (!TEXT_ALIGNS.has(value.textAlign as string)) {
@@ -269,7 +327,10 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       if (!isIdString(value.fileId)) {
         return { ok: false, error: "Invalid file reference" };
       }
-      if (value.status !== undefined && !IMAGE_STATUS.has(value.status as string)) {
+      if (
+        value.status !== undefined &&
+        !IMAGE_STATUS.has(value.status as string)
+      ) {
         return { ok: false, error: "Invalid image status" };
       }
       if (value.scale !== undefined) {
@@ -313,16 +374,17 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
 }
 
 export type BatchValidationResult =
-  | { ok: true; elements: NormalizedElement[] }
-  | { ok: false; error: string };
+  { ok: true; elements: NormalizedElement[] } | { ok: false; error: string };
 
 /** Validate a bounded commit batch: array, size, duplicates, then records. */
 export function validateSyncBatch(
   value: unknown,
   maxElements: number = SYNC_MAX_COMMIT_ELEMENTS,
 ): BatchValidationResult {
-  if (!Array.isArray(value)) return { ok: false, error: "Commit must be an array" };
-  if (value.length === 0) return { ok: false, error: "Commit must not be empty" };
+  if (!Array.isArray(value))
+    return { ok: false, error: "Commit must be an array" };
+  if (value.length === 0)
+    return { ok: false, error: "Commit must not be empty" };
   if (value.length > maxElements) {
     return { ok: false, error: "Commit batch too large" };
   }

@@ -1,6 +1,7 @@
 import type { Point } from "../types.js";
 
 export type ElementType =
+  | "frame"
   | "rectangle"
   | "ellipse"
   | "diamond"
@@ -51,6 +52,11 @@ export interface BaseElement {
 
 export interface RectangleElement extends BaseElement {
   type: "rectangle";
+}
+
+export interface FrameElement extends BaseElement {
+  type: "frame";
+  name?: string;
 }
 
 export interface EllipseElement extends BaseElement {
@@ -115,6 +121,7 @@ export interface FreedrawPoint extends Point {
 }
 
 export type Element =
+  | FrameElement
   | RectangleElement
   | EllipseElement
   | DiamondElement
