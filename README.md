@@ -1,5 +1,9 @@
 # Turborepo starter
 
+## Local collaboration services
+
+Room collaboration uses Redis for live snapshots and the write-behind queue. Set `REDIS_URL` in the workspace `.env` (see `.env.example`), then start local Redis with `docker compose up -d redis`. The workspace dev command starts the HTTP server, WebSocket server, web app, and snapshot flush worker. Postgres remains the durable store and is accessed through `packages/db`.
+
 This Turborepo starter is maintained by the Turborepo core team.
 
 ## Using this example

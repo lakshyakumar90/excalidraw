@@ -109,6 +109,22 @@ export async function pruneSceneRevisions(
   }
 }
 
+/** Retain the most recent N durable snapshots for room history. */
+export async function retainLatestSceneRevisions(
+  store: SyncDb,
+  sceneId: string,
+  keepCount: number,
+): Promise<void> {
+  const safeCount = Math.max(1, Math.floor(keepCount));
+  const rows = (await store.orm!.public!.SceneRevision.where({ sceneId })
+    .select("id", "revision")
+    .orderBy((revision) => revision.revision.desc())
+    .all()) as { id: number; revision: number }[];
+  for (const row of rows.slice(safeCount)) {
+    await store.orm!.public!.SceneRevision.where({ id: row.id }).delete();
+  }
+}
+
 /** Legacy document for scenes without sync history yet. */
 export async function readLegacySceneData(
   store: SyncDb,

@@ -49,6 +49,7 @@ export {
   pruneSceneRevisions,
   readLegacySceneData,
   readSyncHead,
+  retainLatestSceneRevisions,
   roomForScene,
 } from "./sceneSync.js";
 export type {

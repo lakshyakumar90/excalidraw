@@ -14,6 +14,7 @@
     "@repo/auth": "workspace:*",
     "@repo/backend-common": "workspace:*",
     "@repo/db": "workspace:*",
+    "@repo/redis": "workspace:*",
     "@repo/validations": "workspace:*",
     "cors": "2.8.5",
     "express": "^5.2.1",
