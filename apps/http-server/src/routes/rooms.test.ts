@@ -2,9 +2,18 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import express from "express";
 import { db } from "@repo/db";
+import { configureInvitationRateLimiter } from "../invitationRateLimit.js";
 import { roomsRouter } from "./rooms.js";
 
 test("room ownership and invitation email are enforced", async () => {
+  configureInvitationRateLimiter({
+    consumeRateLimit: async () => ({
+      allowed: true,
+      retryAfterMs: 0,
+      remaining: 100,
+    }),
+    publish: async () => {},
+  });
   const ormDescriptor = Object.getOwnPropertyDescriptor(db, "orm");
   const transactionDescriptor = Object.getOwnPropertyDescriptor(
     db,
@@ -23,7 +32,7 @@ test("room ownership and invitation email are enforced", async () => {
       RoomMember: { where: () => ({ first: async () => null }) },
       Scene: { where: () => ({ first: async () => null }) },
       Invite: {
-        where: () => ({ first: async () => null }),
+        where: () => ({ first: async () => null, update: async () => ({}) }),
         create: async () => ({}),
       },
       User: { where: () => ({ first: async () => null }) },
@@ -71,8 +80,15 @@ test("room ownership and invitation email are enforced", async () => {
     );
     const created = await invite("alice");
     assert.equal(created.status, 201);
-    const { code } = (await created.json()) as { code: string };
-    assert.match(code, /^[a-f0-9]{64}$/);
+    const { inviteUrl, delivery } = (await created.json()) as {
+      inviteUrl: string;
+      delivery: string;
+    };
+    assert.match(inviteUrl, /^http:\/\/localhost:3000\/invite\//);
+    assert.ok(["sent", "failed", "manual-link"].includes(delivery));
+    const code = decodeURIComponent(
+      new URL(inviteUrl).pathname.split("/").at(-1)!,
+    );
     assert.equal(
       (await fetch(`${base}/room/invites/${code}/accept`, { method: "POST" }))
         .status,

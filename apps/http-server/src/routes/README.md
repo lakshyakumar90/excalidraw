@@ -10,6 +10,8 @@ Authenticated HTTP API for scenes, rooms, invites, files, and private library it
 - `library.ts`
 - `presenceTicket.test.ts` — focused regression tests.
 - `rooms.test.ts` — focused regression tests.
+- `roomInvites.ts` — invite, join-code, and member management routes.
+- `roomRouteUtils.ts` — shared room authorization, join-code, and rate-limit helpers.
 - `rooms.ts`
 - `roomSceneSync.test.ts` — focused regression tests.
 - `scenes.ts`
