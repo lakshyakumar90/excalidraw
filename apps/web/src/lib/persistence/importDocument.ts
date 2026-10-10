@@ -139,8 +139,8 @@ export function parseExcalidrawDocument(value: unknown): ImportedDocument {
   for (let index = 0; index < elements.length; index++) {
     const e = elements[index]!;
     if (e.type === "frame" && (e.frameId || (e.angle ?? 0) !== 0)) {
-      const { name, ...rest } = e;
-      elements[index] = { ...rest, type: "rectangle", frameId: null };
+      delete e.name;
+      elements[index] = { ...e, type: "rectangle", frameId: null };
     }
   }
   const frames = new Set(

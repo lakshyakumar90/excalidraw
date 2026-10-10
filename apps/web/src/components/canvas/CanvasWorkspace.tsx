@@ -20,29 +20,31 @@ export function CanvasWorkspace({
   savedScene?: SavedCanvasScene;
   roomRole?: RoomRole;
 }) {
-  const [activeRole, setActiveRole] = useState<RoomRole | undefined>(roomRole);
-  const [accessRemoved, setAccessRemoved] = useState(false);
+  const [roleState, setRoleState] = useState(() => ({
+    sourceRole: roomRole,
+    activeRole: roomRole,
+    accessRemoved: false,
+  }));
+  const roleStateMatchesProps = roleState.sourceRole === roomRole;
+  const activeRole = roleStateMatchesProps ? roleState.activeRole : roomRole;
+  const accessRemoved = roleStateMatchesProps && roleState.accessRemoved;
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
   const [sharing, setSharing] = useState(false);
   useEffect(() => {
-    setActiveRole(roomRole);
-    setAccessRemoved(false);
-  }, [roomRole]);
-  useEffect(() => {
     const onAccessChanged = (event: Event) => {
       const role = (event as CustomEvent<{ role: RoomRole | null }>).detail
         .role;
-      if (role === null) setAccessRemoved(true);
-      else {
-        setAccessRemoved(false);
-        setActiveRole(role);
-      }
+      setRoleState({
+        sourceRole: roomRole,
+        activeRole: role ?? undefined,
+        accessRemoved: role === null,
+      });
     };
     window.addEventListener("room-access-changed", onAccessChanged);
     return () =>
       window.removeEventListener("room-access-changed", onAccessChanged);
-  }, []);
+  }, [roomRole]);
   const readOnly = activeRole === "viewer" || accessRemoved;
   async function shareCurrentScene() {
     if (!savedScene?.id) return;
@@ -76,7 +78,7 @@ export function CanvasWorkspace({
       {savedScene?.id && !savedScene.roomSync && (
         <div
           data-editor-chrome
-          className="fixed left-4 top-4 z-50 max-w-[min(32rem,calc(100vw-7rem))] rounded-lg border border-neutral-200 bg-white/95 p-2 text-sm shadow-sm backdrop-blur"
+          className="editor-scene-actions fixed left-4 top-4 z-50 max-w-[min(32rem,calc(100vw-7rem))] rounded-lg border border-neutral-200 bg-white/95 p-2 text-sm shadow-sm backdrop-blur"
         >
           <button
             type="button"
@@ -102,7 +104,7 @@ export function CanvasWorkspace({
         </div>
       )}
       {savedScene?.roomSync && roomRole && (
-        <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 text-sm shadow-sm backdrop-blur">
+        <div className="editor-room-status fixed left-4 top-4 z-40 flex items-center gap-2 rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 text-sm shadow-sm backdrop-blur">
           <span className="font-medium">
             {accessRemoved
               ? "Room access removed"

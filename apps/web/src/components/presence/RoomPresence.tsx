@@ -44,11 +44,14 @@ export function RoomPresence({
     sync;
 
   const [following, setFollowing] = useState<string | null>(null);
+  const activeFollowing = status === "live" ? following : null;
   const participantsRef = useRef(participants);
-  participantsRef.current = participants;
   useEffect(() => {
-    followState.active = Boolean(following);
-    if (!following) return;
+    participantsRef.current = participants;
+  }, [participants]);
+  useEffect(() => {
+    followState.active = Boolean(activeFollowing);
+    if (!activeFollowing || status !== "live") return;
     let frame = 0,
       last = performance.now(),
       lastUpdate = last,
@@ -78,7 +81,7 @@ export function RoomPresence({
     const tick = (now: number) => {
       if (!followState.active) return;
       const target = participantsRef.current.find(
-        (p) => p.connectionId === following,
+        (p) => p.connectionId === activeFollowing,
       )?.viewport;
       if (!target) {
         stop();
@@ -124,9 +127,9 @@ export function RoomPresence({
       window.removeEventListener("wheel", stop, true);
       window.removeEventListener("keydown", key);
     };
-  }, [following]);
+  }, [activeFollowing, status]);
   useEffect(() => {
-    if (status !== "live") setFollowing(null);
+    if (status !== "live") followState.active = false;
   }, [status]);
   const handleJump = (connectionId: string) => {
     followState.active = true;
@@ -145,7 +148,7 @@ export function RoomPresence({
 
   return (
     <>
-      {following && (
+      {activeFollowing && (
         <button
           className="fixed right-4 top-28 z-50 min-h-11 rounded-lg bg-white px-3 text-sm shadow-sm focus-visible:outline-2 focus-visible:outline-violet-600"
           onClick={() => {
@@ -154,7 +157,10 @@ export function RoomPresence({
           }}
         >
           Following{" "}
-          {participants.find((p) => p.connectionId === following)?.displayName}{" "}
+          {
+            participants.find((p) => p.connectionId === activeFollowing)
+              ?.displayName
+          }{" "}
           · Stop
         </button>
       )}

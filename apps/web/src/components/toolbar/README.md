@@ -7,6 +7,9 @@ Next.js editor, account dashboard, and room access interface.
 - `FileMenu.tsx`
 - `Toolbar.tsx`
 - `ToolIcon.tsx`
+- `ToolButton.tsx`
+
+`Toolbar.tsx` owns tool selection and compact palette state. `ToolButton.tsx` renders one accessible tool button; the icon shapes stay in `ToolIcon.tsx`.
 
 ## Working here
 

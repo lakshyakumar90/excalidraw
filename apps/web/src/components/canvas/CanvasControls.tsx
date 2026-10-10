@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { MAX_ZOOM, MIN_ZOOM } from "@repo/common";
 import { zoomAtPoint } from "@repo/engine";
 import { historyStore } from "@/lib/history/historyStore";
@@ -27,8 +27,12 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
     getHistorySnapshot,
   );
   const [helpOpen, setHelpOpen] = useState(false);
-  const helpButtonRef = useRef<HTMLButtonElement | null>(null);
   const closeHelp = () => setHelpOpen(false);
+  useEffect(() => {
+    const openHelp = () => setHelpOpen(true);
+    window.addEventListener("editor-help-open", openHelp);
+    return () => window.removeEventListener("editor-help-open", openHelp);
+  }, []);
 
   const changeZoom = (factor: number) => {
     const current = getCurrentViewport();
@@ -38,14 +42,14 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
 
   return (
     <>
-      <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl border border-black/10 bg-white/95 p-1.5 text-neutral-800 shadow-lg backdrop-blur">
+      <div className="editor-bottom-dock fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-1 rounded-xl border border-neutral-200 bg-white/95 p-1 text-neutral-800 shadow-sm backdrop-blur">
         <div
           role="group"
           aria-label="Canvas zoom"
           onClickCapture={() =>
             window.dispatchEvent(new Event("canvas-user-interaction"))
           }
-          className="flex h-9 items-center"
+          className="flex h-10 items-center"
         >
           <button
             type="button"
@@ -59,7 +63,7 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
           </button>
           <span
             aria-live="polite"
-            className="min-w-14 px-1 text-center text-xs font-semibold tabular-nums"
+            className="min-w-12 px-1 text-center text-xs font-semibold tabular-nums"
           >
             {Math.round(viewport.zoom * 100)}%
           </span>
@@ -105,18 +109,24 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
             </button>
           </div>
         )}
+        <span aria-hidden="true" className="mx-1 h-6 w-px bg-neutral-200" />
+        <button
+          type="button"
+          aria-label="More canvas actions"
+          aria-haspopup="menu"
+          title="More canvas actions"
+          onClick={() => {
+            window.dispatchEvent(
+              new CustomEvent("editor-panel-open", { detail: "actions" }),
+            );
+            window.dispatchEvent(new Event("editor-actions-toggle"));
+          }}
+          className="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          ···
+        </button>
       </div>
 
-      <button
-        ref={helpButtonRef}
-        type="button"
-        aria-label="Help and keyboard shortcuts"
-        title="Help and keyboard shortcuts"
-        onClick={() => setHelpOpen(true)}
-        className="fixed bottom-4 right-4 z-50 grid h-11 w-11 place-items-center rounded-full border border-black/10 bg-white text-neutral-700 shadow-lg transition hover:bg-neutral-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-      >
-        <Icon name="help" />
-      </button>
       {helpOpen && <HelpDialog onClose={closeHelp} />}
     </>
   );

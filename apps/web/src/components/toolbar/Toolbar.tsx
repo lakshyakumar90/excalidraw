@@ -3,54 +3,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ToolType } from "@repo/engine";
 import { toolManager } from "@/lib/tools/toolManager";
-import {
-  TOOL_LABELS,
-  TOOL_SHORTCUTS,
-  TOOL_TYPES,
-} from "@/lib/tools/toolDefinitions";
-import { ToolIcon } from "./ToolIcon";
+import { TOOL_LABELS, TOOL_TYPES } from "@/lib/tools/toolDefinitions";
 import { FileMenu } from "./FileMenu";
-
-function ToolButton({
-  type,
-  active,
-  onClick,
-}: {
-  type: ToolType;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const label = TOOL_LABELS[type];
-  const tooltip =
-    type === "selection"
-      ? `${label} · ${TOOL_SHORTCUTS[type]} · Alt-click cycles overlaps`
-      : `${label} · ${TOOL_SHORTCUTS[type]}`;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-keyshortcuts={TOOL_SHORTCUTS[type]}
-      aria-pressed={active}
-      tabIndex={active ? 0 : -1}
-      className={[
-        "group relative grid h-11 w-11 shrink-0 place-items-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
-        active
-          ? "bg-neutral-900 text-white"
-          : "text-neutral-700 hover:bg-neutral-100",
-      ].join(" ")}
-    >
-      <ToolIcon type={type} />
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[60] hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-visible:block"
-      >
-        {tooltip}
-      </span>
-    </button>
-  );
-}
+import { ToolButton } from "./ToolButton";
 
 export function Toolbar() {
   const [expanded, setExpanded] = useState(false);
@@ -70,7 +25,7 @@ export function Toolbar() {
   return (
     <>
       <button
-        className="mobile-tools-toggle fixed left-3 top-2 z-[60] min-h-11 rounded-lg border bg-white px-4 text-sm shadow-sm"
+        className="mobile-tools-toggle fixed left-1/2 top-2 z-[60] min-h-11 -translate-x-1/2 rounded-lg border border-neutral-200 bg-white px-4 text-sm shadow-sm"
         aria-expanded={expanded}
         aria-controls="drawing-tools"
         onClick={() => {
@@ -80,7 +35,14 @@ export function Toolbar() {
           );
         }}
       >
-        {expanded ? "Close tools" : `Tools · ${TOOL_LABELS[activeTool]}`}
+        {expanded ? (
+          "Close tools"
+        ) : (
+          <>
+            <span className="tools-toggle-prefix">Tools · </span>
+            {TOOL_LABELS[activeTool]}
+          </>
+        )}
       </button>
       <div
         id="drawing-tools"
@@ -111,7 +73,7 @@ export function Toolbar() {
           buttons.forEach((b, i) => (b.tabIndex = i === next ? 0 : -1));
           buttons[next]?.focus();
         }}
-        className="editor-tool-strip fixed left-1/2 top-4 z-50 flex w-max max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-lg border border-black/10 bg-white/95 p-1 shadow-sm backdrop-blur"
+        className="editor-tool-strip fixed left-1/2 top-3 z-50 flex w-max max-w-[calc(100vw-20rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-xl border border-neutral-200 bg-white/95 p-1 shadow-sm backdrop-blur"
       >
         {TOOL_TYPES.map((type) => (
           <ToolButton

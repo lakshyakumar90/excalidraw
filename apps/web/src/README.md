@@ -8,6 +8,7 @@ Next.js editor, account dashboard, and room access interface.
 - [components](./components/README.md)
 - [hooks](./hooks/README.md)
 - [lib](./lib/README.md)
+- [styles](./styles/README.md)
 - [types](./types/README.md)
 
 ## Working here

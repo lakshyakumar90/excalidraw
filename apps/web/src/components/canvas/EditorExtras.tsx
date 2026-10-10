@@ -6,8 +6,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { authClient } from "@repo/auth/client";
-import type { LibrarySummary } from "@repo/common";
 import { visibleBounds, type LayoutAction } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import { useScene } from "@/lib/scene/useScene";
@@ -19,18 +17,12 @@ import {
   getCurrentViewport,
 } from "@/lib/persistence/viewportStore";
 import {
-  listLibrary,
-  getLibraryItem,
-  saveLibraryItem,
-  changeLibraryItem,
-  insertStamp,
-} from "@/lib/persistence/library";
-import {
   subscribeSnapPreference,
   readSnapPreference,
   writeSnapPreference,
 } from "@/lib/styles/snappingPreference";
-import { toolManager } from "@/lib/tools/toolManager";
+import { EditorActionsMenu } from "./EditorActionsMenu";
+import { PersonalLibraryPanel } from "./PersonalLibraryPanel";
 
 const actions: LayoutAction[] = [
   "left",
@@ -55,33 +47,20 @@ export function EditorExtras({
     selectionStore.getSnapshot,
     selectionStore.getSnapshot,
   );
-  const { data: session } = authClient.useSession();
-  const signedIn = Boolean(session?.user);
   const [panel, setPanel] = useState<
     "search" | "library" | "layout" | "summary" | null
   >(null);
   const [zen, setZen] = useState(false),
     [query, setQuery] = useState(""),
-    [name, setName] = useState(""),
-    [items, setItems] = useState<LibrarySummary[]>([]),
-    [nextOffset, setNextOffset] = useState<number | null>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const snap = useSyncExternalStore(
     subscribeSnapPreference,
     readSnapPreference,
     () => true,
   );
-  const [renaming, setRenaming] = useState<string | null>(null),
-    [renameName, setRenameName] = useState("");
   useEffect(() => {
     snappingPreference.enabled = snap;
   }, [snap]);
-  const permission = useRef(readOnly);
-  useEffect(() => {
-    permission.current = readOnly;
-  }, [readOnly]);
   const trigger = useRef<HTMLButtonElement | null>(null),
     input = useRef<HTMLInputElement | null>(null);
   const elements = scene.getElements().filter((e) => !e.isDeleted);
@@ -97,15 +76,12 @@ export function EditorExtras({
     : [];
   const close = useCallback(() => {
     setPanel(null);
-    setBusy(false);
     trigger.current?.focus();
   }, []);
   const open = useCallback(
     (value: typeof panel, button?: HTMLButtonElement) => {
       if (button) trigger.current = button;
-      setError("");
       setPanel(value);
-      setBusy(false);
       if (value)
         window.dispatchEvent(
           new CustomEvent("editor-panel-open", { detail: "extras" }),
@@ -165,56 +141,6 @@ export function EditorExtras({
       ),
     [],
   );
-  async function refresh(append = false) {
-    const response = await listLibrary(
-      signedIn,
-      append ? (nextOffset ?? 0) : 0,
-    );
-    setItems((old) => (append ? [...old, ...response.items] : response.items));
-    setNextOffset(response.nextOffset);
-  }
-  async function run(action: () => Promise<void>) {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "The action failed. Try again.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  useEffect(() => {
-    if (panel !== "library") return;
-    let cancelled = false;
-    queueMicrotask(async () => {
-      if (cancelled) return;
-      setBusy(true);
-      setError("");
-      try {
-        const response = await listLibrary(signedIn, 0);
-        if (!cancelled) {
-          setItems(response.items);
-          setNextOffset(response.nextOffset);
-        }
-      } catch (reason) {
-        if (!cancelled)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "Could not load your library. Try again.",
-          );
-      } finally {
-        if (!cancelled) setBusy(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [panel, signedIn]);
-
   const jump = (id: string) => {
     const e = scene.getElement(id);
     if (!e) return;
@@ -236,63 +162,14 @@ export function EditorExtras({
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {notice}
       </div>
-      <div
-        data-editor-chrome
-        className="editor-extra-actions fixed bottom-20 right-4 z-50 flex gap-1 rounded-lg border border-neutral-200 bg-white p-1 shadow-sm"
-      >
-        <button
-          className={button}
-          onClick={(e) =>
-            open(panel === "search" ? null : "search", e.currentTarget)
-          }
-        >
-          Find
-        </button>
-        <button
-          className={button}
-          onClick={(e) =>
-            open(panel === "library" ? null : "library", e.currentTarget)
-          }
-        >
-          Library
-        </button>
-        {!readOnly && (
-          <button
-            className={button}
-            onClick={(e) =>
-              open(panel === "layout" ? null : "layout", e.currentTarget)
-            }
-          >
-            Arrange
-          </button>
-        )}
-        <button
-          className={button}
-          onClick={(e) =>
-            open(panel === "summary" ? null : "summary", e.currentTarget)
-          }
-        >
-          Elements
-        </button>
-        <button
-          className={button}
-          onClick={() => {
-            setPanel(null);
-            setZen(true);
-          }}
-        >
-          Zen
-        </button>
-        {readOnly && (
-          <button
-            className={button}
-            aria-pressed={toolManager.getActiveTool() === "laser"}
-            onClick={() => toolManager.setActiveTool("laser")}
-          >
-            Laser
-          </button>
-        )}
-      </div>
+      <EditorActionsMenu
+        readOnly={readOnly}
+        onOpenPanel={(value, button) => open(value, button)}
+        onZen={() => {
+          setPanel(null);
+          setZen(true);
+        }}
+      />
       {zen && (
         <button
           aria-label="Exit zen mode"
@@ -417,144 +294,11 @@ export function EditorExtras({
             </>
           )}
           {panel === "library" && (
-            <>
-              <p className="mb-3 text-sm text-neutral-600">
-                {signedIn
-                  ? "Private stamps saved to your account."
-                  : "Stamps saved on this device. Sign in for an account library."}
-              </p>
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run(async () => {
-                    await saveLibraryItem(signedIn, name.trim());
-                    setName("");
-                    await refresh();
-                  });
-                }}
-              >
-                <input
-                  aria-label="Stamp name"
-                  placeholder="Stamp name"
-                  maxLength={100}
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="min-h-11 min-w-0 flex-1 rounded-md border border-neutral-300 px-3 text-sm focus:outline-2 focus:outline-violet-600"
-                />
-                <button
-                  className={button}
-                  disabled={busy || !selection.size || !name.trim()}
-                >
-                  Save
-                </button>
-              </form>
-              <p className="mt-2 text-xs text-neutral-600">
-                Select a group on the canvas before saving.
-              </p>
-              {!items.length && !busy && (
-                <p className="my-6 text-sm">Your library is empty.</p>
-              )}
-              <ul className="mt-4 divide-y divide-neutral-100">
-                {items.map((item) => (
-                  <li key={item.id} className="py-2">
-                    <button
-                      className={`${button} w-full truncate text-left font-medium`}
-                      disabled={busy || readOnly}
-                      onClick={() =>
-                        void run(async () =>
-                          insertStamp(
-                            await getLibraryItem(signedIn, item.id),
-                            roomId,
-                            () => !permission.current,
-                          ),
-                        )
-                      }
-                    >
-                      {item.name}
-                      {readOnly ? " (read only)" : " · Insert"}
-                    </button>
-                    {renaming === item.id && (
-                      <form
-                        className="flex"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void run(async () => {
-                            await changeLibraryItem(
-                              signedIn,
-                              item.id,
-                              renameName.trim(),
-                            );
-                            setRenaming(null);
-                            await refresh();
-                          });
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          aria-label="New stamp name"
-                          maxLength={100}
-                          required
-                          value={renameName}
-                          onChange={(e) => setRenameName(e.target.value)}
-                          className="min-h-11 min-w-0 rounded border px-2"
-                        />
-                        <button
-                          className={button}
-                          disabled={busy || !renameName.trim()}
-                        >
-                          Rename
-                        </button>
-                      </form>
-                    )}
-                    <div className="flex">
-                      <button
-                        className={button}
-                        disabled={busy}
-                        onClick={() => {
-                          setRenaming(item.id);
-                          setRenameName(item.name);
-                        }}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        className={button}
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            await changeLibraryItem(signedIn, item.id);
-                            await refresh();
-                          })
-                        }
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {nextOffset !== null && (
-                <button
-                  className={button}
-                  disabled={busy}
-                  onClick={() => void run(() => refresh(true))}
-                >
-                  Load more
-                </button>
-              )}
-            </>
-          )}
-          {busy && (
-            <p role="status" className="mt-3 text-sm">
-              Working…
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="mt-3 text-sm text-red-700">
-              {error}
-            </p>
+            <PersonalLibraryPanel
+              readOnly={readOnly}
+              roomId={roomId}
+              selectionCount={selection.size}
+            />
           )}
         </section>
       )}

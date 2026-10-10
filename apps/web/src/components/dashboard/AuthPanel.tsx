@@ -10,9 +10,9 @@ export function AuthPanel() {
       ? `Create your account · Step ${auth.signupStep} of 2`
       : "Sign in to your account";
   return (
-    <section className="mx-auto max-w-md rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7 shadow-sm">
+    <section className="mx-auto max-w-md rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-6">
       <h2 className="text-xl font-semibold">{title}</h2>
-      <p className="mt-2 break-words text-sm leading-6 text-neutral-600">
+      <p className="mt-1.5 break-words text-sm leading-5 text-neutral-600">
         {auth.verificationPending
           ? `We sent a verification link to ${auth.email}. Verify your address before signing in.`
           : "Your guest drawing stays in this browser. Sign in to save separate scenes to your account."}
@@ -43,7 +43,7 @@ export function AuthPanel() {
       ) : (
         <>
           <form
-            className="mt-6 space-y-4"
+            className="mt-4 space-y-3"
             onSubmit={(event) => void auth.handleAuth(event)}
           >
             {!auth.isSignUp || auth.signupStep === 1 ? (
@@ -125,7 +125,10 @@ export function AuthPanel() {
               </button>
             </div>
           </form>
-          <button className={`${textButton} mt-4`} onClick={auth.toggleAuth}>
+          <button
+            className={`${textButton} mt-2 w-full`}
+            onClick={auth.toggleAuth}
+          >
             {auth.isSignUp
               ? "Already have an account? Sign in"
               : "New here? Create an account"}

@@ -14,8 +14,12 @@ Next.js editor, account dashboard, and room access interface.
 - `CanvasDebugHud.tsx`
 - `CanvasWorkspace.tsx`
 - `EditorExtras.tsx`
+- `EditorActionsMenu.tsx`
+- `PersonalLibraryPanel.tsx`
 - `HelpDialog.tsx`
 - `RendererBenchmark.tsx`
+
+`EditorExtras` coordinates search, selection navigation, layout controls, and zen mode. The secondary action menu and account/device library panel own their UI and async state separately.
 
 ## Working here
 
