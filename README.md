@@ -57,3 +57,5 @@ Use the service package scripts for focused server checks. Run relevant tests on
 Keep commits small and coherent. Put cross-platform reuse in common, server-only reuse in backend-common, authentication in auth, and durable database operations in db. Do not initialize a database inside a server app, commit environment credentials, edit generated output, or change a protocol without its validators/tests.
 
 [Phase records](docs/README.md) document implementation and testing scope. [Phase 19 summary](docs/phase-19-implementation-summary.md) includes manual verification limits. Phase branches are retained after integration for inspectable history.
+
+The current UI direction is documented in [DESIGN.md](DESIGN.md); the responsive consistency implementation plan is in [docs/ui-consistency-implementation-plan.md](docs/ui-consistency-implementation-plan.md).

@@ -2,6 +2,14 @@
 
 Phase plans, agent instructions, completed implementation summaries, and verification scope.
 
+## UI refinement planning
+
+- [Design system](../DESIGN.md)
+- [UI consistency implementation plan](./ui-consistency-implementation-plan.md)
+- [UI consistency agent prompt](./ui-consistency-agent-prompt.md)
+
+## Phase records
+
 - [code-structure](./code-structure.md)
 - [development-servers](./development-servers.md)
 - [phase-14-presence-agent-instructions](./phase-14-presence-agent-instructions.md)

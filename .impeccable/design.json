@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T04:10:26.5210434Z",
+  "title": "Design System: Collaborative drawing workspace",
+  "extensions": {
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "640px"
+      },
+      {
+        "name": "desktop",
+        "value": "1200px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "html": "<button class=\"ds-button\">Sign in</button>",
+      "kind": "button",
+      "name": "Planned neutral button",
+      "description": "Proposed centered control specimen; application implementation is pending.",
+      "refersTo": "button-neutral",
+      "css": ".ds-button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:8px 12px; font-family:\"Geist Mono\",ui-monospace,monospace; font-size:14px; color:#171717; background:#ffffff; border:1px solid #d4d4d4; border-radius:8px; cursor:pointer; } .ds-button:hover { background:#faf9f6; } .ds-button:focus-visible { outline:2px solid #4c6ef5; outline-offset:2px; } .ds-button:active { background:#eeeeee; }"
+    }
+  ],
+  "narrative": {
+    "dos": [
+      "Do preserve the current font and document-rendering behavior.",
+      "Do check the entire top/bottom composition, rather than treating individual fixed controls independently.",
+      "Do collapse compact panels by default and keep their close controls reachable.",
+      "Do keep back/navigation and account slots clear of the tool picker.",
+      "Do retain all Phase 19 features through menus or shortcuts.",
+      "Do reuse semantic tokens and control primitives across editor and dashboard."
+    ],
+    "overview": "**Creative North Star: \"A clear drawing desk\"**\n\nThis is a refinement of the existing interface. Preserve Geist Mono, the warm canvas, white control surfaces, familiar tool icons, and existing account flows. Use the dashboard's clear grouping as the reference for controls throughout the application.\n\nThe intended result is compact and orderly: related controls share a container, secondary features appear on demand, and panels have clear boundaries. This document defines the next implementation's visual contract; its new layout rules are planned requirements, not a claim that the current UI already meets them.\n\nKey characteristics:\n\n- Small visible chrome with usable touch targets.\n- Centered labels and stable control positions.\n- Shared button, panel, border, and spacing treatments.\n- Drawing space remains the primary surface.\n- Existing editor functions remain discoverable.",
+    "northStar": "A clear drawing desk",
+    "donts": [
+      "Do not equate smaller visible chrome with smaller touch targets.",
+      "Do not place Zen/Library/search actions in a permanently floating side strip.",
+      "Do not introduce more media-query overrides to compensate for conflicting fixed positioning; replace the obsolete layout rules.",
+      "Do not auto-center or move the user's drawing as part of a UI layout correction. Center the tool controls; preserve scene coordinates and viewport state.",
+      "Do not describe planned rules as completed implementation. Verification belongs in the implementation summary."
+    ],
+    "keyCharacteristics": [
+      "Small visible chrome with usable touch targets.",
+      "Centered labels and stable control positions.",
+      "Shared button, panel, border, and spacing treatments.",
+      "Drawing space remains the primary surface.",
+      "Existing editor functions remain discoverable."
+    ]
+  }
+}
