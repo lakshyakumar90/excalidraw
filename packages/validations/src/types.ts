@@ -30,7 +30,18 @@ export const RoomSchema = z
 
 export const InviteSchema = z
   .object({
-    email: z.email().trim().toLowerCase(),
+    email: z
+      .string()
+      .trim()
+      .min(3)
+      .max(254)
+      .refine(
+        (value) =>
+          z.email().safeParse(value).success ||
+          /^[a-zA-Z0-9_.]{3,30}$/.test(value),
+        "Enter an email address or an existing username",
+      )
+      .transform((value) => value.toLowerCase()),
     role: z.enum(["editor", "viewer"]).default("editor"),
   })
   .strict();

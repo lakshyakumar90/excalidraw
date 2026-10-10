@@ -19,23 +19,63 @@ test("room ownership and invitation email are enforced", async () => {
     db,
     "transaction",
   );
+  const createdInvites: Array<Record<string, unknown>> = [];
+  const roomRecord = { id: 1, adminId: "alice", slug: "Private", sceneId: "scene-1" };
   const orm = {
     public: {
       Room: {
         where: ({ id, adminId }: { id?: number; adminId?: string }) => ({
           first: async () =>
             id === 1 && (adminId === undefined || adminId === "alice")
-              ? { id: 1, adminId: "alice", slug: "Private", sceneId: "scene-1" }
+              ? roomRecord
               : null,
         }),
       },
-      RoomMember: { where: () => ({ first: async () => null }) },
-      Scene: { where: () => ({ first: async () => null }) },
-      Invite: {
-        where: () => ({ first: async () => null, update: async () => ({}) }),
+      RoomMember: {
+        where: () => ({ first: async () => null }),
         create: async () => ({}),
       },
-      User: { where: () => ({ first: async () => null }) },
+      Scene: { where: () => ({ first: async () => null }) },
+      Invite: {
+        where: (criteria: Record<string, unknown>) => ({
+          first: async () =>
+            createdInvites.find((invite) =>
+              Object.entries(criteria).every(([key, value]) => invite[key] === value),
+            ) ?? null,
+          update: async () => ({}),
+          include() { return this; },
+          orderBy() { return this; },
+          all: async () => createdInvites.map((invite) => ({
+            ...invite,
+            room: roomRecord,
+            claim: null,
+          })),
+        }),
+        create: async (invite: Record<string, unknown>) => {
+          createdInvites.push({
+            ...invite,
+            createdAt: new Date().toISOString(),
+            usedAt: null,
+            revokedAt: null,
+          });
+          return {};
+        },
+      },
+      User: {
+        where: (criteria: Record<string, unknown>) => ({
+          first: async () => {
+            if (criteria.username === "friend")
+              return { id: "bob", email: "friend@example.com", username: "friend", emailVerified: true };
+            if (criteria.id === "bob")
+              return { id: "bob", email: "friend@example.com", username: "friend", emailVerified: true };
+            return null;
+          },
+        }),
+      },
+      InviteClaim: {
+        where: () => ({ first: async () => null }),
+        create: async () => ({}),
+      },
     },
   };
   Object.defineProperty(db, "orm", { configurable: true, value: orm });
@@ -86,13 +126,34 @@ test("room ownership and invitation email are enforced", async () => {
     };
     assert.match(inviteUrl, /^http:\/\/localhost:3000\/invite\//);
     assert.ok(["sent", "failed", "manual-link"].includes(delivery));
+    const byUsername = await fetch(`${base}/room/1/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-user": "alice" },
+      body: JSON.stringify({ email: "friend", role: "viewer" }),
+    });
+    assert.equal(byUsername.status, 201);
+    assert.equal((await byUsername.json() as { email: string }).email, "friend@example.com");
+    const inbox = await fetch(`${base}/room/invitations/inbox`, {
+      headers: { "x-user": "bob" },
+    });
+    assert.equal(inbox.status, 200);
+    const inboxData = await inbox.json() as { invitations: Array<{ id: string; role: string }> };
+    assert.equal(inboxData.invitations.length, 2);
+    const viewerInvite = inboxData.invitations.find((invite) => invite.role === "viewer");
+    assert.ok(viewerInvite);
+    const inboxAccepted = await fetch(
+      `${base}/room/invitations/${viewerInvite.id}/accept`,
+      { method: "POST", headers: { "x-user": "bob" } },
+    );
+    assert.equal(inboxAccepted.status, 200);
+    assert.equal((await inboxAccepted.json() as { role: string }).role, "viewer");
     const code = decodeURIComponent(
       new URL(inviteUrl).pathname.split("/").at(-1)!,
     );
     assert.equal(
       (await fetch(`${base}/room/invites/${code}/accept`, { method: "POST" }))
         .status,
-      404,
+      200,
     );
     assert.equal(
       (

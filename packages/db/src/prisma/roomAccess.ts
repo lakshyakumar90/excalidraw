@@ -32,6 +32,18 @@ export async function listRoomInvites(store: RoomDb, roomId: number) {
     .all();
 }
 
+export async function listPendingRoomInvitesForEmail(
+  store: RoomDb,
+  email: string,
+) {
+  return publicDb(store)
+    .Invite.where({ email: email.trim().toLowerCase() })
+    .include("room")
+    .include("claim")
+    .orderBy((invite) => invite.createdAt.desc())
+    .all();
+}
+
 export async function listRoomJoinCodes(store: RoomDb, roomId: number) {
   return publicDb(store)
     .JoinCode.where({ roomId })
@@ -42,7 +54,7 @@ export async function listRoomJoinCodes(store: RoomDb, roomId: number) {
 export async function acceptEmailRoomInvite(
   store: RoomDb,
   input: {
-    codeHash: string;
+    codeHash?: string;
     userId: string;
     inviteId?: string;
     roomId?: number;
@@ -51,12 +63,13 @@ export async function acceptEmailRoomInvite(
     now?: string;
   },
 ): Promise<{ roomId: number; role: RoomMemberRole } | null> {
+  if (!input.codeHash && !input.inviteId) return null;
   const now = input.now ?? new Date().toISOString();
   try {
     return await store.transaction(async (tx) => {
-      const invite = await publicDb(tx).Invite.where({
-        codeHash: input.codeHash,
-      }).first();
+      const invite = await publicDb(tx).Invite.where(
+        input.codeHash ? { codeHash: input.codeHash } : { id: input.inviteId! },
+      ).first();
       const user = await publicDb(tx).User.where({ id: input.userId }).first();
       if (
         !invite ||
@@ -103,9 +116,9 @@ export async function acceptEmailRoomInvite(
     // Unique claim or membership conflicts mean another concurrent request
     // won. Do not consume again or change an already-existing member's role.
     if (isUniqueConflict(error)) {
-      const invite = await publicDb(store).Invite.where({
-        codeHash: input.codeHash,
-      }).first();
+      const invite = await publicDb(store).Invite.where(
+        input.codeHash ? { codeHash: input.codeHash } : { id: input.inviteId! },
+      ).first();
       if (invite) {
         const member = await findRoomMember(store, invite.roomId, input.userId);
         if (member)

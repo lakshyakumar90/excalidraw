@@ -14,6 +14,7 @@ import {
   createRoomJoinCode,
   listRoomInvites,
   listRoomJoinCodes,
+  listPendingRoomInvitesForEmail,
   markInviteSent,
   prepareRoomInviteResend,
   recordInviteDelivery,
@@ -42,6 +43,62 @@ import {
 } from "./roomRouteUtils.js";
 
 export function registerRoomInviteRoutes(router: Router): void {
+  router.get("/invitations/inbox", async (req, res) => {
+    try {
+      const user = await db.orm!.public!.User.where({ id: req.userId! }).first();
+      if (!user?.emailVerified)
+        return res.status(403).json({ message: "Verify your email to view invitations" });
+      const now = Date.now();
+      const invites = await listPendingRoomInvitesForEmail(db, user.email);
+      return res.json({
+        invitations: invites
+          .filter((invite) =>
+            !invite.usedAt &&
+            !invite.revokedAt &&
+            Date.parse(invite.expiresAt) > now &&
+            !invite.claim,
+          )
+          .map((invite) => ({
+            id: invite.id,
+            roomId: invite.roomId,
+            roomName: invite.room.slug,
+            role: invite.role,
+            expiresAt: invite.expiresAt,
+            createdAt: invite.createdAt,
+          })),
+      });
+    } catch (error) {
+      console.error("Invitation inbox error:", error);
+      return res.status(500).json({ message: "Unable to load invitations" });
+    }
+  });
+
+  router.post("/invitations/:inviteId/accept", async (req, res) => {
+    try {
+      if (
+        !(await applyInviteRateLimit(
+          req,
+          res,
+          "invite-accept-user",
+          `${req.userId}:${req.ip}`,
+          10,
+          60_000,
+        ))
+      )
+        return;
+      const accepted = await acceptEmailRoomInvite(db, {
+        inviteId: req.params.inviteId,
+        userId: req.userId!,
+      });
+      if (!accepted)
+        return res.status(404).json({ message: "Invitation unavailable for this account" });
+      return res.json(accepted);
+    } catch (error) {
+      console.error("Inbox invitation acceptance error:", error);
+      return res.status(500).json({ message: "Unable to accept invitation" });
+    }
+  });
+
   router.post("/:roomId/invites", async (req, res) => {
     const roomId = roomIdOf(req.params.roomId);
     if (!roomId) return res.status(404).json({ message: "Room not found" });
@@ -74,7 +131,13 @@ export function registerRoomInviteRoutes(router: Router): void {
       const expiresAt = new Date(
         Date.now() + 7 * 24 * 60 * 60 * 1000,
       ).toISOString();
-      const email = parsed.data.email;
+      let email = parsed.data.email;
+      if (!email.includes("@")) {
+        const target = await db.orm!.public!.User.where({ username: email }).first();
+        if (!target)
+          return res.status(404).json({ message: "No account found for that username. You can invite new users by email." });
+        email = target.email.toLowerCase();
+      }
       const token = issueRoomInviteToken({
         inviteId,
         roomId,

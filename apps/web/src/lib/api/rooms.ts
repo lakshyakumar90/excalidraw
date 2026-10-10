@@ -80,6 +80,30 @@ export async function acceptInvite(code: string): Promise<number> {
   return result.roomId;
 }
 
+export interface PendingRoomInvitation {
+  id: string;
+  roomId: number;
+  roomName: string;
+  role: "editor" | "viewer";
+  expiresAt: string;
+  createdAt: string;
+}
+
+export async function listMyRoomInvitations(): Promise<PendingRoomInvitation[]> {
+  const result = await apiRequest<{ invitations: PendingRoomInvitation[] }>(
+    "/room/invitations/inbox",
+  );
+  return result.invitations;
+}
+
+export async function acceptMyRoomInvitation(inviteId: string): Promise<number> {
+  const result = await apiRequest<{ roomId: number }>(
+    `/room/invitations/${encodeURIComponent(inviteId)}/accept`,
+    { method: "POST" },
+  );
+  return result.roomId;
+}
+
 export async function createJoinCode(
   roomId: string,
   role: "editor" | "viewer",

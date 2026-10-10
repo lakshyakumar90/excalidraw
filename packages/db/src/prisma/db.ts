@@ -50,6 +50,7 @@ export {
   createRoomInvite,
   createRoomJoinCode,
   findRoomMember,
+  listPendingRoomInvitesForEmail,
   listRoomInvites,
   listRoomJoinCodes,
   markInviteSent,
