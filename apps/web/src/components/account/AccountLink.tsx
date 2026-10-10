@@ -10,7 +10,7 @@ export function AccountLink() {
   return (
     <Link
       href="/dashboard"
-      className="editor-account-link fixed right-3 top-3 z-40 rounded-lg border border-neutral-200 bg-white/95 px-3 text-center text-sm font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white hover:text-neutral-950 sm:right-4 sm:top-4"
+      className="editor-account-link rounded-lg border border-neutral-200 bg-white/95 px-3 text-center text-sm font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white hover:text-neutral-950"
     >
       {label}
     </Link>

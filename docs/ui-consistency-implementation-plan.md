@@ -1,8 +1,10 @@
 # UI consistency and compact-layout implementation plan
 
-Status: implementation in progress. The user has requested implementation. The established design files remain the source of truth; verify the acceptance criteria before marking complete.
+Status: UI and targeted file refactors implemented. The established design files remain the source of truth. This run did not split the large canvas/sync/selection/WebSocket state-machine coordinators; see the scope note under file decomposition.
 
-Implemented so far: extracted `ToolButton`, `EditorActionsMenu`, and `PersonalLibraryPanel`; replaced the permanent action strip with a bottom-dock menu; centered the compact tool picker; moved editor responsive rules into `apps/web/src/styles/editor.css`; centered account links and dashboard button labels; tightened the auth card spacing. Final checks and remaining decomposition work are still pending.
+Implemented: extracted `EditorHeader`, `ToolButton`, `EditorActionsMenu`, and `PersonalLibraryPanel`; replaced the permanent action strip with a single bottom-dock menu; centered the compact tool picker; moved editor responsive rules into `apps/web/src/styles/editor.css`; centered account links and dashboard button labels; tightened auth spacing; split shape/connector/text rendering; split room invite/member routes from room scene/file routes. The desktop and compact composition uses reserved left, center, and right slots.
+
+Browser verification covered 320×568, 390×844, 844×390, 768×1024, 1024×768, and 1440×900. It found no horizontal overflow or compact header collisions. The short-landscape action panel clears the dock by 14px. Web typecheck, lint, tests, and production build passed; engine typecheck and tests passed; HTTP server typecheck and all seven route tests passed.
 
 ## Objective
 
@@ -124,6 +126,8 @@ Current source audit (approximate line counts; generated declarations excluded):
 | EditorExtras.tsx                |   564 | feature panels and library state as described above                                         |
 
 Perform the UI-related extractions while recomposing chrome. Make backend/state-machine extractions separate behavior-preserving commits after the UI work. Do not mix an authorization or reconciliation redesign into a file move.
+
+Scope note for this run: the renderer and room routes were split as listed above. `useCanvasInteraction`, `roomSync`, `selectionController`, the WebSocket server, `Scene`, and backend collaboration service remain cohesive lifecycle/state-machine owners. Their existing keyboard, input, preview, persistence, validation, and scene helpers remain separate; moving their ordered transitions needs a dedicated behavior-preserving slice with focused tests.
 
 Guidelines:
 

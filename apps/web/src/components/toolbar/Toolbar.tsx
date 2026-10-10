@@ -25,7 +25,7 @@ export function Toolbar() {
   return (
     <>
       <button
-        className="mobile-tools-toggle fixed left-1/2 top-2 z-[60] min-h-11 -translate-x-1/2 rounded-lg border border-neutral-200 bg-white px-4 text-sm shadow-sm"
+        className="mobile-tools-toggle min-h-11 rounded-lg border border-neutral-200 bg-white px-4 text-sm shadow-sm"
         aria-expanded={expanded}
         aria-controls="drawing-tools"
         onClick={() => {
@@ -73,7 +73,7 @@ export function Toolbar() {
           buttons.forEach((b, i) => (b.tabIndex = i === next ? 0 : -1));
           buttons[next]?.focus();
         }}
-        className="editor-tool-strip fixed left-1/2 top-3 z-50 flex w-max max-w-[calc(100vw-20rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-xl border border-neutral-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+        className="editor-tool-strip flex w-max max-w-[calc(100vw-20rem)] flex-wrap justify-center gap-1 rounded-xl border border-neutral-200 bg-white/95 p-1 shadow-sm backdrop-blur"
       >
         {TOOL_TYPES.map((type) => (
           <ToolButton

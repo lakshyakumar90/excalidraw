@@ -5,13 +5,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { RoomRole } from "@repo/common";
 import { shareScene } from "@/lib/api/rooms";
-import { AccountLink } from "@/components/account/AccountLink";
+import { EditorHeader } from "@/components/editor/EditorHeader";
 import { EditorExtras } from "./EditorExtras";
 import { LaserOverlay } from "@/components/presence/LaserOverlay";
 import { Canvas } from "@/components/canvas/Canvas";
 import { CanvasControls } from "@/components/canvas/CanvasControls";
 import { StylePanel } from "@/components/styles/StylePanel";
-import { Toolbar } from "@/components/toolbar/Toolbar";
 
 export function CanvasWorkspace({
   savedScene,
@@ -71,9 +70,8 @@ export function CanvasWorkspace({
       <EditorExtras readOnly={readOnly} roomId={savedScene?.roomSync?.roomId} />
       <div data-editor-chrome>
         <CanvasControls readOnly={readOnly} />
-        {!readOnly && <Toolbar />}
         {!readOnly && <StylePanel />}
-        <AccountLink />
+        <EditorHeader sceneTitle={savedScene?.title || undefined} />
       </div>
       {savedScene?.id && !savedScene.roomSync && (
         <div
