@@ -10,9 +10,9 @@ export function AuthPanel() {
       ? `Create your account · Step ${auth.signupStep} of 2`
       : "Sign in to your account";
   return (
-    <section className="mx-auto max-w-md rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-6">
-      <h2 className="text-xl font-semibold">{title}</h2>
-      <p className="mt-1.5 break-words text-sm leading-5 text-neutral-600">
+    <section className="mx-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_12px_36px_rgb(23_23_23_/_0.08)] sm:p-7">
+      <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+      <p className="mt-2 break-words text-base leading-6 text-neutral-700">
         {auth.verificationPending
           ? `We sent a verification link to ${auth.email}. Verify your address before signing in.`
           : "Your guest drawing stays in this browser. Sign in to save separate scenes to your account."}

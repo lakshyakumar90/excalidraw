@@ -121,7 +121,7 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
             );
             window.dispatchEvent(new Event("editor-actions-toggle"));
           }}
-          className="grid h-10 w-10 place-items-center rounded-lg text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="grid h-10 w-10 place-items-center rounded-lg bg-neutral-900 text-base font-semibold text-white transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           ···
         </button>

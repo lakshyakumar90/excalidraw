@@ -3,6 +3,7 @@ import { primaryButton, secondaryButton } from "./dashboardStyles";
 import { GuestDrawingOffer } from "./GuestDrawingOffer";
 import { SceneCard } from "./SceneCard";
 import { RoomsPanel } from "./RoomsPanel";
+import { InvitationsPanel } from "./InvitationsPanel";
 import { useEffect, useRef } from "react";
 import type { SceneSummary } from "@/lib/api/scenes";
 
@@ -72,6 +73,7 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
           {dashboard.error}
         </p>
       )}
+      <InvitationsPanel />
       {dashboard.loadingScenes ? (
         <p className="p-5 text-sm text-neutral-500">Loading scenes…</p>
       ) : dashboard.scenes.length === 0 ? (
@@ -89,7 +91,14 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
           </button>
         </section>
       ) : (
-        <ul ref={list} className="grid gap-3 sm:grid-cols-2">
+        <section className="dashboard-section">
+          <div className="dashboard-section-heading">
+            <div>
+              <h2>Your scenes</h2>
+              <p>Open a drawing or start something new.</p>
+            </div>
+          </div>
+          <ul ref={list} className="grid gap-3 sm:grid-cols-2">
           {dashboard.scenes.map((scene) => (
             <SceneCard
               key={scene.id}
@@ -98,7 +107,8 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
               onDeleted={handleDeleted}
             />
           ))}
-        </ul>
+          </ul>
+        </section>
       )}
       {!dashboard.loadingScenes && <RoomsPanel scenes={dashboard.scenes} />}
     </>

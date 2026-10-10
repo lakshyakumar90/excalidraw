@@ -44,7 +44,7 @@ export function EditorActionsMenu({
 
   if (!open) return null;
   const button =
-    "min-h-11 rounded-lg px-3 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600";
+    "min-h-11 rounded-lg px-3 text-left text-base font-medium leading-6 text-neutral-950 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 sm:text-sm";
   const choosePanel = (panel: EditorPanel) => {
     setOpen(false);
     onOpenPanel(
@@ -58,10 +58,10 @@ export function EditorActionsMenu({
   return (
     <section
       aria-label="Canvas actions"
-      className="editor-actions-menu fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-[70] w-[min(22rem,calc(100vw-1rem))] -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-2 shadow-lg"
+      className="editor-actions-menu fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-[70] w-[min(24rem,calc(100vw-1rem))] -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-3 text-neutral-950 shadow-lg sm:p-2"
     >
       <div className="mb-1 flex items-center justify-between px-2 py-1">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700 sm:text-xs">
           Canvas actions
         </h2>
         <button
@@ -71,7 +71,7 @@ export function EditorActionsMenu({
             setOpen(false);
             trigger.current?.focus();
           }}
-          className="grid h-9 w-9 place-items-center rounded-lg text-neutral-600 hover:bg-neutral-100"
+          className="grid h-10 w-10 place-items-center rounded-lg bg-neutral-100 text-lg font-semibold text-neutral-950 hover:bg-neutral-200 sm:h-9 sm:w-9"
         >
           ×
         </button>
@@ -79,7 +79,7 @@ export function EditorActionsMenu({
       <div className="grid grid-cols-2 gap-1">
         <button className={button} onClick={() => choosePanel("search")}>
           Find text{" "}
-          <span className="block text-xs text-neutral-500">Ctrl/⌘ F</span>
+          <span className="block text-sm font-normal text-neutral-700 sm:text-xs">Ctrl/⌘ F</span>
         </button>
         <button className={button} onClick={() => choosePanel("library")}>
           Library
@@ -120,7 +120,7 @@ export function EditorActionsMenu({
             onZen();
           }}
         >
-          Zen mode <span className="block text-xs text-neutral-500">Alt Z</span>
+          Zen mode <span className="block text-sm font-normal text-neutral-700 sm:text-xs">Alt Z</span>
         </button>
       </div>
     </section>

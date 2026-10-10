@@ -50,8 +50,8 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
     }
   }
   return (
-    <section className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold">Rooms</h2>
+    <section id="rooms" className="dashboard-section mt-8">
+      <h2 className="text-lg font-semibold">Your rooms</h2>
       <p className="mt-1 text-sm text-neutral-600">
         Share a saved scene with invited people and collaborate in real time.
       </p>

@@ -216,7 +216,7 @@ export default function RoomPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#faf9f6] px-5 py-6 text-neutral-900">
+    <main className="dashboard-page room-page min-h-dvh bg-[#faf9f6] px-4 py-5 text-neutral-900 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-4xl">
         <Link href="/dashboard" className="text-sm font-medium text-violet-700">
           ← Your scenes
@@ -247,26 +247,29 @@ export default function RoomPage() {
               </div>
               {room.role === "owner" && (
                 <form
-                  className="mt-5 border-t border-neutral-200 pt-5"
+                  className="mt-6 border-t border-neutral-200 pt-5"
                   onSubmit={(event) => {
                     event.preventDefault();
                     void invite();
                   }}
                 >
-                  <label
-                    htmlFor="invite-email"
-                    className="block text-sm font-medium"
-                  >
-                    Invite someone by email
+                  <h2 className="text-lg font-semibold">Invite people</h2>
+                  <p className="mt-1 text-sm leading-6 text-neutral-600">
+                    They’ll get an email and can accept from their dashboard. A direct link is available to copy too.
+                  </p>
+                  <label htmlFor="invite-email" className="mt-4 block text-sm font-medium">
+                    Invite by email or username
                   </label>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <input
                       id="invite-email"
-                      type="email"
+                      type="text"
                       required
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className="min-w-60 flex-1 rounded-lg border border-neutral-300 px-3 py-2"
+                      placeholder="name@example.com or username"
+                      autoComplete="email"
+                      className="min-w-60 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-base"
                     />
                     <select
                       aria-label="Invitation role"
@@ -283,21 +286,25 @@ export default function RoomPage() {
                       disabled={inviting}
                       className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                     >
-                      {inviting ? "Creating…" : "Create invite link"}
+                      {inviting ? "Sending…" : "Send invitation"}
                     </button>
                   </div>
                   {inviteUrl && (
-                    <p className="mt-3 text-sm break-all">
-                      {deliveryState} Share this {inviteRole} link with {inviteEmail}:{" "}
-                      <a className="text-violet-700 underline" href={inviteUrl}>
-                        {inviteUrl}
-                      </a>
+                    <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                      <p role="status" className="text-sm font-medium text-neutral-800">
+                        {deliveryState} {inviteEmail} will also see this in their dashboard.
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <a className="min-w-0 flex-1 break-all text-sm text-violet-700 underline" href={inviteUrl}>
+                          Open {inviteRole} invitation link
+                        </a>
                       <button
                         type="button"
-                        className="ml-2 text-violet-700 underline"
+                        className="min-h-10 rounded-lg border border-neutral-300 bg-white px-3 text-sm font-medium hover:bg-neutral-100"
                         onClick={() => void navigator.clipboard.writeText(inviteUrl)}
                       >Copy link</button>
-                    </p>
+                      </div>
+                    </div>
                   )}
                 </form>
               )}
