@@ -14,6 +14,11 @@ Browser-independent drawing geometry, tools, renderer, scene capture, and histor
 - `culling.ts`
 - `elementBitmapCache.test.ts` — focused regression tests.
 - `elementBitmapCache.ts`
+- `drawConnectors.ts` — line, arrow, curve, and polyline drawing.
+- `drawElements.ts` — element type dispatch and image/frame fallback rendering.
+- `drawPaths.ts` — seeded sketch paths, stroke appearance, and shape outlines.
+- `drawText.ts` — freehand outline and text rendering.
+- `drawTransform.ts` — shared local element rotation and translation.
 - `index.ts`
 - `renderer.ts`
 - `renderLoop.test.ts` — focused regression tests.
