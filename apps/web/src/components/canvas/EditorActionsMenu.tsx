@@ -44,7 +44,7 @@ export function EditorActionsMenu({
 
   if (!open) return null;
   const button =
-    "min-h-11 rounded-lg px-3 text-left text-base font-medium leading-6 text-neutral-950 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 sm:text-sm";
+    "min-h-11 rounded-lg px-3 text-left text-sm font-medium leading-5 text-neutral-950 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600";
   const choosePanel = (panel: EditorPanel) => {
     setOpen(false);
     onOpenPanel(
@@ -79,7 +79,9 @@ export function EditorActionsMenu({
       <div className="grid grid-cols-2 gap-1">
         <button className={button} onClick={() => choosePanel("search")}>
           Find text{" "}
-          <span className="block text-sm font-normal text-neutral-700 sm:text-xs">Ctrl/⌘ F</span>
+          <span className="block text-xs font-normal text-neutral-600">
+            Ctrl/⌘ F
+          </span>
         </button>
         <button className={button} onClick={() => choosePanel("library")}>
           Library
@@ -120,7 +122,10 @@ export function EditorActionsMenu({
             onZen();
           }}
         >
-          Zen mode <span className="block text-sm font-normal text-neutral-700 sm:text-xs">Alt Z</span>
+          Zen mode{" "}
+          <span className="block text-xs font-normal text-neutral-600">
+            Alt Z
+          </span>
         </button>
       </div>
     </section>

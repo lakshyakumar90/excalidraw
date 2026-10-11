@@ -56,7 +56,7 @@ export default function AcceptInvitePage() {
             </p>
             <Link
               className="mt-5 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white"
-              href={`/dashboard?returnTo=${encodeURIComponent(returnTo)}`}
+              href={`/login?returnTo=${encodeURIComponent(returnTo)}`}
             >
               Sign in to join
             </Link>

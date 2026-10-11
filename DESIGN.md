@@ -4,6 +4,9 @@ description: Compact, consistent controls that leave the drawing surface clear.
 colors:
   canvas: "#faf9f6"
   surface: "#ffffff"
+  surface-muted: "#f0eee8"
+  border-subtle: "#e4e1da"
+  border-soft: "#d9d5cc"
   ink: "#171717"
   focus: "#4c6ef5"
 typography:

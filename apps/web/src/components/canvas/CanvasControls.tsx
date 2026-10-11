@@ -121,9 +121,18 @@ export function CanvasControls({ readOnly = false }: { readOnly?: boolean }) {
             );
             window.dispatchEvent(new Event("editor-actions-toggle"));
           }}
-          className="grid h-10 w-10 place-items-center rounded-lg bg-neutral-900 text-base font-semibold text-white transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="grid h-10 w-10 place-items-center rounded-lg bg-neutral-900 text-white transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
-          ···
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="currentColor"
+          >
+            <circle cx="5" cy="12" r="1.7" />
+            <circle cx="12" cy="12" r="1.7" />
+            <circle cx="19" cy="12" r="1.7" />
+          </svg>
         </button>
       </div>
 

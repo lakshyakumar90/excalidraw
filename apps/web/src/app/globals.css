@@ -3,8 +3,11 @@
 @import "../styles/dashboard.css";
 
 :root {
-  --background: #ffffff;
+  --background: #faf9f6;
   --foreground: #171717;
+  --surface-muted: #f0eee8;
+  --border-subtle: #e4e1da;
+  --border-soft: #d9d5cc;
 }
 
 @theme inline {

@@ -7,12 +7,11 @@ import {
 } from "@/lib/api/auth";
 import { errorMessage } from "@/lib/errors";
 
-export function useDashboardAuth() {
+export function useDashboardAuth(isSignUp: boolean) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [submitting, setSubmitting] = useState(false);
   const [verificationPending, setVerificationPending] = useState(false);
@@ -80,17 +79,9 @@ export function useDashboardAuth() {
     }
   }
 
-  function toggleAuth() {
-    setIsSignUp((value) => !value);
-    setSignupStep(1);
-    setError("");
-    setVerificationSent(false);
-  }
-
   function showSignIn() {
     setVerificationPending(false);
     setVerificationSent(false);
-    setIsSignUp(false);
     setError("");
   }
 
@@ -114,7 +105,6 @@ export function useDashboardAuth() {
     handleAuth,
     handleGoogleSignIn,
     handleResendVerification,
-    toggleAuth,
     showSignIn,
   };
 }

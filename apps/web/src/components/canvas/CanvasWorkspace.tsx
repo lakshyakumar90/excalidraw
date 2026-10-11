@@ -71,7 +71,15 @@ export function CanvasWorkspace({
       <div data-editor-chrome>
         <CanvasControls readOnly={readOnly} />
         {!readOnly && <StylePanel />}
-        <EditorHeader sceneTitle={savedScene?.title || undefined} />
+        <EditorHeader
+          sceneTitle={savedScene?.title || undefined}
+          backHref={
+            savedScene?.roomSync
+              ? `/room/${savedScene.roomSync.roomId}`
+              : "/dashboard"
+          }
+          showAccount={!savedScene?.roomSync}
+        />
       </div>
       {savedScene?.id && !savedScene.roomSync && (
         <div
@@ -98,25 +106,6 @@ export function CanvasWorkspace({
             <p role="alert" className="mt-2 text-red-700">
               {shareError}
             </p>
-          )}
-        </div>
-      )}
-      {savedScene?.roomSync && roomRole && (
-        <div className="editor-room-status fixed left-4 top-4 z-40 flex items-center gap-2 rounded-lg border border-neutral-200 bg-white/95 px-3 py-2 text-sm shadow-sm backdrop-blur">
-          <span className="font-medium">
-            {accessRemoved
-              ? "Room access removed"
-              : readOnly
-                ? "View only"
-                : activeRole}
-          </span>
-          {!accessRemoved && (
-            <Link
-              className="text-violet-700 underline"
-              href={`/room/${savedScene.roomSync.roomId}`}
-            >
-              Room access
-            </Link>
           )}
         </div>
       )}

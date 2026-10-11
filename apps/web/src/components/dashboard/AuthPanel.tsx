@@ -1,21 +1,33 @@
+import Link from "next/link";
 import { useDashboardAuth } from "@/hooks/dashboard/useDashboardAuth";
 import { AuthField } from "./AuthField";
 import { primaryButton, secondaryButton, textButton } from "./dashboardStyles";
 
-export function AuthPanel() {
-  const auth = useDashboardAuth();
+export function AuthPanel({
+  mode,
+  returnTo,
+}: {
+  mode: "login" | "signup";
+  returnTo: string;
+}) {
+  const isSignUp = mode === "signup";
+  const auth = useDashboardAuth(isSignUp);
+  const otherMode = isSignUp ? "login" : "signup";
+  const modeHref = `/${otherMode}${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`;
   const title = auth.verificationPending
     ? "Check your email"
-    : auth.isSignUp
+    : isSignUp
       ? `Create your account · Step ${auth.signupStep} of 2`
       : "Sign in to your account";
   return (
-    <section className="mx-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_12px_36px_rgb(23_23_23_/_0.08)] sm:p-7">
+    <section className="auth-panel mx-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_12px_36px_rgb(23_23_23_/_0.08)] sm:p-7">
       <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
       <p className="mt-2 break-words text-base leading-6 text-neutral-700">
         {auth.verificationPending
           ? `We sent a verification link to ${auth.email}. Verify your address before signing in.`
-          : "Your guest drawing stays in this browser. Sign in to save separate scenes to your account."}
+          : isSignUp
+            ? "Create an account to keep scenes together, invite collaborators, and continue across devices."
+            : "Your guest drawing stays in this browser. Sign in to save separate scenes to your account."}
       </p>
       {auth.verificationPending ? (
         <div className="mt-6 space-y-4">
@@ -36,9 +48,18 @@ export function AuthPanel() {
           >
             {auth.submitting ? "Sending…" : "Resend verification email"}
           </button>
-          <button onClick={auth.showSignIn} className={`${textButton} w-full`}>
-            Return to sign in
-          </button>
+          {isSignUp ? (
+            <Link href={modeHref} className={`${textButton} w-full`}>
+              Return to sign in
+            </Link>
+          ) : (
+            <button
+              onClick={auth.showSignIn}
+              className={`${textButton} w-full`}
+            >
+              Back to sign in
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -46,7 +67,7 @@ export function AuthPanel() {
             className="mt-4 space-y-3"
             onSubmit={(event) => void auth.handleAuth(event)}
           >
-            {!auth.isSignUp || auth.signupStep === 1 ? (
+            {!isSignUp || auth.signupStep === 1 ? (
               <>
                 <AuthField
                   label="Email"
@@ -59,9 +80,7 @@ export function AuthPanel() {
                 <AuthField
                   label="Password"
                   type="password"
-                  autoComplete={
-                    auth.isSignUp ? "new-password" : "current-password"
-                  }
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
                   value={auth.password}
                   onChange={auth.setPassword}
                   required
@@ -102,7 +121,7 @@ export function AuthPanel() {
               </p>
             )}
             <div className="flex gap-3">
-              {auth.isSignUp && auth.signupStep === 2 && (
+              {isSignUp && auth.signupStep === 2 && (
                 <button
                   type="button"
                   onClick={() => auth.setSignupStep(1)}
@@ -117,7 +136,7 @@ export function AuthPanel() {
               >
                 {auth.submitting
                   ? "Please wait…"
-                  : auth.isSignUp
+                  : isSignUp
                     ? auth.signupStep === 1
                       ? "Continue"
                       : "Create account"
@@ -125,14 +144,11 @@ export function AuthPanel() {
               </button>
             </div>
           </form>
-          <button
-            className={`${textButton} mt-2 w-full`}
-            onClick={auth.toggleAuth}
-          >
-            {auth.isSignUp
+          <Link className={`${textButton} mt-2 w-full`} href={modeHref}>
+            {isSignUp
               ? "Already have an account? Sign in"
               : "New here? Create an account"}
-          </button>
+          </Link>
           {auth.googleEnabled && (
             <>
               <div className="my-5 flex items-center gap-3 text-xs text-neutral-400">

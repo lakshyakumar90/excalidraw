@@ -5,6 +5,7 @@ Next.js editor, account dashboard, and room access interface.
 ## Files
 
 - `AuthField.tsx`
+- `AuthPage.tsx` — shared, route-aware sign-in and sign-up page shell.
 - `AuthPanel.tsx`
 - `InvitationsPanel.tsx`
 - `dashboardStyles.ts`

@@ -33,7 +33,9 @@ export function JoinCodePage() {
       <section className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold">Join a shared room</h1>
         {isPending ? (
-          <p className="mt-3" role="status">Checking your account…</p>
+          <p className="mt-3" role="status">
+            Checking your account…
+          </p>
         ) : session?.user ? (
           <>
             <p className="mt-3 text-sm text-neutral-600">
@@ -55,13 +57,17 @@ export function JoinCodePage() {
             </p>
             <Link
               className="mt-5 inline-flex rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white"
-              href={`/dashboard?returnTo=${encodeURIComponent(returnTo)}`}
+              href={`/login?returnTo=${encodeURIComponent(returnTo)}`}
             >
               Sign in to join
             </Link>
           </>
         )}
-        {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
       </section>
     </main>
   );

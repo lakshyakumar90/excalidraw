@@ -9,7 +9,7 @@ export function AccountLink() {
 
   return (
     <Link
-      href="/dashboard"
+      href={session ? "/dashboard" : "/login"}
       className="editor-account-link rounded-lg border border-neutral-200 bg-white/95 px-3 text-center text-sm font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white hover:text-neutral-950"
     >
       {label}

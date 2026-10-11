@@ -6,6 +6,8 @@ Next.js editor, account dashboard, and room access interface.
 
 - [canvas](./canvas/README.md)
 - [dashboard](./dashboard/README.md)
+- [login](./login/README.md)
+- [signup](./signup/README.md)
 - [dev](./dev/README.md)
 - [invite](./invite/README.md)
 - [join](./join/README.md)

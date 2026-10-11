@@ -6,6 +6,7 @@ import { toolManager } from "@/lib/tools/toolManager";
 import { TOOL_LABELS, TOOL_TYPES } from "@/lib/tools/toolDefinitions";
 import { FileMenu } from "./FileMenu";
 import { ToolButton } from "./ToolButton";
+import { ToolIcon } from "./ToolIcon";
 
 export function Toolbar() {
   const [expanded, setExpanded] = useState(false);
@@ -25,7 +26,7 @@ export function Toolbar() {
   return (
     <>
       <button
-        className="mobile-tools-toggle min-h-11 rounded-lg border border-neutral-200 bg-white px-4 text-sm shadow-sm"
+        className="mobile-tools-toggle min-h-11 rounded-lg border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-800 shadow-sm transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
         aria-expanded={expanded}
         aria-controls="drawing-tools"
         onClick={() => {
@@ -39,8 +40,18 @@ export function Toolbar() {
           "Close tools"
         ) : (
           <>
-            <span className="tools-toggle-prefix">Tools · </span>
-            {TOOL_LABELS[activeTool]}
+            <ToolIcon type={activeTool} />
+            <span>{TOOL_LABELS[activeTool]}</span>
+            <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+              <path
+                d="m5 7 5 5 5-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </>
         )}
       </button>

@@ -11,12 +11,10 @@ import {
   setCurrentViewport,
 } from "@/lib/persistence/viewportStore";
 import { computeJumpViewport } from "@/lib/presence/viewportJump";
-import { PresenceAvatars } from "@/components/presence/PresenceAvatars";
 import { PresenceCursors } from "@/components/presence/PresenceCursors";
-import { PresenceStatus } from "@/components/presence/PresenceStatus";
+import { RoomHeaderStatus } from "@/components/presence/RoomHeaderStatus";
 import { RemotePreviews } from "@/components/presence/RemotePreviews";
 import { RemoteSelections } from "@/components/presence/RemoteSelections";
-import { SyncStatus } from "@/components/presence/SyncStatus";
 
 /**
  * Room presence + sync overlay: live cursors, participant avatars with
@@ -167,13 +165,14 @@ export function RoomPresence({
       <PresenceCursors participants={participants} selfUserId={selfUserId} />
       <RemotePreviews previews={previews} participants={participants} />
       <RemoteSelections selections={selections} />
-      <PresenceAvatars
+      <RoomHeaderStatus
+        status={status}
+        detail={detail}
         participants={participants}
         selfUserId={selfUserId}
-        onJump={handleJump}
+        sync={sync}
+        onFollow={handleJump}
       />
-      <PresenceStatus status={status} detail={detail} />
-      <SyncStatus sync={sync} />
     </>
   );
 }

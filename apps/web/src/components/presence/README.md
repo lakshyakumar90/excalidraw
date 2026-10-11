@@ -8,6 +8,7 @@ Next.js editor, account dashboard, and room access interface.
 - `PresenceAvatars.tsx`
 - `PresenceCursors.tsx`
 - `PresenceStatus.tsx`
+- `RoomHeaderStatus.tsx` — compact room connection, save, and participant controls in the editor header.
 - `RemotePreviews.tsx`
 - `RemoteSelections.tsx`
 - `RoomPresence.tsx`
