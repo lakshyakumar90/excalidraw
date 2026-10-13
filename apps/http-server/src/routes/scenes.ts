@@ -14,17 +14,20 @@ scenesRouter.use("/guest-import", guestImportRouter);
 /** Overlay the durable sync head for room-backed scenes. */
 async function withSyncHead<T extends { id: string; data: unknown }>(
   scene: T,
-): Promise<T> {
+): Promise<T & { roomId: number | null }> {
+  // Keep room discovery outside the optional snapshot overlay: a failed lookup
+  // must not accidentally open a collaborative document as a private canvas.
+  const attached = await roomForScene(db, scene.id);
+  const linked = { ...scene, roomId: attached?.roomId ?? null };
+  if (!attached) return linked;
   try {
-    const attached = await roomForScene(db, scene.id);
-    if (!attached) return scene;
     const service = createCollaborationService({ store: db });
     const synced = await service.readSyncScene(scene.id);
-    if (!synced) return scene;
-    return { ...scene, data: synced.data };
+    if (!synced) return linked;
+    return { ...linked, data: synced.data };
   } catch (error) {
     console.error("Scene sync overlay error:", error);
-    return scene;
+    return linked;
   }
 }
 
