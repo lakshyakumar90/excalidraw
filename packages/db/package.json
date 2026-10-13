@@ -2,12 +2,16 @@
   "name": "@repo/db",
   "version": "1.0.0",
   "description": "",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/prisma/db.js",
+  "types": "./src/prisma/db.ts",
   "exports": {
-    ".": "./src/prisma/db.ts"
+    ".": {
+      "types": "./src/prisma/db.ts",
+      "default": "./dist/prisma/db.js"
+    }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "db:emit": "prisma contract emit",
     "db:migration-check": "prisma migration check",
     "db:sign": "prisma db sign",

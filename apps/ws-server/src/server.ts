@@ -193,7 +193,15 @@ export async function startPresenceServer(
       })
     : null;
 
-  const httpServer: Server = createServer();
+  const httpServer: Server = createServer((request, response) => {
+    if (request.url === "/" || request.url === "/health") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ status: "ok", service: "websocket" }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: options.maxPayloadBytes ?? WS_COLLAB_MAX_PAYLOAD_BYTES,

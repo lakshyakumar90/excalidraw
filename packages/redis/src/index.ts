@@ -43,6 +43,9 @@ export class RoomRedis {
   constructor(url = process.env.REDIS_URL) {
     if (!url) throw new Error("REDIS_URL must be configured.");
     this.redis = new Redis(url, {
+      ...(url.startsWith("rediss://")
+        ? { tls: { servername: new URL(url).hostname } }
+        : {}),
       maxRetriesPerRequest: null,
       enableReadyCheck: true,
     });

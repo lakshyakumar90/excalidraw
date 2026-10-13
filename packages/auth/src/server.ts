@@ -63,6 +63,13 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   database: authPool,
   trustedOrigins: [authWebOrigin, apiOrigin],
+  advanced:
+    process.env.NODE_ENV === "production"
+      ? {
+          useSecureCookies: true,
+          defaultCookieAttributes: { sameSite: "none", secure: true },
+        }
+      : undefined,
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,

@@ -12,6 +12,7 @@ The sole Prisma schema, database client, repositories, migration graph, and sche
 - `prisma-8.md`
 - `prisma.config.ts`
 - `tsconfig.json`
+- `tsconfig.build.json` — emits server-side JavaScript to `dist` for production Node imports.
 
 ## Working here
 
@@ -20,6 +21,7 @@ Keep changes within this folder’s responsibility. Follow the owning app/packag
 ## Checks
 
 ```sh
+pnpm --filter @repo/db build
 pnpm --filter @repo/db db:emit
 pnpm --filter @repo/db db:migration-check
 pnpm --filter @repo/db db:sign

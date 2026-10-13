@@ -42,6 +42,8 @@ Frames are flat and axis-aligned. Library insertion remaps element identities an
 
 ## Development checks
 
+For backend deployment and Vercel environment variables, see [InstaCloud deployment](docs/instacloud-deployment.md). The Docker image builds only the API, WebSocket server, flush worker, and their shared packages.
+
 ```sh
 pnpm check-types
 pnpm --filter web test

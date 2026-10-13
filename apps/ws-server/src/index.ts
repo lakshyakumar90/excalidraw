@@ -47,6 +47,7 @@ async function startServer() {
     service: createCollaborationService({ store: db, liveStore: roomRedis }),
     roomRedis,
     allowedOrigins: getAllowedWsOrigins(),
+    host: "0.0.0.0",
     port,
   });
   console.log(`Presence server is running on port ${handle.port}`);
