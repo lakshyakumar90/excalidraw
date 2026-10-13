@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Element } from "@repo/common";
 import { CanvasWorkspace } from "@/components/canvas/CanvasWorkspace";
@@ -13,6 +13,7 @@ import {
 import { cacheSavedSceneFiles } from "@/lib/persistence/savedScene";
 
 export default function SavedCanvasPage() {
+  const router = useRouter();
   const params = useParams<{ sceneId: string }>();
   const sceneId = params.sceneId;
   const [savedScene, setSavedScene] = useState<SavedScene | null>(null);
@@ -22,6 +23,12 @@ export default function SavedCanvasPage() {
     let cancelled = false;
     void getScene(sceneId)
       .then(async (scene) => {
+        if (cancelled) return;
+        if (scene.roomId != null) {
+          // Enter the canonical room workspace before starting private autosave.
+          router.replace(`/room/${encodeURIComponent(scene.roomId)}/canvas`);
+          return;
+        }
         await cacheSavedSceneFiles(scene.data.files);
         if (!cancelled) setSavedScene(scene);
       })
@@ -35,7 +42,7 @@ export default function SavedCanvasPage() {
     return () => {
       cancelled = true;
     };
-  }, [sceneId]);
+  }, [sceneId, router]);
 
   if (savedScene) {
     return (

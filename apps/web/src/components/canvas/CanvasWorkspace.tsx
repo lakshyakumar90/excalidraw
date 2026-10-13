@@ -3,6 +3,7 @@
 import type { SavedCanvasScene } from "@/lib/canvas/types";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { RoomRole } from "@repo/common";
 import { shareScene } from "@/lib/api/rooms";
 import { EditorHeader } from "@/components/editor/EditorHeader";
@@ -19,6 +20,7 @@ export function CanvasWorkspace({
   savedScene?: SavedCanvasScene;
   roomRole?: RoomRole;
 }) {
+  const router = useRouter();
   const [roleState, setRoleState] = useState(() => ({
     sourceRole: roomRole,
     activeRole: roomRole,
@@ -55,6 +57,7 @@ export function CanvasWorkspace({
         savedScene.id,
       );
       setShareUrl(result.url);
+      router.replace(`/room/${encodeURIComponent(result.roomId)}/canvas`);
     } catch (error) {
       setShareError(
         error instanceof Error ? error.message : "Could not share this scene",

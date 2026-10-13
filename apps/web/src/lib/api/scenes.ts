@@ -22,6 +22,8 @@ export interface SceneFileData {
 
 export interface SavedScene {
   id: string;
+  /** Attached room, resolved by the authenticated scene endpoint. */
+  roomId?: number | null;
   title: string;
   data: SceneData;
   createdAt: string;
