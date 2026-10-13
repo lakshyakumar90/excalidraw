@@ -5,6 +5,8 @@ Better Auth configuration, browser auth client, email delivery, and authenticati
 ## Files
 
 - `client.ts`
+- `email.ts` — account verification and password-reset delivery through Resend.
+- `email.test.ts` — delivery and provider-error tests using mocked requests.
 - `presenceTicket.test.ts` — focused regression tests.
 - `presenceTicket.ts`
 - `roomInvitation.ts`
