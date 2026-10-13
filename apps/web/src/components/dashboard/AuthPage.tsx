@@ -14,10 +14,10 @@ export function AuthPage({
   returnTo: string;
 }) {
   const router = useRouter();
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session } = authClient.useSession();
 
   useEffect(() => {
-    if (session?.user) router.replace(returnTo);
+    if (session?.user.emailVerified) router.replace(returnTo);
   }, [returnTo, router, session?.user]);
 
   return (
@@ -45,11 +45,9 @@ export function AuthPage({
         </Link>
       </header>
       <div className="dashboard-main auth-main">
-        {isPending || session?.user ? (
+        {session?.user.emailVerified ? (
           <div className="dashboard-loading" role="status">
-            {session?.user
-              ? "Opening your workspace…"
-              : "Checking your account…"}
+            Opening your workspace…
           </div>
         ) : (
           <div className="dashboard-auth-layout">

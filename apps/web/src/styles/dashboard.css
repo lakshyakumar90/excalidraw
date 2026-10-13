@@ -307,6 +307,9 @@
 }
 
 .dashboard-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(100% - 2rem, 520px);
   max-height: min(90dvh, 720px);
   padding: 0;

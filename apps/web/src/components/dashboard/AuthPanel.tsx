@@ -33,7 +33,7 @@ export function AuthPanel({
         <div className="mt-6 space-y-4">
           {auth.verificationSent && (
             <p role="status" className="text-sm text-green-700">
-              A new verification link has been sent.
+              Verification email sent. Check your inbox and spam folder.
             </p>
           )}
           {auth.error && (
@@ -86,6 +86,14 @@ export function AuthPanel({
                   required
                   minLength={8}
                 />
+                {!isSignUp && (
+                  <Link
+                    href="/forgot-password"
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 underline underline-offset-4 hover:text-blue-800"
+                  >
+                    Forgot password?
+                  </Link>
+                )}
               </>
             ) : (
               <>

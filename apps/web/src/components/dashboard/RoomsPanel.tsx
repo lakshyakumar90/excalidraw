@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import type { SceneSummary } from "@/lib/api/scenes";
 import { createRoom, listRooms, type RoomSummary } from "@/lib/api/rooms";
 import { primaryButton, secondaryButton } from "./dashboardStyles";
+import { RoomActions } from "../rooms/RoomActions";
 
 export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
   const router = useRouter();
@@ -87,8 +88,8 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
       ) : (
         <ul className="dashboard-room-list">
           {rooms.map((room) => (
-            <li key={room.id}>
-              <Link href={`/room/${room.id}`} className="dashboard-room-card">
+            <li key={room.id} className="flex flex-wrap items-center gap-2">
+              <Link href={`/room/${room.id}`} className="dashboard-room-card min-w-0 flex-1">
                 <span className="dashboard-room-mark" aria-hidden="true">▧</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-semibold text-neutral-900">{room.slug}</span>
@@ -96,6 +97,7 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
                 </span>
                 <span aria-hidden="true" className="text-lg text-neutral-400">↗</span>
               </Link>
+              <RoomActions roomId={String(room.id)} name={room.slug} owner={room.role === "owner"} onComplete={() => setRooms((items) => items.filter((item) => item.id !== room.id))} />
             </li>
           ))}
         </ul>

@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { RoomActions } from "@/components/rooms/RoomActions";
 import { cacheSavedSceneFiles } from "@/lib/persistence/savedScene";
 import {
   createInvite,
   createInviteLink,
   createJoinCode,
-  deleteRoom,
   getRoom,
   listInvites,
   listMembers,
@@ -27,7 +27,6 @@ type Room = Awaited<ReturnType<typeof getRoom>>;
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
-  const deleteDialog = useRef<HTMLDialogElement>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
@@ -182,21 +181,6 @@ export default function RoomPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not revoke join code");
     } finally {
-      setPendingAction("");
-    }
-  }
-
-  async function removeRoom() {
-    setPendingAction("room");
-    setError("");
-    try {
-      await deleteRoom(roomId);
-      router.push("/dashboard");
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not delete room",
-      );
-      deleteDialog.current?.close();
       setPendingAction("");
     }
   }
@@ -409,20 +393,9 @@ export default function RoomPage() {
                   )}
                 </section>
               )}
-              {room.role === "owner" && (
-                <section className="mt-5 border-t border-neutral-200 pt-5">
-                  <p className="text-sm text-neutral-600">
-                    Deleting this room keeps the saved scene in your account.
-                  </p>
-                  <button
-                    disabled={pendingAction === "room"}
-                    onClick={() => deleteDialog.current?.showModal()}
-                    className="mt-2 text-sm font-medium text-red-700 disabled:opacity-60"
-                  >
-                    Delete room
-                  </button>
-                </section>
-              )}
+              <section className="mt-5 border-t border-neutral-200 pt-5">
+                <RoomActions roomId={roomId} name={room.name} owner={room.role === "owner"} onComplete={() => router.push("/dashboard")} />
+              </section>
               {error && (
                 <p role="alert" className="mt-3 text-sm text-red-700">
                   {error}
@@ -432,19 +405,6 @@ export default function RoomPage() {
           )}
         </div>
       </div>
-      <dialog ref={deleteDialog} className="dashboard-dialog room-confirm-dialog" aria-labelledby="delete-room-title">
-        <div className="room-confirm-content">
-          <p className="dashboard-eyebrow">Room settings</p>
-          <h2 id="delete-room-title">Delete {room?.name ?? "this room"}?</h2>
-          <p>The room and its invitations will be removed. The saved canvas stays in your account.</p>
-          <div className="dashboard-dialog-actions">
-            <button type="button" className="min-h-11 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium" onClick={() => deleteDialog.current?.close()} disabled={pendingAction === "room"}>Keep room</button>
-            <button type="button" className="min-h-11 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={() => void removeRoom()} disabled={pendingAction === "room"}>
-              {pendingAction === "room" ? "Deleting…" : "Delete room"}
-            </button>
-          </div>
-        </div>
-      </dialog>
     </main>
   );
 }

@@ -5,6 +5,7 @@ Next.js editor, account dashboard, and room access interface.
 ## Files
 
 - `JoinCodePage.tsx`
+- `RoomActions.tsx` — centered owner-delete and member-leave confirmations shared by dashboard and room pages.
 
 ## Working here
 

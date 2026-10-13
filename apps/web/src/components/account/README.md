@@ -5,6 +5,7 @@ Next.js editor, account dashboard, and room access interface.
 ## Files
 
 - `AccountLink.tsx`
+- `PasswordRecovery.tsx` — email reset requests and token-based password updates.
 
 ## Working here
 

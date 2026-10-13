@@ -39,7 +39,11 @@ export function useDashboardAuth(isSignUp: boolean) {
         }
         throw new Error(result.error.message ?? "Authentication failed");
       }
-      if (isSignUp) setVerificationPending(true);
+      if (isSignUp) {
+        setVerificationPending(true);
+        setVerificationSent(true);
+        setPassword("");
+      }
     } catch (error: unknown) {
       setError(errorMessage(error, "Authentication failed"));
     } finally {

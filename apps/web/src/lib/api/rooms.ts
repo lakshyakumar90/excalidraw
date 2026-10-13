@@ -263,3 +263,7 @@ export async function revokeInvite(
 export async function deleteRoom(roomId: string): Promise<void> {
   await apiRequest(`/room/${encodeURIComponent(roomId)}`, { method: "DELETE" });
 }
+
+export async function leaveRoom(roomId: string): Promise<void> {
+  await apiRequest(`/room/${encodeURIComponent(roomId)}/leave`, { method: "POST" });
+}
