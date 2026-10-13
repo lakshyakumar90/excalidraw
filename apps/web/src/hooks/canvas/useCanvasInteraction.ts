@@ -33,6 +33,7 @@ import { subscribeRoomFilesAvailable } from "@/lib/sync/roomFiles";
 import { toPreviewElement } from "@/lib/sync/previewGeometry";
 import { commitHistoryEntry } from "@/lib/sync/commits";
 import { renderDiagnostics } from "@/lib/canvas/renderDiagnostics";
+import { sizeCanvas } from "@/lib/canvas/sizeCanvas";
 import { snappingPreference } from "@/lib/selection/selectionController";
 import { selectionController } from "@/lib/selection/selectionController";
 import { drawSelectionOverlay } from "@/lib/canvas/selectionOverlay";
@@ -455,22 +456,16 @@ export function useCanvasInteraction({
     };
 
     const resizeCanvas = () => {
-      const rect = interactiveCanvas.getBoundingClientRect();
+      // Measure the layout container, not the canvas's previous inline size.
+      const rect = (interactiveCanvas.parentElement ?? interactiveCanvas)
+        .getBoundingClientRect();
 
       width = rect.width;
       height = rect.height;
 
       pixelRatio = window.devicePixelRatio || 1;
-      staticCanvas.width = Math.round(width * pixelRatio);
-      staticCanvas.height = Math.round(height * pixelRatio);
-      interactiveCanvas.width = Math.round(width * pixelRatio);
-      interactiveCanvas.height = Math.round(height * pixelRatio);
-      staticCanvas.style.width = `${width}px`;
-      staticCanvas.style.height = `${height}px`;
-      interactiveCanvas.style.width = `${width}px`;
-      interactiveCanvas.style.height = `${height}px`;
-      staticContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      interactiveContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      sizeCanvas(staticCanvas, staticContext, { width, height }, pixelRatio);
+      sizeCanvas(interactiveCanvas, interactiveContext, { width, height }, pixelRatio);
       renderLoop.invalidateAll();
     };
 
