@@ -13,6 +13,7 @@ import {
   toCommitRole,
 } from "./roomRouteUtils.js";
 import { registerRoomInviteRoutes } from "./roomInvites.js";
+import { registerRoomLeaveRoute } from "./roomLeave.js";
 
 export const roomsRouter: Router = Router();
 export { accessibleRoom } from "./roomRouteUtils.js";
@@ -224,10 +225,12 @@ roomsRouter.post("/", async (req, res) => {
     const roomId = await db.transaction(async (tx) => {
       let sceneId = parsed.data.sceneId;
       if (sceneId) {
-        const scene = await tx.orm!.public!.Scene.where({
-          id: sceneId,
-          ownerId: req.userId!,
-        }).first();
+        const scene = await tx
+          .orm!.public!.Scene.where({
+            id: sceneId,
+            ownerId: req.userId!,
+          })
+          .first();
         if (!scene) return null;
         const attached = await tx.orm!.public!.Room.where({ sceneId }).first();
         if (attached) return "attached";
@@ -298,6 +301,7 @@ roomsRouter.post("/share", async (req, res) => {
 });
 
 registerRoomInviteRoutes(roomsRouter);
+registerRoomLeaveRoute(roomsRouter);
 
 roomsRouter.delete("/:roomId", async (req, res) => {
   const roomId = roomIdOf(req.params.roomId);

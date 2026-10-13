@@ -59,6 +59,7 @@ export {
   roomOwnedBy,
   recordInviteDelivery,
   removeRoomMember,
+  leaveRoomMembership,
   revokeEmailRoomInvite,
   revokeRoomJoinCode,
 } from "./roomAccess.js";

@@ -13,6 +13,8 @@ Authenticated HTTP API for scenes, rooms, invites, files, and private library it
 - `roomInvites.ts` — invite, join-code, and member management routes.
 - `roomRouteUtils.ts` — shared room authorization, join-code, and rate-limit helpers.
 - `rooms.ts`
+- `roomLeave.ts` — authenticated self-only room departure and access revocation.
+- `roomPermissions.test.ts` — owner/member authorization regression tests.
 - `roomSceneSync.test.ts` — focused regression tests.
 - `scenes.ts`
 

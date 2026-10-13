@@ -475,3 +475,18 @@ export async function createOrGetSceneRoom(
       : null;
   }
 }
+
+/** Members may remove only their own membership; owners must keep ownership. */
+export async function leaveRoomMembership(
+  store: RoomDb,
+  input: { roomId: number; userId: string },
+): Promise<boolean> {
+  return store.transaction(async (tx) => {
+    const room = await publicDb(tx).Room.where({ id: input.roomId }).first();
+    if (!room || room.adminId === input.userId) return false;
+    const member = await publicDb(tx).RoomMember.where(input).first();
+    if (!member || member.role === "owner") return false;
+    await publicDb(tx).RoomMember.where({ id: member.id }).delete();
+    return true;
+  });
+}
