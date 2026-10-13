@@ -25,11 +25,11 @@ export async function listRooms(): Promise<RoomSummary[]> {
 
 export async function createRoom(
   name: string,
-  sceneId: string,
+  sceneId?: string,
 ): Promise<number> {
   const result = await apiRequest<{ roomId: number }>("/room", {
     method: "POST",
-    body: JSON.stringify({ name, sceneId }),
+    body: JSON.stringify({ name, ...(sceneId ? { sceneId } : {}) }),
   });
   return result.roomId;
 }
@@ -48,10 +48,11 @@ export async function createInvite(
   roomId: string,
   email: string,
   role: "editor" | "viewer" = "editor",
-): Promise<{ inviteUrl: string; delivery: "sent" | "failed" | "manual-link" }> {
+): Promise<{ inviteUrl: string; email: string; delivery: "in-app" }> {
   const result = await apiRequest<{
     inviteUrl: string;
-    delivery: "sent" | "failed" | "manual-link";
+    email: string;
+    delivery: "in-app";
   }>(
     `/room/${encodeURIComponent(roomId)}/invites`,
     {
@@ -62,12 +63,12 @@ export async function createInvite(
   return result;
 }
 
-export async function resendInvite(
+export async function createInviteLink(
   roomId: string,
   inviteId: string,
-): Promise<{ inviteUrl: string; delivery: "sent" | "failed" | "manual-link" }> {
+): Promise<{ inviteUrl: string; delivery: "in-app" }> {
   return apiRequest(
-    `/room/${encodeURIComponent(roomId)}/invites/${encodeURIComponent(inviteId)}/resend`,
+    `/room/${encodeURIComponent(roomId)}/invites/${encodeURIComponent(inviteId)}/link`,
     { method: "POST" },
   );
 }
@@ -84,6 +85,8 @@ export interface PendingRoomInvitation {
   id: string;
   roomId: number;
   roomName: string;
+  inviterName: string;
+  inviterEmail: string | null;
   role: "editor" | "viewer";
   expiresAt: string;
   createdAt: string;
@@ -102,6 +105,12 @@ export async function acceptMyRoomInvitation(inviteId: string): Promise<number> 
     { method: "POST" },
   );
   return result.roomId;
+}
+
+export async function rejectMyRoomInvitation(inviteId: string): Promise<void> {
+  await apiRequest(`/room/invitations/${encodeURIComponent(inviteId)}/reject`, {
+    method: "POST",
+  });
 }
 
 export async function createJoinCode(

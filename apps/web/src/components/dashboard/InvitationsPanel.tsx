@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   acceptMyRoomInvitation,
   listMyRoomInvitations,
+  rejectMyRoomInvitation,
   type PendingRoomInvitation,
 } from "@/lib/api/rooms";
 import { primaryButton } from "./dashboardStyles";
@@ -48,12 +49,26 @@ export function InvitationsPanel() {
     }
   }
 
+  async function reject(invite: PendingRoomInvitation) {
+    setPending(invite.id);
+    setError("");
+    try {
+      await rejectMyRoomInvitation(invite.id);
+      setInvitations((current) => current.filter((item) => item.id !== invite.id));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not reject invitation");
+      await refresh();
+    } finally {
+      setPending("");
+    }
+  }
+
   return (
     <section id="invitations" className="dashboard-section">
       <div className="dashboard-section-heading">
         <div>
           <h2>Invitations</h2>
-          <p>Room invitations sent to your account appear here.</p>
+          <p>Review who invited you before joining a shared room.</p>
         </div>
         {invitations.length > 0 && (
           <span className="dashboard-count" aria-label={`${invitations.length} pending invitations`}>
@@ -72,6 +87,10 @@ export function InvitationsPanel() {
               <div className="min-w-0">
                 <p className="truncate font-semibold">{invite.roomName}</p>
                 <p className="mt-1 text-sm text-neutral-600">
+                  Invited by {invite.inviterName}
+                  {invite.inviterEmail ? ` · ${invite.inviterEmail}` : ""}
+                </p>
+                <p className="mt-1 text-sm text-neutral-600">
                   {invite.role} access · Expires {new Date(invite.expiresAt).toLocaleDateString()}
                 </p>
               </div>
@@ -83,6 +102,14 @@ export function InvitationsPanel() {
                   className={primaryButton}
                 >
                   {pending === invite.id ? "Joining…" : "Accept"}
+                </button>
+                <button
+                  type="button"
+                  disabled={pending === invite.id}
+                  onClick={() => void reject(invite)}
+                  className="min-h-11 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-60"
+                >
+                  {pending === invite.id ? "Working…" : "Reject"}
                 </button>
               </div>
             </li>

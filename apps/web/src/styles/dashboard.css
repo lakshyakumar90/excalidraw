@@ -261,6 +261,230 @@
   color: #525252;
 }
 
+.dashboard-room-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-room-card,
+.dashboard-room-empty {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.875rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  background: #fffefa;
+}
+
+.dashboard-room-card {
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.dashboard-room-card:hover,
+.dashboard-room-card:focus-visible {
+  border-color: #b8b2a8;
+  background: #fff;
+}
+
+.dashboard-room-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: #f1eee8;
+  color: #48443e;
+  font-size: 1.2rem;
+}
+
+.dashboard-dialog {
+  width: min(100% - 2rem, 520px);
+  max-height: min(90dvh, 720px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #e7e5e4;
+  border-radius: 16px;
+  background: #fffefa;
+  color: #171717;
+  box-shadow: 0 24px 70px rgb(23 23 23 / 0.22);
+}
+
+.dashboard-dialog::backdrop {
+  background: rgb(26 24 21 / 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.dashboard-dialog > form {
+  padding: clamp(1.1rem, 5vw, 1.6rem);
+}
+
+.dashboard-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.dashboard-dialog-heading h3 {
+  margin: 0.25rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-dialog-heading p:last-child {
+  margin: 0.45rem 0 0;
+  color: #625f59;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.dashboard-eyebrow {
+  margin: 0;
+  color: #6d675f;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dashboard-dialog-close {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #e7e5e4;
+  border-radius: 9px;
+  background: #fff;
+  color: #44403c;
+  font-size: 1.5rem;
+}
+
+.dashboard-field-label,
+.dashboard-room-choice legend {
+  display: block;
+  margin: 1rem 0 0.4rem;
+  color: #292524;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dashboard-field {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 9px;
+  background: #fff;
+  color: #171717;
+  font: inherit;
+}
+
+.dashboard-field:focus-visible {
+  outline: 3px solid rgb(109 89 58 / 0.18);
+  border-color: #766b5a;
+}
+
+.dashboard-room-choice {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.dashboard-room-choice legend {
+  padding: 0;
+}
+
+.dashboard-room-choice label {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.dashboard-room-choice label.is-selected {
+  border-color: #8c8170;
+  background: #f7f5f0;
+}
+
+.dashboard-room-choice input {
+  width: 17px;
+  height: 17px;
+  accent-color: #292524;
+}
+
+.dashboard-room-choice strong,
+.dashboard-room-choice small {
+  display: block;
+}
+
+.dashboard-room-choice strong {
+  font-size: 0.9rem;
+}
+
+.dashboard-room-choice small {
+  margin-top: 0.15rem;
+  color: #625f59;
+  font-size: 0.8rem;
+}
+
+.dashboard-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ece9e3;
+}
+
+.room-confirm-content {
+  padding: clamp(1.1rem, 5vw, 1.6rem);
+}
+
+.room-confirm-content h2 {
+  margin: 0.35rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+.room-confirm-content > p:not(.dashboard-eyebrow) {
+  margin: 0.55rem 0 0;
+  color: #625f59;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 520px) {
+  .dashboard-section-heading:has(> button) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 700px) {
   .dashboard-page .text-sm,
   .room-page .text-sm {

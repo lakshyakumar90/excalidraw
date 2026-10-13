@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cacheSavedSceneFiles } from "@/lib/persistence/savedScene";
 import {
   createInvite,
+  createInviteLink,
   createJoinCode,
   deleteRoom,
   getRoom,
@@ -14,7 +15,6 @@ import {
   listJoinCodes,
   removeMember,
   revokeInvite,
-  resendInvite,
   revokeJoinCode,
   updateMemberRole,
   type RoomInvite,
@@ -27,6 +27,7 @@ type Room = Awaited<ReturnType<typeof getRoom>>;
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
+  const deleteDialog = useRef<HTMLDialogElement>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
@@ -80,14 +81,8 @@ export default function RoomPage() {
     try {
       const result = await createInvite(roomId, email.trim(), inviteRole);
       setInviteUrl(result.inviteUrl);
-      setDeliveryState(
-        result.delivery === "sent"
-          ? "Invitation email sent."
-          : result.delivery === "failed"
-            ? "Invite created, but email delivery failed. Copy and send this link manually."
-            : "Email is not configured. Copy and send this invitation link manually.",
-      );
-      setInviteEmail(email.trim());
+      setDeliveryState("In-app invitation created. A share link is ready if you need it.");
+      setInviteEmail(result.email);
       setInvites(await listInvites(roomId));
       setEmail("");
     } catch (reason) {
@@ -161,22 +156,18 @@ export default function RoomPage() {
     }
   }
 
-  async function resend(inviteId: string) {
-    setPendingAction(inviteId);
+  async function getInviteLink(invite: RoomInvite) {
+    setPendingAction(invite.id);
     setError("");
     try {
-      const result = await resendInvite(roomId, inviteId);
+      const result = await createInviteLink(roomId, invite.id);
       setInviteUrl(result.inviteUrl);
-      setDeliveryState(
-        result.delivery === "sent"
-          ? "Invitation email sent."
-          : result.delivery === "failed"
-            ? "Email delivery failed. Copy and send this link manually."
-            : "Email is not configured. Copy and send this link manually.",
-      );
+      setInviteEmail(invite.email);
+      setInviteRole(invite.role);
+      setDeliveryState("A new share link is ready to copy.");
       setInvites(await listInvites(roomId));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not resend invitation");
+      setError(reason instanceof Error ? reason.message : "Could not create invitation link");
     } finally {
       setPendingAction("");
     }
@@ -196,12 +187,6 @@ export default function RoomPage() {
   }
 
   async function removeRoom() {
-    if (
-      !window.confirm(
-        "Delete this room? The saved scene will stay in your account.",
-      )
-    )
-      return;
     setPendingAction("room");
     setError("");
     try {
@@ -211,6 +196,7 @@ export default function RoomPage() {
       setError(
         reason instanceof Error ? reason.message : "Could not delete room",
       );
+      deleteDialog.current?.close();
       setPendingAction("");
     }
   }
@@ -255,7 +241,7 @@ export default function RoomPage() {
                 >
                   <h2 className="text-lg font-semibold">Invite people</h2>
                   <p className="mt-1 text-sm leading-6 text-neutral-600">
-                    They’ll get an email and can accept from their dashboard. A direct link is available to copy too.
+                    Enter an account email or username. The invitation appears in their dashboard when they sign in. You can also create a share link.
                   </p>
                   <label htmlFor="invite-email" className="mt-4 block text-sm font-medium">
                     Invite by email or username
@@ -268,7 +254,7 @@ export default function RoomPage() {
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="name@example.com or username"
-                      autoComplete="email"
+                      autoComplete="off"
                       className="min-w-60 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-base"
                     />
                     <select
@@ -286,13 +272,13 @@ export default function RoomPage() {
                       disabled={inviting}
                       className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                     >
-                      {inviting ? "Sending…" : "Send invitation"}
+                      {inviting ? "Creating…" : "Invite to room"}
                     </button>
                   </div>
                   {inviteUrl && (
                     <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
                       <p role="status" className="text-sm font-medium text-neutral-800">
-                        {deliveryState} {inviteEmail} will also see this in their dashboard.
+                        {deliveryState} {inviteEmail} will see it in their dashboard after signing in.
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <a className="min-w-0 flex-1 break-all text-sm text-violet-700 underline" href={inviteUrl}>
@@ -393,7 +379,7 @@ export default function RoomPage() {
                   <h2 className="font-semibold">Invitations</h2>
                   {invites.length === 0 ? (
                     <p className="mt-2 text-sm text-neutral-500">
-                      No invitations yet.
+                      No pending invitations. Accepted and declined invitations are cleared from this list.
                     </p>
                   ) : (
                     <ul className="mt-2 space-y-2">
@@ -403,14 +389,7 @@ export default function RoomPage() {
                           className="flex flex-wrap items-center justify-between gap-2 text-sm"
                         >
                           <span>
-                            {entry.email} · {entry.role} · {entry.deliveryError === "not-configured" ? "Manual link" : entry.deliveryError ? "Email failed" : entry.sentAt ? "Email sent" : "Preparing email"} ·{" "}
-                            {entry.usedAt
-                              ? "Used"
-                              : entry.revokedAt
-                                ? "Revoked"
-                              : new Date(entry.expiresAt) < new Date()
-                                ? "Expired"
-                                : "Pending"}
+                            {entry.email} · {entry.role} · In-app invitation · Pending
                           </span>
                           <button
                             disabled={pendingAction === entry.id}
@@ -419,15 +398,11 @@ export default function RoomPage() {
                           >
                             Revoke
                           </button>
-                          {!entry.usedAt && !entry.revokedAt &&
-                            new Date(entry.expiresAt) > new Date() &&
-                            (!entry.sentAt || entry.deliveryError) && (
-                              <button
-                                disabled={pendingAction === entry.id}
-                                onClick={() => void resend(entry.id)}
-                                className="text-violet-700 disabled:opacity-60"
-                              >Resend</button>
-                            )}
+                          <button
+                            disabled={pendingAction === entry.id}
+                            onClick={() => void getInviteLink(entry)}
+                            className="text-violet-700 disabled:opacity-60"
+                          >Create share link</button>
                         </li>
                       ))}
                     </ul>
@@ -441,7 +416,7 @@ export default function RoomPage() {
                   </p>
                   <button
                     disabled={pendingAction === "room"}
-                    onClick={() => void removeRoom()}
+                    onClick={() => deleteDialog.current?.showModal()}
                     className="mt-2 text-sm font-medium text-red-700 disabled:opacity-60"
                   >
                     Delete room
@@ -457,6 +432,19 @@ export default function RoomPage() {
           )}
         </div>
       </div>
+      <dialog ref={deleteDialog} className="dashboard-dialog room-confirm-dialog" aria-labelledby="delete-room-title">
+        <div className="room-confirm-content">
+          <p className="dashboard-eyebrow">Room settings</p>
+          <h2 id="delete-room-title">Delete {room?.name ?? "this room"}?</h2>
+          <p>The room and its invitations will be removed. The saved canvas stays in your account.</p>
+          <div className="dashboard-dialog-actions">
+            <button type="button" className="min-h-11 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium" onClick={() => deleteDialog.current?.close()} disabled={pendingAction === "room"}>Keep room</button>
+            <button type="button" className="min-h-11 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={() => void removeRoom()} disabled={pendingAction === "room"}>
+              {pendingAction === "room" ? "Deleting…" : "Delete room"}
+            </button>
+          </div>
+        </div>
+      </dialog>
     </main>
   );
 }
