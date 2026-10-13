@@ -24,7 +24,7 @@ export const RoomSchema = z
       .trim()
       .min(1, "Name is required")
       .max(50, "Name is too long"),
-    sceneId: z.string().min(1),
+    sceneId: z.string().min(1).optional(),
   })
   .strict();
 

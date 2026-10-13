@@ -84,18 +84,15 @@ export async function acceptEmailRoomInvite(
         invite.revokedAt
       ) return null;
 
-      const member = await publicDb(tx).RoomMember.where({
-        roomId: invite.roomId,
-        userId: input.userId,
-      }).first();
-      if (member) {
-        return { roomId: invite.roomId, role: member.role as RoomMemberRole };
-      }
-
       const claim = await publicDb(tx).InviteClaim.where({
         inviteId: invite.id,
       }).first();
       if (claim || invite.usedAt) return null;
+
+      const member = await publicDb(tx).RoomMember.where({
+        roomId: invite.roomId,
+        userId: input.userId,
+      }).first();
 
       // inviteId is unique in InviteClaim: concurrent redemption and revocation
       // cannot both commit. Membership and claim share this transaction.
@@ -104,13 +101,17 @@ export async function acceptEmailRoomInvite(
         actorId: input.userId,
         action: "accepted",
       });
-      await publicDb(tx).RoomMember.create({
-        roomId: invite.roomId,
-        userId: input.userId,
-        role: invite.role,
-      });
+      if (!member)
+        await publicDb(tx).RoomMember.create({
+          roomId: invite.roomId,
+          userId: input.userId,
+          role: invite.role,
+        });
       await publicDb(tx).Invite.where({ id: invite.id }).update({ usedAt: now });
-      return { roomId: invite.roomId, role: invite.role as RoomMemberRole };
+      return {
+        roomId: invite.roomId,
+        role: (member?.role ?? invite.role) as RoomMemberRole,
+      };
     });
   } catch (error) {
     // Unique claim or membership conflicts mean another concurrent request
@@ -126,6 +127,53 @@ export async function acceptEmailRoomInvite(
       }
       return null;
     }
+    throw error;
+  }
+}
+
+/** Reject an email invitation without granting room access. */
+export async function rejectEmailRoomInvite(
+  store: RoomDb,
+  input: { inviteId: string; userId: string; now?: string },
+): Promise<boolean> {
+  const now = input.now ?? new Date().toISOString();
+  try {
+    return await store.transaction(async (tx) => {
+      const invite = await publicDb(tx).Invite.where({
+        id: input.inviteId,
+      }).first();
+      const user = await publicDb(tx).User.where({ id: input.userId }).first();
+      if (
+        !invite ||
+        !user ||
+        !user.emailVerified ||
+        user.email.toLowerCase() !== invite.email.toLowerCase() ||
+        Date.parse(invite.expiresAt) <= Date.parse(now) ||
+        invite.usedAt ||
+        invite.revokedAt
+      )
+        return false;
+
+      const claim = await publicDb(tx).InviteClaim.where({
+        inviteId: invite.id,
+      }).first();
+      if (claim) return false;
+
+      // A rejected invitation is terminal and hidden from both inbox and owner
+      // views. The existing claim enum's `revoked` value also covers recipient
+      // rejection, so this does not require a database enum migration.
+      await publicDb(tx).InviteClaim.create({
+        inviteId: invite.id,
+        actorId: input.userId,
+        action: "revoked",
+      });
+      await publicDb(tx)
+        .Invite.where({ id: invite.id })
+        .update({ revokedAt: now });
+      return true;
+    });
+  } catch (error) {
+    if (isUniqueConflict(error)) return false;
     throw error;
   }
 }
@@ -312,7 +360,7 @@ export async function createRoomInvite(
   return publicDb(store).Invite.create(input);
 }
 
-export async function prepareRoomInviteResend(
+export async function prepareRoomInviteLink(
   store: RoomDb,
   input: {
     roomId: number;

@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import {
-  isRoomInviteDeliveryConfigured,
   issueRoomInviteToken,
-  sendRoomInvitationEmail,
   verifyRoomInviteToken,
 } from "@repo/auth/room-invitation";
 import {
@@ -15,9 +13,8 @@ import {
   listRoomInvites,
   listRoomJoinCodes,
   listPendingRoomInvitesForEmail,
-  markInviteSent,
-  prepareRoomInviteResend,
-  recordInviteDelivery,
+  rejectEmailRoomInvite,
+  prepareRoomInviteLink,
   removeRoomMember,
   revokeEmailRoomInvite,
   revokeRoomJoinCode,
@@ -50,6 +47,14 @@ export function registerRoomInviteRoutes(router: Router): void {
         return res.status(403).json({ message: "Verify your email to view invitations" });
       const now = Date.now();
       const invites = await listPendingRoomInvitesForEmail(db, user.email);
+      const senderIds = [...new Set(invites.map((invite) => invite.room.adminId))];
+      const senders = await Promise.all(
+        senderIds.map(async (id) => {
+          const sender = await db.orm!.public!.User.where({ id }).first();
+          return [id, sender] as const;
+        }),
+      );
+      const sendersById = new Map(senders);
       return res.json({
         invitations: invites
           .filter((invite) =>
@@ -62,6 +67,8 @@ export function registerRoomInviteRoutes(router: Router): void {
             id: invite.id,
             roomId: invite.roomId,
             roomName: invite.room.slug,
+            inviterName: sendersById.get(invite.room.adminId)?.name || "Room owner",
+            inviterEmail: sendersById.get(invite.room.adminId)?.email ?? null,
             role: invite.role,
             expiresAt: invite.expiresAt,
             createdAt: invite.createdAt,
@@ -99,6 +106,31 @@ export function registerRoomInviteRoutes(router: Router): void {
     }
   });
 
+  router.post("/invitations/:inviteId/reject", async (req, res) => {
+    try {
+      if (
+        !(await applyInviteRateLimit(
+          req,
+          res,
+          "invite-reject-user",
+          `${req.userId}:${req.ip}`,
+          10,
+          60_000,
+        ))
+      ) return;
+      const rejected = await rejectEmailRoomInvite(db, {
+        inviteId: req.params.inviteId,
+        userId: req.userId!,
+      });
+      if (!rejected)
+        return res.status(404).json({ message: "Invitation unavailable for this account" });
+      return res.status(204).end();
+    } catch (error) {
+      console.error("Inbox invitation rejection error:", error);
+      return res.status(500).json({ message: "Unable to reject invitation" });
+    }
+  });
+
   router.post("/:roomId/invites", async (req, res) => {
     const roomId = roomIdOf(req.params.roomId);
     if (!roomId) return res.status(404).json({ message: "Room not found" });
@@ -106,7 +138,8 @@ export function registerRoomInviteRoutes(router: Router): void {
     if (!parsed.success)
       return res.status(400).json({ message: "Invalid invitation" });
     try {
-      if (!(await ownedRoom(roomId, req.userId!)))
+      const room = await ownedRoom(roomId, req.userId!);
+      if (!room)
         return res.status(404).json({ message: "Room not found" });
       if (
         !(await applyInviteRateLimit(
@@ -154,22 +187,6 @@ export function registerRoomInviteRoutes(router: Router): void {
         expiresAt,
       });
       const url = `${canonicalWebOrigin()}/invite/${encodeURIComponent(token)}`;
-      const sent = await sendRoomInvitationEmail({
-        to: email,
-        roomName: (await ownedRoom(roomId, req.userId!))?.slug ?? "Shared room",
-        inviterName: "The room owner",
-        role: parsed.data.role,
-        expiresAt,
-        url,
-      });
-      if (sent) await markInviteSent(db, inviteId);
-      else
-        await recordInviteDelivery(db, {
-          id: inviteId,
-          error: isRoomInviteDeliveryConfigured()
-            ? "delivery-failed"
-            : "not-configured",
-        });
       return res.status(201).json({
         inviteId,
         roomId,
@@ -177,11 +194,7 @@ export function registerRoomInviteRoutes(router: Router): void {
         role: parsed.data.role,
         expiresAt,
         inviteUrl: url,
-        delivery: sent
-          ? "sent"
-          : isRoomInviteDeliveryConfigured()
-            ? "failed"
-            : "manual-link",
+        delivery: "in-app",
       });
     } catch (error) {
       console.error("Invitation creation error:", error);
@@ -189,11 +202,12 @@ export function registerRoomInviteRoutes(router: Router): void {
     }
   });
 
-  router.post("/:roomId/invites/:inviteId/resend", async (req, res) => {
+  router.post("/:roomId/invites/:inviteId/link", async (req, res) => {
     const roomId = roomIdOf(req.params.roomId);
     if (!roomId) return res.status(404).json({ message: "Room not found" });
     try {
-      if (!(await ownedRoom(roomId, req.userId!)))
+      const room = await ownedRoom(roomId, req.userId!);
+      if (!room)
         return res.status(404).json({ message: "Room not found" });
       if (
         !(await applyInviteRateLimit(
@@ -221,7 +235,7 @@ export function registerRoomInviteRoutes(router: Router): void {
         role: existing.role as "editor" | "viewer",
         expiresAt: existing.expiresAt,
       });
-      const invite = await prepareRoomInviteResend(db, {
+      const invite = await prepareRoomInviteLink(db, {
         roomId,
         inviteId: existing.id,
         ownerId: req.userId!,
@@ -230,33 +244,13 @@ export function registerRoomInviteRoutes(router: Router): void {
       if (!invite)
         return res.status(409).json({ message: "Invitation is unavailable" });
       const url = `${canonicalWebOrigin()}/invite/${encodeURIComponent(token)}`;
-      const sent = await sendRoomInvitationEmail({
-        to: invite.email,
-        roomName: invite.roomName,
-        inviterName: "The room owner",
-        role: invite.role as "editor" | "viewer",
-        expiresAt: invite.expiresAt,
-        url,
-      });
-      if (sent) await markInviteSent(db, invite.id);
-      else
-        await recordInviteDelivery(db, {
-          id: invite.id,
-          error: isRoomInviteDeliveryConfigured()
-            ? "delivery-failed"
-            : "not-configured",
-        });
       return res.json({
         inviteUrl: url,
-        delivery: sent
-          ? "sent"
-          : isRoomInviteDeliveryConfigured()
-            ? "failed"
-            : "manual-link",
+        delivery: "in-app",
       });
     } catch (error) {
-      console.error("Invitation resend error:", error);
-      return res.status(500).json({ message: "Unable to resend invitation" });
+      console.error("Invitation link creation error:", error);
+      return res.status(500).json({ message: "Unable to create invitation link" });
     }
   });
 
@@ -533,7 +527,14 @@ export function registerRoomInviteRoutes(router: Router): void {
     try {
       if (!(await ownedRoom(roomId, req.userId!)))
         return res.status(404).json({ message: "Room not found" });
-      const invites = await listRoomInvites(db, roomId);
+      const now = Date.now();
+      const invites = (await listRoomInvites(db, roomId)).filter(
+        (invite) =>
+          !invite.usedAt &&
+          !invite.revokedAt &&
+          Date.parse(invite.expiresAt) > now &&
+          !invite.claim,
+      );
       return res.json({
         invites: invites.map((invite) => ({
           id: invite.id,

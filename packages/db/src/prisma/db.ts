@@ -44,6 +44,7 @@ export async function connectApplicationDatabase() {
 
 export {
   acceptEmailRoomInvite,
+  rejectEmailRoomInvite,
   acceptRoomJoinCode,
   changeRoomMemberRole,
   createOrGetSceneRoom,
@@ -54,7 +55,7 @@ export {
   listRoomInvites,
   listRoomJoinCodes,
   markInviteSent,
-  prepareRoomInviteResend,
+  prepareRoomInviteLink,
   roomOwnedBy,
   recordInviteDelivery,
   removeRoomMember,

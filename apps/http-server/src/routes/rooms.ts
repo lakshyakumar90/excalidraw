@@ -222,21 +222,31 @@ roomsRouter.post("/", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ message: "Invalid room" });
   try {
     const roomId = await db.transaction(async (tx) => {
-      const scene = await tx
-        .orm!.public!.Scene.where({
-          id: parsed.data.sceneId,
+      let sceneId = parsed.data.sceneId;
+      if (sceneId) {
+        const scene = await tx.orm!.public!.Scene.where({
+          id: sceneId,
           ownerId: req.userId!,
-        })
-        .first();
-      if (!scene) return null;
-      const attached = await tx
-        .orm!.public!.Room.where({ sceneId: scene.id })
-        .first();
-      if (attached) return "attached";
+        }).first();
+        if (!scene) return null;
+        const attached = await tx.orm!.public!.Room.where({ sceneId }).first();
+        if (attached) return "attached";
+      } else {
+        const scene = await tx.orm!.public!.Scene.create({
+          ownerId: req.userId!,
+          title: parsed.data.name,
+          data: {
+            elements: [],
+            appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
+            files: {},
+          } as JsonValue,
+        });
+        sceneId = scene.id;
+      }
       const room = await tx.orm!.public!.Room.create({
         slug: parsed.data.name,
         adminId: req.userId!,
-        sceneId: scene.id,
+        sceneId,
       });
       await tx.orm!.public!.RoomMember.create({
         userId: req.userId!,
@@ -267,7 +277,8 @@ roomsRouter.post("/", async (req, res) => {
 
 roomsRouter.post("/share", async (req, res) => {
   const parsed = RoomSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: "Invalid room" });
+  if (!parsed.success || !parsed.data.sceneId)
+    return res.status(400).json({ message: "Choose a saved scene to share" });
   try {
     const room = await createOrGetSceneRoom(db, {
       sceneId: parsed.data.sceneId,
