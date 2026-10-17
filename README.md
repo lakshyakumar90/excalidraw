@@ -19,6 +19,9 @@ Default URLs: [editor](http://localhost:3000/), [dashboard/sign-in](http://local
 
 ## Architecture
 
+For a single-host AWS backend with Vercel frontend and Neon database, follow
+[the EC2 deployment guide](docs/aws-ec2-deployment.md).
+
 | Workspace                                           | Ownership                                                   |
 | --------------------------------------------------- | ----------------------------------------------------------- |
 | [web](apps/web/README.md)                           | Editor, account/room pages, IndexedDB, collaboration client |

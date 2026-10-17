@@ -7,7 +7,8 @@
     "dev": "tsx watch --exclude **/node_modules/** src/index.ts",
     "build": "tsc -b",
     "start": "node dist/index.js",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@repo/db": "workspace:*",

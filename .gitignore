@@ -11,6 +11,8 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+.env.ec2
+excalidraw-backend*.tar
 
 # Testing
 coverage
@@ -58,3 +60,9 @@ yarn-error.log*
 .agents/skills/
 .github/skills/
 skills-lock.json
+
+.vercel
+.env*
+!.env*.example
+.codex/aws-deploy/old-api.env
+.codex/aws-deploy/old-ws.env

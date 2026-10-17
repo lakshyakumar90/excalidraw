@@ -24,3 +24,4 @@ packages/eslint-config
 .github
 .freebuff
 .impeccable
+excalidraw-backend*.tar

@@ -6,6 +6,7 @@ import {
   retainLatestSceneRevisions,
 } from "@repo/db";
 import { openRoomRedis, ROOM_SNAPSHOT_KEEP } from "@repo/redis";
+import { startMaintenance } from "./maintenance.js";
 
 async function start() {
   await connectApplicationDatabase();
@@ -33,46 +34,48 @@ async function start() {
 
   // The dirty sorted set closes the Redis-write/queue-enqueue crash gap and
   // recovers fixed-ID jobs that were active when a new version arrived.
-  const recoveryTimer = setInterval(() => {
-    void (async () => {
+  // Normal saves enqueue immediately. Scan on startup and once per minute only
+  // as a crash-recovery fallback, including when the queue is otherwise idle.
+  const stopRecovery = startMaintenance(
+    async () => {
       for (const sceneId of await rooms.dirtyRooms())
         await rooms.scheduleFlush(sceneId);
-    })().catch((error: unknown) =>
-      console.error("Flush recovery scan failed:", error),
-    );
-  }, 5_000);
-  recoveryTimer.unref?.();
+    },
+    60_000,
+    (error: unknown) => console.error("Flush recovery scan failed:", error),
+  );
 
   let memoryLoggedAt = 0;
-  const metricsTimer = setInterval(() => {
-    void (async () => {
-      const rates = await rooms.roomMessageRates();
-      for (const rate of rates) {
-        console.info(
-          JSON.stringify({ metric: "room_messages_per_second", ...rate }),
-        );
-      }
-      if (Date.now() - memoryLoggedAt >= 60_000) {
-        const info = await rooms.redis.info("memory");
-        const usedMemory = info.match(/(?:^|\r?\n)used_memory:(\d+)/)?.[1];
-        if (usedMemory)
-          console.info(
-            JSON.stringify({
-              metric: "redis_used_memory_bytes",
-              value: Number(usedMemory),
-            }),
-          );
-        memoryLoggedAt = Date.now();
-      }
-    })().catch((error: unknown) =>
-      console.error("Metrics collection failed:", error),
-    );
-  }, 10_000);
-  metricsTimer.unref?.();
+  const stopMetrics = rooms.metricsEnabled
+    ? startMaintenance(
+        async () => {
+          const rates = await rooms.roomMessageRates();
+          for (const rate of rates) {
+            console.info(
+              JSON.stringify({ metric: "room_messages_per_second", ...rate }),
+            );
+          }
+          if (Date.now() - memoryLoggedAt >= 60_000) {
+            const info = await rooms.redis.info("memory");
+            const usedMemory = info.match(/(?:^|\r?\n)used_memory:(\d+)/)?.[1];
+            if (usedMemory)
+              console.info(
+                JSON.stringify({
+                  metric: "redis_used_memory_bytes",
+                  value: Number(usedMemory),
+                }),
+              );
+            memoryLoggedAt = Date.now();
+          }
+        },
+        10_000,
+        (error: unknown) => console.error("Metrics collection failed:", error),
+      )
+    : () => {};
 
   const shutdown = () => {
-    clearInterval(recoveryTimer);
-    clearInterval(metricsTimer);
+    stopRecovery();
+    stopMetrics();
     void worker
       .close()
       .finally(() => rooms.close().finally(() => process.exit(0)));

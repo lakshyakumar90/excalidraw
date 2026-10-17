@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+const API_PREFIX = process.env.NEXT_PUBLIC_API_PROXY_PREFIX ?? "";
 
 export async function apiRequest<T>(
   path: string,
@@ -7,7 +8,7 @@ export async function apiRequest<T>(
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type"))
     headers.set("Content-Type", "application/json");
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
     ...init,
     credentials: "include",
     headers,

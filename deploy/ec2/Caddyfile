@@ -1,0 +1,11 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+    reverse_proxy api:5000
+}
+
+{$WS_DOMAIN} {
+    reverse_proxy websocket:8080
+}

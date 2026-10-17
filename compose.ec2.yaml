@@ -1,0 +1,118 @@
+name: excalidraw
+
+x-backend: &backend
+  image: ${BACKEND_IMAGE:-excalidraw-backend:ec2}
+  user: node
+  env_file:
+    - .env.ec2
+  environment:
+    NODE_ENV: production
+    REDIS_URL: redis://redis:6379
+    REDIS_METRICS_ENABLED: "false"
+    NODE_OPTIONS: ${APP_NODE_OPTIONS:---max-old-space-size=128}
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 60s
+  depends_on:
+    redis:
+      condition: service_healthy
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+    # No host port: Redis is reachable only by services on the Docker network.
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    <<: *backend
+    command: ["node", "apps/http-server/dist/index.js"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  websocket:
+    <<: *backend
+    command: ["node", "apps/ws-server/dist/index.js"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  flush-worker:
+    <<: *backend
+    command: ["node", "apps/flush-worker/dist/index.js"]
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN in .env.ec2}
+      WS_DOMAIN: ${WS_DOMAIN:?Set WS_DOMAIN in .env.ec2}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env.ec2}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/ec2/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      websocket:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:

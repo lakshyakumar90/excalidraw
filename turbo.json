@@ -4,8 +4,22 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "API_PROXY_TARGET",
+        "LEGACY_WEB_HOST",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_WS_URL",
+        "NEXT_PUBLIC_API_PROXY_PREFIX",
+        "NEXT_PUBLIC_GOOGLE_AUTH_ENABLED"
+      ],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**", "tsconfig.tsbuildinfo"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        "dist/**",
+        "tsconfig.tsbuildinfo"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]

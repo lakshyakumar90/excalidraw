@@ -39,6 +39,7 @@ export class RoomRedis {
   readonly redis: Redis;
   readonly queue: Queue;
   readonly instanceId = randomUUID();
+  readonly metricsEnabled = process.env.REDIS_METRICS_ENABLED === "true";
 
   constructor(url = process.env.REDIS_URL) {
     if (!url) throw new Error("REDIS_URL must be configured.");
@@ -50,7 +51,7 @@ export class RoomRedis {
       enableReadyCheck: true,
     });
     this.queue = new Queue(ROOM_FLUSH_QUEUE, {
-      connection: this.redis.duplicate(),
+      connection: this.redis,
     });
   }
 
@@ -85,7 +86,8 @@ export class RoomRedis {
         !item ||
         typeof item !== "object" ||
         typeof (item as { id?: unknown }).id !== "string"
-      ) continue;
+      )
+        continue;
       elementFields.push(
         `element:${(item as { id: string }).id}`,
         JSON.stringify(item),
@@ -194,6 +196,7 @@ export class RoomRedis {
   }
 
   async recordMessage(sceneId: string, now = Date.now()): Promise<void> {
+    if (!this.metricsEnabled) return;
     const bucket = Math.floor(now / 1000);
     const metricKey = `collab:metrics:${encodeURIComponent(sceneId)}:${bucket}`;
     await this.redis
@@ -476,7 +479,24 @@ export class RoomRedis {
           }),
         );
       },
-      { connection: this.redis.duplicate(), concurrency },
+      {
+        // Let BullMQ own and close its connections. A supplied Redis instance
+        // is treated as shared, leaving caller-created duplicates open.
+        connection: {
+          host: this.redis.options.host,
+          port: this.redis.options.port,
+          username: this.redis.options.username,
+          password: this.redis.options.password,
+          db: this.redis.options.db,
+          tls: this.redis.options.tls,
+          maxRetriesPerRequest: null,
+        },
+        concurrency,
+        // BZPOPMIN wakes immediately for new jobs; this only reduces empty
+        // queue polling. Delayed jobs still use their scheduled wake-up time.
+        drainDelay: 60,
+        stalledInterval: 60_000,
+      },
     );
     return worker;
   }

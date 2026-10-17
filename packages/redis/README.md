@@ -2,6 +2,11 @@
 
 Redis live room state, pub/sub, rate limiting, and write-behind queue integration.
 
+Message metrics require `REDIS_METRICS_ENABLED=true` (disabled by default).
+Queue producers share the main Redis connection; the worker owns its connections
+and closes them on shutdown. See the [worker README](../../apps/flush-worker/README.md)
+for idle command usage and recovery timing.
+
 ## Subfolders
 
 - [src](./src/README.md)

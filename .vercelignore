@@ -1,0 +1,21 @@
+# Vercel CLI does not use all of this repository's .gitignore exclusions.
+# Keep host credentials and local tooling out of uploaded deployment sources.
+.git
+.vercel
+.aws
+.codex
+.insta
+.agents
+.claude
+.github
+.freebuff
+.impeccable
+**/.env
+**/.env.*
+**/node_modules
+**/.next
+**/.turbo
+**/coverage
+**/dist
+**/*.tsbuildinfo
+excalidraw-backend*.tar*
