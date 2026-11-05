@@ -7,7 +7,9 @@
   --docs-paper: #faf9f6;
   --docs-white: #fff;
   --docs-blue: #4c6ef5;
+  width: 100%;
   min-height: 100dvh;
+  flex: 1 0 auto;
   color: var(--docs-ink);
   background: var(--docs-paper);
   font-family: var(--font-geist-mono), ui-monospace, monospace;
@@ -16,7 +18,7 @@
 }
 
 .docs-app a { color: inherit; text-decoration: none; }
-.docs-topbar { height: 58px; position: sticky; top: 0; z-index: 40; display: grid; grid-template-columns: 256px minmax(240px, 460px) 1fr; align-items: center; gap: 22px; padding: 0 26px 0 22px; border-bottom: 1px solid var(--docs-border); background: rgb(255 255 255 / 96%); backdrop-filter: blur(12px); }
+.docs-topbar { height: 58px; position: sticky; top: 0; z-index: 40; display: grid; grid-template-columns: 256px minmax(240px, 460px) 1fr; align-items: center; gap: 22px; padding: 0 26px 0 22px; border-bottom: 1px solid var(--docs-border); background: var(--docs-white); }
 .docs-topbar-actions { display: flex; align-items: center; justify-self: end; gap: 17px; }
 .docs-theme-toggle { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--docs-border); border-radius: 7px; background: var(--docs-white); color: var(--docs-muted); cursor: pointer; }
 .docs-theme-toggle:hover { color: var(--docs-ink); border-color: var(--docs-border-strong); }
@@ -166,6 +168,19 @@
 .docs-home-footer a { color: #5e69a7 !important; }
 .docs-scrim { display: none; }
 
+/* The body normally has a fixed viewport height for the drawing editor. Let
+   the docs route own the scrolling canvas when its saved theme is dark. */
+html:has(.docs-app[data-theme="dark"]),
+body:has(.docs-app[data-theme="dark"]) {
+  background: #171614;
+  color: #f0eee9;
+  color-scheme: dark;
+}
+body:has(.docs-app[data-theme="dark"]) {
+  height: auto;
+  min-height: 100%;
+}
+
 @media (max-width: 1180px) {
   .docs-topbar { grid-template-columns: 220px minmax(210px, 400px) 1fr; }
   .docs-frame { grid-template-columns: 220px minmax(0,1fr); }
@@ -235,7 +250,7 @@
   --docs-white: #211f1b;
   --docs-blue: #b5c1ff;
 }
-.docs-app[data-theme="dark"] .docs-topbar { background: rgb(33 31 27 / 96%); }
+.docs-app[data-theme="dark"] .docs-topbar { background: #211f1b; }
 .docs-app[data-theme="dark"] .docs-brand-mark { border-color: #e6e1d7; }
 .docs-app[data-theme="dark"] .docs-brand-mark i { background: #e6e1d7; }
 .docs-app[data-theme="dark"] .docs-search { background: #1c1a17; }
