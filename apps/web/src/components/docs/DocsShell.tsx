@@ -12,6 +12,7 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
   const activeSlug = pathname.replace(/^\/docs\/?/, "") || "home";
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const searchRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -20,6 +21,14 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
       .filter((entry) => `${entry.title} ${entry.description} ${entry.group} ${entry.searchText ?? ""}`.toLowerCase().includes(needle))
       .slice(0, 7);
   }, [query, searchIndex]);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("excalidraw-docs-theme");
+    if (savedTheme === "dark" || savedTheme === "light") {
+      const frame = window.requestAnimationFrame(() => setTheme(savedTheme));
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -44,7 +53,7 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
   }
 
   return (
-    <div className="docs-app">
+    <div className="docs-app" data-theme={theme}>
       <header className="docs-topbar">
         <button className="docs-menu-button" type="button" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Close documentation navigation" : "Open documentation navigation"} onClick={() => setMobileOpen((open) => !open)}>
           <span aria-hidden="true">{mobileOpen ? "×" : "☰"}</span>
@@ -69,7 +78,16 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
             </div>
           )}
         </div>
-        <Link className="docs-back-link" href="/">Open drawing app <span aria-hidden="true">↗</span></Link>
+        <div className="docs-topbar-actions">
+          <button className="docs-theme-toggle" type="button" aria-pressed={theme === "dark"} aria-label={theme === "dark" ? "Switch documentation to light mode" : "Switch documentation to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setTheme((current) => {
+            const next = current === "dark" ? "light" : "dark";
+            window.localStorage.setItem("excalidraw-docs-theme", next);
+            return next;
+          })}>
+            {theme === "dark" ? <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.5" /><path d="M10 1.8v2M10 16.2v2M18.2 10h-2M3.8 10h-2m14-5.8-1.4 1.4m-8.8 8.8-1.4 1.4m11.6 0-1.4-1.4m-8.8-8.8L4.4 4.2" /></svg> : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.8 12.7A7.2 7.2 0 0 1 7.3 3.2 7.3 7.3 0 1 0 16.8 12.7Z" /></svg>}
+          </button>
+          <Link className="docs-back-link" href="/">Open drawing app <span aria-hidden="true">↗</span></Link>
+        </div>
       </header>
 
       <div className="docs-frame">
