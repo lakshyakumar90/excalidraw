@@ -1,0 +1,17 @@
+sequenceDiagram
+ participant U as User browser
+ participant API as HTTP API
+ participant WS as WebSocket server
+ participant R as Redis
+ participant DB as PostgreSQL
+ U->>API: join room or request presence ticket
+ API->>DB: authenticate and check role/membership
+ API-->>U: room info / short-lived ticket
+ U->>WS: upgrade with ticket subprotocol
+ WS->>DB: recheck access and current role
+ WS->>R: register participant lease
+ WS-->>U: presence snapshot
+ U->>WS: validated element commit
+ WS->>R: update live snapshot and schedule flush
+ WS-->>U: acknowledgement and peer broadcast
+ R->>DB: worker inserts retained revision

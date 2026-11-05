@@ -1,0 +1,68 @@
+erDiagram
+ User ||--o{ Scene : owns
+ User ||--o{ Room : administers
+ User ||--o{ RoomMember : joins
+ User ||--o{ LibraryItem : owns
+ User ||--o{ Session : has
+ User ||--o{ Account : has
+ User ||--o{ Chat : writes
+ Scene ||--o| Room : linked
+ Scene ||--o{ SceneRevision : revisions
+ Room ||--o{ RoomMember : contains
+ Room ||--o{ Chat : contains
+ Room ||--o{ Invite : issues
+ Room ||--o{ JoinCode : offers
+ Invite ||--o| InviteClaim : claimed
+ JoinCode ||--o| JoinCodeClaim : claimed
+ User {
+  string id PK
+  string email UK
+  string username UK
+  boolean emailVerified
+ }
+ Scene {
+  string id PK
+  string ownerId FK
+  string title
+  json data
+  int syncRevision
+ }
+ SceneRevision {
+  int id PK
+  string sceneId FK
+  int revision UK
+  json data
+  string actorId
+ }
+ Room {
+  int id PK
+  string slug UK
+  string adminId FK
+  string sceneId FK
+ }
+ RoomMember {
+  int id PK
+  string userId FK
+  int roomId FK
+  enum role
+ }
+ LibraryItem {
+  string id PK
+  string ownerId FK
+  string name
+  json data
+ }
+ Invite {
+  string id PK
+  string codeHash UK
+  int roomId FK
+  enum role
+  datetime expiresAt
+ }
+ JoinCode {
+  string id PK
+  string codeHash UK
+  int roomId FK
+  enum role
+  datetime expiresAt
+ }

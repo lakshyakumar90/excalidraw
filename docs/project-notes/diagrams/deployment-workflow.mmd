@@ -1,0 +1,17 @@
+flowchart LR
+ DEV[Developer] --> PNPM[pnpm install / dev / checks]
+ PNPM --> TURBO[Turborepo tasks]
+ TURBO --> WEB[Next.js build]
+ TURBO --> API[HTTP build]
+ TURBO --> WS[WebSocket build]
+ TURBO --> WORK[Worker build]
+ WEB --> VERCEL[Vercel path]
+ API --> DOCKER[Docker backend image]
+ WS --> DOCKER
+ WORK --> DOCKER
+ DOCKER --> EC2[EC2 / Caddy guide]
+ API --> PG[(PostgreSQL / documented Neon option)]
+ WS --> REDIS[(Redis)]
+ WORK --> PG
+ WORK --> REDIS
+ GH[GitHub migration workflow] --> DBM[db migration commands]

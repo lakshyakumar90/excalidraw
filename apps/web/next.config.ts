@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
+  outputFileTracingIncludes: {
+    "/docs": ["../../docs/*.md", "../../docs/project-notes/**/*"],
+    "/docs/**/*": ["../../docs/*.md", "../../docs/project-notes/**/*"],
+  },
   allowedDevOrigins: ["192.168.1.36", "localhost:3000"],
   async redirects() {
     const legacyHost = process.env.LEGACY_WEB_HOST;

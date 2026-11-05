@@ -1,0 +1,19 @@
+sequenceDiagram
+ participant W as Web client
+ participant H as HTTP API
+ participant DB as PostgreSQL
+ participant S as WebSocket server
+ participant R as Redis
+ W->>H: request presence ticket
+ H->>DB: validate session and room access
+ H-->>W: signed short-lived ticket
+ W->>S: upgrade with ticket in Sec-WebSocket-Protocol
+ S->>S: validate origin, ticket and room
+ S->>DB: check membership and current role
+ S->>R: register presence lease
+ S-->>W: presence snapshot
+ W->>S: commit or ephemeral update
+ S->>DB: durable revision check/commit as needed
+ S->>R: update live snapshot and schedule flush
+ S-->>W: acknowledgement and peer broadcast
+ R->>S: pub/sub fanout where configured

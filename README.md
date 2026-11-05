@@ -2,6 +2,8 @@
 
 A TypeScript drawing application with guest storage, authenticated scenes, real-time rooms, a hand-drawn renderer, Redis write-behind persistence, and the Phase 19 editor features.
 
+The in-app technical documentation portal is available at [`/docs`](http://localhost:3000/docs) while the web app is running. Its source notes are maintained in [`docs/project-notes`](docs/project-notes/README.md).
+
 ## Requirements
 
 Node.js 24+, pnpm 11.25.0, PostgreSQL 15+, and Redis. Email delivery is needed for verification and invites; Google OAuth is optional.

@@ -1,0 +1,16 @@
+flowchart LR
+ ENTRY[HTTP src/index.ts] --> APP[Express app.ts]
+ APP --> CORS[CORS credentials]
+ APP --> BA[Better Auth raw-body routes]
+ APP --> JSON[JSON parser 50 MB]
+ APP --> MW[requireAuth]
+ MW --> ROUTES[scene / room / library routes]
+ ROUTES --> BC[backend-common]
+ ROUTES --> DB[db repositories]
+ ROUTES --> REDIS[Redis live state]
+ WSENTRY[ws-server index.ts] --> WSS[WebSocket server.ts]
+ WSS --> VALID[common protocol validation]
+ WSS --> DB
+ WSS --> REDIS
+ WORK[flush worker] --> REDIS
+ WORK --> DB

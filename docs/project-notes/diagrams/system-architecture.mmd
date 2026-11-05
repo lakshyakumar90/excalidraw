@@ -1,0 +1,13 @@
+flowchart LR
+ U[Browser users] --> WEB[Next.js web app]
+ WEB -->|HTTP JSON + cookies| API[Express HTTP API]
+ WEB -->|ticketed WebSocket| WS[ws collaboration service]
+ API --> AUTH[Better Auth]
+ API --> PG[(PostgreSQL)]
+ WS --> PG
+ API --> REDIS[(Redis live state, pub/sub, queue)]
+ WS --> REDIS
+ WORKER[Snapshot flush worker / BullMQ] --> REDIS
+ WORKER --> PG
+ API --> EMAIL[Resend when configured]
+ AUTH -. optional OAuth .-> GOOGLE[Google OAuth]

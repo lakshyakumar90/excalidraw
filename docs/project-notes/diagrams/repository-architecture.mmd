@@ -1,0 +1,17 @@
+flowchart TB
+ WEB[apps/web] --> AUTH[packages/auth]
+ WEB --> COMMON[packages/common]
+ WEB --> ENGINE[packages/engine]
+ HTTP[apps/http-server] --> AUTH
+ HTTP --> COMMON
+ HTTP --> BACK[packages/backend-common]
+ HTTP --> DB[packages/db]
+ HTTP --> REDIS[packages/redis]
+ WS[apps/ws-server] --> AUTH
+ WS --> COMMON
+ WS --> BACK
+ WS --> DB
+ WS --> REDIS
+ WORKER[apps/flush-worker] --> DB
+ WORKER --> REDIS
+ ENGINE --> COMMON

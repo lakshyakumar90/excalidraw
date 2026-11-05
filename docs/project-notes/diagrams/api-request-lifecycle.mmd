@@ -1,0 +1,21 @@
+sequenceDiagram
+ participant UI as Web API helper
+ participant E as Express
+ participant A as requireAuth
+ participant R as Route handler
+ participant S as Domain / repository
+ participant D as PostgreSQL
+ participant C as Redis
+ UI->>E: JSON request + cookie
+ E->>E: CORS, auth routing, JSON parse
+ E->>A: protected route
+ A->>D: session lookup via auth
+ D-->>A: user identity
+ A->>R: req.userId set
+ R->>S: validate, authorize, execute
+ S->>D: repository query/transaction
+ S->>C: live state if required
+ D-->>S: result
+ C-->>S: live result
+ S-->>R: domain result
+ R-->>UI: JSON response/status

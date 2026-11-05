@@ -1,0 +1,10 @@
+flowchart TB
+ P[Next App Router pages] --> C[Canvas / Dashboard / Room components]
+ C --> H[Canvas hooks: interaction, persistence, sync]
+ H --> S[Scene, selection, style, history state]
+ H --> E[packages/engine: tools, geometry, renderer]
+ H --> L[IndexedDB, file import/export, API helpers]
+ L --> API[HTTP API]
+ H --> SYNC[roomSync / outbox / syncBridge]
+ SYNC --> WS[WebSocket server]
+ AUTH[auth client] --> API

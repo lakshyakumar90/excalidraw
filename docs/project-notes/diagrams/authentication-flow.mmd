@@ -1,0 +1,15 @@
+sequenceDiagram
+ participant B as Browser
+ participant API as Express / Better Auth
+ participant DB as PostgreSQL
+ B->>API: sign up or sign in credentials
+ API->>DB: read/write user, account and session
+ DB-->>API: persisted result
+ API-->>B: response and session cookie
+ B->>API: protected request with cookie
+ API->>DB: getSessionFromHeaders lookup
+ DB-->>API: user/session or none
+ API-->>B: route response or 401
+ B->>API: sign out
+ API->>DB: invalidate session
+ API-->>B: result / clear cookie
