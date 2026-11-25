@@ -12,6 +12,10 @@ import { LaserOverlay } from "@/components/presence/LaserOverlay";
 import { Canvas } from "@/components/canvas/Canvas";
 import { CanvasControls } from "@/components/canvas/CanvasControls";
 import { StylePanel } from "@/components/styles/StylePanel";
+import { useCanvasTheme } from "@/lib/theme";
+import { FloatingCollabBar } from "./FloatingCollabBar";
+import { BoardPresetSwitcher } from "@/components/toolbar/BoardPresetSwitcher";
+import type { BoardPresetId } from "@repo/common";
 
 export function CanvasWorkspace({
   savedScene,
@@ -32,6 +36,9 @@ export function CanvasWorkspace({
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
   const [sharing, setSharing] = useState(false);
+  const { theme, toggleTheme } = useCanvasTheme();
+  const [boardPreset, setBoardPreset] = useState<BoardPresetId>("excali-font");
+  const [followingConnectionId, setFollowingConnectionId] = useState<string | null>(null);
   useEffect(() => {
     const onAccessChanged = (event: Event) => {
       const role = (event as CustomEvent<{ role: RoomRole | null }>).detail
@@ -67,12 +74,36 @@ export function CanvasWorkspace({
     }
   }
   return (
-    <main className="editor-workspace fixed inset-0 overflow-hidden bg-[#faf9f6]">
+    <main className="editor-workspace fixed inset-0 overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)]">
       <Canvas savedScene={savedScene} readOnly={readOnly} />
       <LaserOverlay />
       <EditorExtras readOnly={readOnly} roomId={savedScene?.roomSync?.roomId} />
       <div data-editor-chrome>
         <CanvasControls readOnly={readOnly} />
+        <div className="fixed bottom-4 right-4 z-40 hidden md:block">
+          <BoardPresetSwitcher
+            value={boardPreset}
+            onChange={(next) => {
+              setBoardPreset(next);
+              window.dispatchEvent(new CustomEvent("board-preset-changed", { detail: { presetId: next } }));
+            }}
+          />
+        </div>
+        <FloatingCollabBar
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          followingConnectionId={followingConnectionId}
+          onToggleFollow={(connId) =>
+            setFollowingConnectionId((cur) => (cur === connId ? null : connId))
+          }
+          onOpenShare={savedScene?.id && !savedScene.roomSync ? () => void shareCurrentScene() : undefined}
+          onOpenAiPalette={() => window.dispatchEvent(new CustomEvent("open-ai-palette"))}
+          onOpenDiagramCode={() => window.dispatchEvent(new CustomEvent("toggle-diagram-code"))}
+          onOpenSlides={() => window.dispatchEvent(new CustomEvent("toggle-slides-panel"))}
+          onOpenHistory={() => window.dispatchEvent(new CustomEvent("toggle-version-history"))}
+          onOpenMcp={() => window.dispatchEvent(new CustomEvent("open-mcp-modal"))}
+          roomId={savedScene?.roomSync?.roomId}
+        />
         {!readOnly && <StylePanel />}
         <EditorHeader
           sceneTitle={savedScene?.title || undefined}
