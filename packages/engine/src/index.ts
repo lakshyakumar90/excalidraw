@@ -8,3 +8,5 @@ export * from "./text";
 export * from "./element";
 
 export * from "./slides/slides";
+
+export * from "./diagram/mermaidParser";
