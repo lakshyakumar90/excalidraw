@@ -42,6 +42,24 @@ export async function connectApplicationDatabase() {
   await db.connect();
 }
 
+/** Deep liveness/readiness probe executing `SELECT 1` with a bounded timeout. */
+export async function pingDatabase(timeoutMs = 2_000): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const ok = await Promise.race<boolean>([
+      authPool.query("SELECT 1").then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]);
+    return ok;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export {
   acceptEmailRoomInvite,
   rejectEmailRoomInvite,

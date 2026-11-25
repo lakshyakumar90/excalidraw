@@ -246,7 +246,13 @@ function dbQueries(store: SyncDb): CollaborationQueries {
 export interface CollaborationServiceOptions {
   store: SyncDb;
   queries?: CollaborationQueries;
-  liveStore?: Pick<RoomRedis, "readSnapshot" | "writeSnapshot" | "warmSnapshot">;
+  liveStore?: Pick<RoomRedis, "readSnapshot" | "writeSnapshot" | "warmSnapshot"> &
+    Partial<
+      Pick<
+        RoomRedis,
+        "claimMutation" | "getMutationResult" | "storeMutationResult"
+      >
+    >;
   clock?: () => Date;
 }
 
@@ -410,22 +416,73 @@ export function createCollaborationService(options: CollaborationServiceOptions)
     if (!isValidMutationId(input.mutationId)) {
       return { saved: false, revision: null, winners: [], corrected: [], reason: "invalid" };
     }
-    const cached = seenMutations.get(input.mutationId);
-    if (cached) {
-      if (liveStore && cached.revision !== null) {
+    async function resolveCachedReplay(cachedResult: CommitResult): Promise<CommitResult> {
+      if (liveStore && cachedResult.revision !== null) {
         const snapshot = await liveStore.readSnapshot(input.sceneId);
         const durableHead = snapshot
           ? null
           : await queries.readHead(input.sceneId);
         return {
-          ...cached,
+          ...cachedResult,
           persisted: snapshot
-            ? snapshot.persistedRevision >= cached.revision
-            : !!durableHead && durableHead.revision >= cached.revision,
+            ? snapshot.persistedRevision >= cachedResult.revision
+            : !!durableHead && durableHead.revision >= cachedResult.revision,
           replayed: true,
         };
       }
-      return { ...cached, replayed: true };
+      return { ...cachedResult, replayed: true };
+    }
+
+    const localCached = seenMutations.get(input.mutationId);
+    if (localCached) {
+      return resolveCachedReplay(localCached);
+    }
+
+    // Distributed multi-replica idempotency via Redis (`SET collab:mut:<sceneId>:<mutationId> 1 EX 300 NX`)
+    // with clean fallback to the process-local Map when Redis is unavailable.
+    let distributedClaimed = true;
+    if (liveStore?.getMutationResult && liveStore?.claimMutation) {
+      try {
+        const remoteCached = await liveStore.getMutationResult<CommitResult>(
+          input.sceneId,
+          input.mutationId,
+        );
+        if (remoteCached) {
+          remember(input.mutationId, remoteCached);
+          return resolveCachedReplay(remoteCached);
+        }
+        distributedClaimed = await liveStore.claimMutation(
+          input.sceneId,
+          input.mutationId,
+        );
+        if (!distributedClaimed) {
+          // Another replica already claimed this mutationId; check if its result is stored.
+          const raceResult = await liveStore.getMutationResult<CommitResult>(
+            input.sceneId,
+            input.mutationId,
+          );
+          if (raceResult) {
+            remember(input.mutationId, raceResult);
+            return resolveCachedReplay(raceResult);
+          }
+          const snapshot = await liveStore.readSnapshot(input.sceneId);
+          return {
+            saved: true,
+            persisted: snapshot
+              ? snapshot.persistedRevision >= snapshot.revision
+              : false,
+            revision: snapshot?.revision ?? null,
+            winners: [],
+            corrected: [],
+            replayed: true,
+          };
+        }
+      } catch (error) {
+        console.error(
+          "Redis mutation dedup unavailable, falling back to local map:",
+          error,
+        );
+      }
     }
     let payloadBytes = 0;
     try {
@@ -530,14 +587,22 @@ export function createCollaborationService(options: CollaborationServiceOptions)
         }
       }
     }
-    return remember(input.mutationId, {
+    const result: CommitResult = {
       saved: true,
       persisted: written.persisted,
       revision: written.revision,
       winners,
       corrected,
       replayed: false,
-    });
+    };
+    if (liveStore?.storeMutationResult) {
+      await liveStore
+        .storeMutationResult(input.sceneId, input.mutationId, result)
+        .catch((error: unknown) => {
+          console.error("Failed to store distributed mutation result:", error);
+        });
+    }
+    return remember(input.mutationId, result);
   }
 
   async function attachFile(input: AttachFileInput): Promise<AttachFileResult> {

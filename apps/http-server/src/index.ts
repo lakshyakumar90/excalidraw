@@ -1,9 +1,9 @@
-import { connectDatabase } from "@repo/db";
+import { connectDatabase, pingDatabase } from "@repo/db";
 import { assertAuthConfiguration } from "@repo/auth";
 import { configureCollaborationLiveStore } from "@repo/backend-common";
 import { openRoomRedis } from "@repo/redis";
 import { configureInvitationRateLimiter } from "./invitationRateLimit.js";
-import { app } from "./app.js";
+import { app, configureHealthChecks } from "./app.js";
 
 async function startServer() {
   assertAuthConfiguration();
@@ -14,6 +14,10 @@ async function startServer() {
     await roomRedis.redis.ping();
     configureCollaborationLiveStore(roomRedis);
     configureInvitationRateLimiter(roomRedis);
+    configureHealthChecks({
+      pingDb: () => pingDatabase(2_000),
+      pingRedis: () => roomRedis.ping(2_000),
+    });
 
     const port = Number(process.env.PORT ?? 5000);
     const server = app.listen(port, () => {

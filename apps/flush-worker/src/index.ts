@@ -8,6 +8,10 @@ import {
 import { openRoomRedis, ROOM_SNAPSHOT_KEEP } from "@repo/redis";
 import { startMaintenance } from "./maintenance.js";
 
+const FLUSH_WORKER_CONCURRENCY = Number(
+  process.env.FLUSH_WORKER_CONCURRENCY ?? 8,
+);
+
 async function start() {
   await connectApplicationDatabase();
   const rooms = openRoomRedis();
@@ -24,7 +28,7 @@ async function start() {
       );
     }
     await retainLatestSceneRevisions(db, snapshot.sceneId, ROOM_SNAPSHOT_KEEP);
-  }, 1);
+  }, FLUSH_WORKER_CONCURRENCY);
   worker.on("failed", (job, error) => {
     console.error(
       `Room flush failed${job ? ` for ${job.data.sceneId}` : ""}:`,
@@ -82,7 +86,9 @@ async function start() {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
-  console.log("Room snapshot flush worker is running");
+  console.log(
+    `Room snapshot flush worker is running (concurrency=${FLUSH_WORKER_CONCURRENCY})`,
+  );
 }
 
 void start().catch((error: unknown) => {

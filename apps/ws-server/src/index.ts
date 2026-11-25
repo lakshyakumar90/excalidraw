@@ -7,7 +7,7 @@ import {
   getAllowedWsOrigins,
 } from "@repo/backend-common";
 import { openRoomRedis } from "@repo/redis";
-import { connectApplicationDatabase, db, getRoomSceneAccess } from "@repo/db";
+import { connectApplicationDatabase, db, getRoomSceneAccess, pingDatabase } from "@repo/db";
 import { startPresenceServer } from "./server.js";
 
 async function hasRoomAccess(roomId: number, userId: string): Promise<boolean> {
@@ -46,6 +46,7 @@ async function startServer() {
       (await getRoomSceneAccess(db, roomId, userId))?.role ?? null,
     service: createCollaborationService({ store: db, liveStore: roomRedis }),
     roomRedis,
+    checkDbHealth: () => pingDatabase(2_000),
     allowedOrigins: getAllowedWsOrigins(),
     host: "0.0.0.0",
     port,

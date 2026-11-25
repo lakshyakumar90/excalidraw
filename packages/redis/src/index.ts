@@ -7,6 +7,8 @@ export const ROOM_SNAPSHOT_KEEP = 20;
 export const ROOM_DEBOUNCE_MS = 5_000;
 export const ROOM_MAX_WAIT_MS = 30_000;
 export const ROOM_REDIS_GRACE_MS = 60_000;
+export const MUTATION_DEDUP_TTL_SECONDS = 300;
+export const FLUSH_LOCK_TTL_MS = 15_000;
 
 export interface RoomSnapshot {
   sceneId: string;
@@ -37,6 +39,19 @@ const roomConnectionsKey = (sceneId: string) =>
   `collab:room:${encodeURIComponent(sceneId)}:connections`;
 const roomParticipantsKey = (sceneId: string) =>
   `collab:room:${encodeURIComponent(sceneId)}:participants`;
+const mutationKey = (sceneId: string, mutationId: string) =>
+  `collab:mut:${encodeURIComponent(sceneId)}:${encodeURIComponent(mutationId)}`;
+const mutationResultKey = (sceneId: string, mutationId: string) =>
+  `collab:mut-res:${encodeURIComponent(sceneId)}:${encodeURIComponent(mutationId)}`;
+const flushLockKey = (sceneId: string) =>
+  `lock:flush:${encodeURIComponent(sceneId)}`;
+
+const RELEASE_LOCK_LUA = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
 const DIRTY_KEY = "collab:dirty-rooms";
 const METRIC_ROOMS_KEY = "collab:metric-rooms";
 const EVENTS_CHANNEL = "collab:events";
@@ -555,6 +570,94 @@ export class RoomRedis {
     return count;
   }
 
+  /** Deep health probe for Redis with a bounded timeout. */
+  async ping(timeoutMs = 2_000): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race<string | null>([
+        this.redis.ping(),
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), timeoutMs);
+        }),
+      ]);
+      return result === "PONG";
+    } catch {
+      return false;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Distributed idempotency claim using `SET collab:mut:<sceneId>:<mutationId> 1 EX 300 NX`.
+   * Returns `true` if this replica claimed the mutation first, `false` if already seen.
+   */
+  async claimMutation(
+    sceneId: string,
+    mutationId: string,
+    ttlSeconds = MUTATION_DEDUP_TTL_SECONDS,
+  ): Promise<boolean> {
+    const result = await this.redis.set(
+      mutationKey(sceneId, mutationId),
+      "1",
+      "EX",
+      ttlSeconds,
+      "NX",
+    );
+    return result === "OK";
+  }
+
+  async getMutationResult<T = unknown>(
+    sceneId: string,
+    mutationId: string,
+  ): Promise<T | null> {
+    const raw = await this.redis.get(mutationResultKey(sceneId, mutationId));
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  async storeMutationResult(
+    sceneId: string,
+    mutationId: string,
+    result: unknown,
+    ttlSeconds = MUTATION_DEDUP_TTL_SECONDS,
+  ): Promise<void> {
+    await this.redis
+      .multi()
+      .set(mutationKey(sceneId, mutationId), "1", "EX", ttlSeconds)
+      .set(
+        mutationResultKey(sceneId, mutationId),
+        JSON.stringify(result),
+        "EX",
+        ttlSeconds,
+      )
+      .exec();
+  }
+
+  /** Per-room distributed lock so concurrent flush workers never race the same room. */
+  async acquireFlushLock(
+    sceneId: string,
+    ttlMs = FLUSH_LOCK_TTL_MS,
+  ): Promise<string | null> {
+    const token = randomUUID();
+    const res = await this.redis.set(
+      flushLockKey(sceneId),
+      token,
+      "PX",
+      ttlMs,
+      "NX",
+    );
+    return res === "OK" ? token : null;
+  }
+
+  async releaseFlushLock(sceneId: string, token: string): Promise<void> {
+    await this.redis.eval(RELEASE_LOCK_LUA, 1, flushLockKey(sceneId), token);
+  }
+
   async startWorker(
     persist: (snapshot: RoomSnapshot) => Promise<void>,
     concurrency = 1,
@@ -562,20 +665,32 @@ export class RoomRedis {
     const worker = new Worker(
       ROOM_FLUSH_QUEUE,
       async (job: Job<{ sceneId: string }>) => {
-        const snapshot = await this.readSnapshot(job.data.sceneId);
-        if (!snapshot || snapshot.revision <= snapshot.persistedRevision)
+        const lockToken = await this.acquireFlushLock(job.data.sceneId);
+        if (!lockToken) {
+          // Another worker holds the flush lock for this room; re-schedule shortly.
+          await this.scheduleFlush(job.data.sceneId, Date.now(), false);
           return;
-        const startedAt = Date.now();
-        await persist(snapshot);
-        await this.markPersisted(snapshot.sceneId, snapshot.revision);
-        console.info(
-          JSON.stringify({
-            metric: "room_snapshot_flush",
-            sceneId: snapshot.sceneId,
-            revision: snapshot.revision,
-            latencyMs: Date.now() - startedAt,
-          }),
-        );
+        }
+        try {
+          const snapshot = await this.readSnapshot(job.data.sceneId);
+          if (!snapshot || snapshot.revision <= snapshot.persistedRevision)
+            return;
+          const startedAt = Date.now();
+          await persist(snapshot);
+          await this.markPersisted(snapshot.sceneId, snapshot.revision);
+          console.info(
+            JSON.stringify({
+              metric: "room_snapshot_flush",
+              sceneId: snapshot.sceneId,
+              revision: snapshot.revision,
+              latencyMs: Date.now() - startedAt,
+            }),
+          );
+        } finally {
+          await this.releaseFlushLock(job.data.sceneId, lockToken).catch(
+            () => undefined,
+          );
+        }
       },
       {
         // Let BullMQ own and close its connections. A supplied Redis instance

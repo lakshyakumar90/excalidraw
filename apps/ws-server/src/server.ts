@@ -59,6 +59,8 @@ export interface PresenceServerOptions {
   /** Durable collaboration authority; absent means sync unavailable. */
   service?: Pick<CollaborationService, "applyCommit" | "readSyncScene">;
   roomRedis?: RoomRedis;
+  /** Deep DB health check (`SELECT 1` with 2s timeout) for `/health`. */
+  checkDbHealth?: () => Promise<boolean>;
   allowedOrigins?: string[];
   heartbeatIntervalMs?: number;
   membershipRecheckMs?: number;
@@ -195,8 +197,29 @@ export async function startPresenceServer(
 
   const httpServer: Server = createServer((request, response) => {
     if (request.url === "/" || request.url === "/health") {
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ status: "ok", service: "websocket" }));
+      void (async () => {
+        const checks: { postgres: "ok" | "error" | "skipped"; redis: "ok" | "error" | "skipped" } = {
+          postgres: options.checkDbHealth ? "ok" : "skipped",
+          redis: options.roomRedis ? "ok" : "skipped",
+        };
+        const [dbOk, redisOk] = await Promise.all([
+          options.checkDbHealth ? options.checkDbHealth().catch(() => false) : Promise.resolve(true),
+          options.roomRedis ? options.roomRedis.ping(2_000).catch(() => false) : Promise.resolve(true),
+        ]);
+        if (options.checkDbHealth) checks.postgres = dbOk ? "ok" : "error";
+        if (options.roomRedis) checks.redis = redisOk ? "ok" : "error";
+        const healthy = dbOk && redisOk;
+        response.writeHead(healthy ? 200 : 503, {
+          "Content-Type": "application/json",
+        });
+        response.end(
+          JSON.stringify({
+            status: healthy ? "ok" : "degraded",
+            service: "websocket",
+            checks,
+          }),
+        );
+      })();
       return;
     }
     response.writeHead(404);
