@@ -32,6 +32,14 @@ export function ToolIcon({ type }: { type: ToolType }) {
         </>
       );
       break;
+    case "sticky":
+      shape = (
+        <>
+          <path d="M5 3h14v12l-4 6H5V3Z" />
+          <path d="M19 15h-4v6M8 8h8M8 12h5" />
+        </>
+      );
+      break;
     case "hand":
       shape = (
         <path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10 4.5a1.5 1.5 0 0 1 3 0V10 5.5a1.5 1.5 0 0 1 3 0V12l.7-1.1a1.6 1.6 0 0 1 2.8 1.4l-2 5A4 4 0 0 1 14.8 20h-2.1a4 4 0 0 1-3.1-1.5L6.2 14a1.7 1.7 0 0 1 2.5-2.2L10 13" />

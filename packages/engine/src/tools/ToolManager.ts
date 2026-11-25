@@ -22,6 +22,7 @@ export type ToolType =
   | "curved-line"
   | "freedraw"
   | "selection"
+  | "sticky"
   | "text"
   | "hand"
   | "eraser";

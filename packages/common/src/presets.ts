@@ -1,5 +1,6 @@
 export type BoardPresetId =
   | "black-and-white"
+  | "sketch"
   | "excali-font"
   | "chalk-bold"
   | "clean-sketch";
@@ -24,7 +25,7 @@ export interface BoardPresetConfig {
 export const BOARD_PRESETS: Readonly<Record<BoardPresetId, BoardPresetConfig>> = {
   "black-and-white": {
     id: "black-and-white",
-    name: "Black & White",
+    name: "B/W",
     description: "High-contrast monochrome ink with subtle dot grid",
     fontFamily: "Inter, sans-serif",
     cssFontVar: "var(--font-inter)",
@@ -35,6 +36,20 @@ export const BOARD_PRESETS: Readonly<Record<BoardPresetId, BoardPresetConfig>> =
     dotGrid: true,
     chalkTexture: false,
     palette: ["#111827", "#374151", "#6B7280", "#9CA3AF", "#F1F5F9"],
+  },
+  sketch: {
+    id: "sketch",
+    name: "Sketch",
+    description: "Loose hand-drawn strokes with a warm marker typeface",
+    fontFamily: "Caveat, cursive",
+    cssFontVar: "var(--font-caveat)",
+    defaultStrokeColor: "#1E293B",
+    defaultBackgroundColor: "transparent",
+    strokeWidth: 2,
+    roughness: 1.2,
+    dotGrid: false,
+    chalkTexture: false,
+    palette: ["#1E293B", "#F97316", "#3B82F6", "#10B981", "#A855F7", "#EF4444"],
   },
   "excali-font": {
     id: "excali-font",
@@ -52,7 +67,7 @@ export const BOARD_PRESETS: Readonly<Record<BoardPresetId, BoardPresetConfig>> =
   },
   "chalk-bold": {
     id: "chalk-bold",
-    name: "Chalk Bold",
+    name: "Chalkboard",
     description: "Deep chalkboard canvas with thick pastel chalk strokes",
     fontFamily: "'Architects Daughter', cursive",
     cssFontVar: "var(--font-chalk)",
@@ -62,13 +77,13 @@ export const BOARD_PRESETS: Readonly<Record<BoardPresetId, BoardPresetConfig>> =
     roughness: 1.8,
     dotGrid: false,
     chalkTexture: true,
-    canvasBackgroundDark: "#141A18",
-    canvasBackgroundLight: "#1B2420",
+    canvasBackgroundDark: "#0E1210",
+    canvasBackgroundLight: "#141A17",
     palette: ["#F8FAFC", "#FEF08A", "#BAE6FD", "#FDA4AF", "#A7F3D0"],
   },
   "clean-sketch": {
     id: "clean-sketch",
-    name: "Clean Sketch",
+    name: "Clean",
     description: "Minimal architectural precision with crisp sans/mono type",
     fontFamily: "Inter, 'JetBrains Mono', sans-serif",
     cssFontVar: "var(--font-inter)",
@@ -83,18 +98,19 @@ export const BOARD_PRESETS: Readonly<Record<BoardPresetId, BoardPresetConfig>> =
 };
 
 export const BOARD_PRESET_LIST: readonly BoardPresetConfig[] = [
-  BOARD_PRESETS["black-and-white"],
-  BOARD_PRESETS["excali-font"],
-  BOARD_PRESETS["chalk-bold"],
+  BOARD_PRESETS["sketch"],
   BOARD_PRESETS["clean-sketch"],
+  BOARD_PRESETS["chalk-bold"],
+  BOARD_PRESETS["excali-font"],
+  BOARD_PRESETS["black-and-white"],
 ];
 
 export function isBoardPresetId(value: unknown): value is BoardPresetId {
   return typeof value === "string" && Object.hasOwn(BOARD_PRESETS, value);
 }
 
-export function getBoardPreset(presetId: BoardPresetId = "excali-font"): BoardPresetConfig {
-  return isBoardPresetId(presetId) ? BOARD_PRESETS[presetId] : BOARD_PRESETS["excali-font"];
+export function getBoardPreset(presetId: BoardPresetId = "sketch"): BoardPresetConfig {
+  return isBoardPresetId(presetId) ? BOARD_PRESETS[presetId] : BOARD_PRESETS["sketch"];
 }
 
 /**
@@ -130,7 +146,9 @@ export function applyBoardPresetToElements<
       strokeColor: nextColor,
       strokeWidth: nextStrokeWidth,
       roughness: preset.roughness,
-      ...(el.type === "text" ? { fontFamily: preset.fontFamily } : {}),
+      ...(el.type === "text" || el.type === "sticky"
+        ? { fontFamily: preset.fontFamily }
+        : {}),
       version: (el.version ?? 0) + 1,
       versionNonce: ((el.versionNonce ?? 1) * 1664525 + 1013904223) >>> 0,
     };

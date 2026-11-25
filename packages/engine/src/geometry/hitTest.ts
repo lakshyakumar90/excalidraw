@@ -117,7 +117,10 @@ function isPointInPolygon(point: Point, polygon: readonly Point[]): boolean {
 }
 
 function hitRectangle(
-  element: Extract<Element, { type: "frame" | "rectangle" | "text" | "image" }>,
+  element: Extract<
+    Element,
+    { type: "frame" | "rectangle" | "text" | "sticky" | "image" }
+  >,
   point: Point,
   tolerance: number,
 ): boolean {
@@ -307,6 +310,7 @@ export function isPointOnElement(
     case "frame":
     case "rectangle":
     case "text":
+    case "sticky":
     case "image":
       return hitRectangle(element, point, tolerance);
 

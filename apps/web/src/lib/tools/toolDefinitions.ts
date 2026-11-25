@@ -2,6 +2,7 @@ import type { ToolType } from "@repo/engine";
 
 export const TOOL_LABELS: Record<ToolType, string> = {
   selection: "Select",
+  sticky: "Sticky note",
   text: "Text",
   hand: "Hand",
   rectangle: "Rectangle",
@@ -21,6 +22,7 @@ export const TOOL_SHORTCUTS: Record<ToolType, string> = {
   frame: "S",
   laser: "K",
   selection: "V",
+  sticky: "N",
   text: "T",
   hand: "H",
   rectangle: "R",

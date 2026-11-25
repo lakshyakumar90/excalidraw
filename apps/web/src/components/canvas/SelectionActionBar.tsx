@@ -9,6 +9,7 @@ import { eyedropperStore } from "@/lib/styles/eyedropperStore";
 import { colorHistoryStore } from "@/lib/styles/colorHistoryStore";
 import { historyStore } from "@/lib/history/historyStore";
 import { commitHistoryEntry } from "@/lib/sync/commits";
+import { setTextFontFamily } from "@/lib/selection/textFont";
 
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 
@@ -392,19 +393,24 @@ export function SelectionActionBar({
               </div>
             </div>
 
-            {selectedElements.some((item) => item.type === "text") && (
+            {selectedElements.some(
+              (item) => item.type === "text" || item.type === "sticky",
+            ) && (
               <div>
                 <div className="mb-1 text-[11px] font-semibold text-[var(--text-muted)]">Font</div>
                 <select
                   aria-label="Font family"
-                  value={selectedElements.find((item) => item.type === "text")?.fontFamily ?? ""}
+                  value={
+                    selectedElements.find(
+                      (item) => item.type === "text" || item.type === "sticky",
+                    )?.fontFamily ?? ""
+                  }
                   onChange={(event) => {
                     const fontFamily = event.target.value;
                     if (!fontFamily) return;
-                    const { changes } = historyStore.commitUpdate(() => {
-                      for (const item of selectedElements)
-                        if (item.type === "text") scene.mutateElement(item.id, { fontFamily });
-                    });
+                    const { changes } = historyStore.commitUpdate(() =>
+                      setTextFontFamily(selectedElements, fontFamily),
+                    );
                     commitHistoryEntry(changes, "local");
                   }}
                   className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2 py-1 text-xs text-[var(--text-primary)]"

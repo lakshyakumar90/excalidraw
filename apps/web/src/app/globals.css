@@ -4,10 +4,10 @@
 
 :root,
 [data-theme="dark"] {
-  --bg-canvas: #111111;
-  --bg-surface: #161616;
-  --bg-elevated: #1c1c1c;
-  --bg-hover: #262626;
+  --bg-canvas: #080808;
+  --bg-surface: #101010;
+  --bg-elevated: #171717;
+  --bg-hover: #222222;
   --border-subtle: rgba(255, 255, 255, 0.09);
   --border-soft: rgba(255, 255, 255, 0.16);
   --text-primary: #f4f4f5;
@@ -20,6 +20,11 @@
   --danger-surface: rgba(239, 68, 68, 0.12);
   --success: #22c55e;
   --success-surface: rgba(34, 197, 94, 0.12);
+
+  /* Sticky-note editing: keep the canvas-drawn text visible and hide browser selection paint. */
+  .sticky-text-input::selection {
+    background: transparent;
+  }
 
   /* Legacy aliases kept in sync for existing components */
   --background: var(--bg-canvas);

@@ -58,7 +58,7 @@ describe("dark/light theme engine", () => {
   });
 
   it("exposes semantic dark and light canvas palettes", () => {
-    expect(getCanvasThemePalette("dark").background).toBe("#0D1117");
+    expect(getCanvasThemePalette("dark").background).toBe("#080808");
     expect(getCanvasThemePalette("light").background).toBe("#FFFFFF");
   });
 });

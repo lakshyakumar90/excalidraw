@@ -27,21 +27,28 @@ export function resizeSelectedElement(
     const scaleY = Math.max(0.05, (resized.height ?? 0) / originalHeight);
     const horizontal = handle.includes("w") || handle.includes("e");
     const vertical = handle.includes("n") || handle.includes("s");
-    const rawFontScale =
+    // Corner handles scale the font; side handles only change the box.
+    // Vertical-only handles still scale the font so the text can fit the new
+    // height. In every case the box height is derived from the text so it
+    // grows and shrinks cleanly instead of being stuck at the old size.
+    const fontScale =
       horizontal && vertical
         ? Math.sqrt(scaleX * scaleY)
-        : horizontal
-          ? scaleX
-          : scaleY;
-    const fontSize = Math.max(1, original.fontSize * rawFontScale);
+        : vertical
+          ? scaleY
+          : 1;
+    const fontSize = Math.max(
+      1,
+      Math.min(500, original.fontSize * fontScale),
+    );
     const width = Math.max(1, resized.width ?? 0);
-    const textHeight = measureText(
+    const measured = measureText(
       original.text,
       fontSize,
       original.fontFamily,
       width,
-    ).height;
-    const height = Math.max(resized.height ?? 0, textHeight);
+    );
+    const height = Math.max(1, measured.height);
     const resizedFromTop = handle.includes("n");
     resized = {
       ...resized,
@@ -49,7 +56,7 @@ export function resizeSelectedElement(
       width,
       height,
       y: resizedFromTop
-        ? original.y + (original.height ?? 0) - height
+        ? original.y + originalHeight - height
         : resized.y,
       wrapText: true,
     };

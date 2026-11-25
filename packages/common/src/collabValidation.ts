@@ -89,6 +89,7 @@ function isPreviewElement(value: unknown): value is PreviewWireElement {
       "arrow",
       "freedraw",
       "text",
+      "sticky",
       "image",
     ].includes(String(value.type))
   )

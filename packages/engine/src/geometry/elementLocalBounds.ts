@@ -8,6 +8,7 @@ export function getElementLocalBounds(element: Element): Bounds {
     case "ellipse":
     case "diamond":
     case "text":
+    case "sticky":
     case "image":
       return {
         minX: 0,

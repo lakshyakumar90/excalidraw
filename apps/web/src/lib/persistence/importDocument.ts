@@ -14,6 +14,7 @@ const ELEMENT_TYPES = new Set([
   "arrow",
   "freedraw",
   "text",
+  "sticky",
   "image",
 ]);
 

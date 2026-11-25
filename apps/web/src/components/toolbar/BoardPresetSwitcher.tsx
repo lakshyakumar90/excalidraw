@@ -23,6 +23,10 @@ export function BoardPresetSwitcher({
   onFontsReady,
 }: BoardPresetSwitcherProps) {
   const [hovered, setHovered] = useState(false);
+  const shortLabels: Partial<Record<BoardPresetId, string>> = {
+    "excali-font": "Aa",
+    "black-and-white": "B/W",
+  };
 
   useEffect(() => {
     if (typeof document === "undefined" || !("fonts" in document)) return;
@@ -65,7 +69,7 @@ export function BoardPresetSwitcher({
                 : "mx-0 max-w-0 overflow-hidden px-0 opacity-0 pointer-events-none"
             }`}
           >
-            {preset.name}
+            {shortLabels[preset.id] ?? preset.name}
           </button>
         );
       })}

@@ -40,7 +40,10 @@ export function toPreviewElement(element: Element): PreviewWireElement | null {
       )
       .map((point) => ({ x: point.x, y: point.y }));
   }
-  if (element.type === "text" && typeof element.text === "string") {
+  if (
+    (element.type === "text" || element.type === "sticky") &&
+    typeof element.text === "string"
+  ) {
     preview.text = element.text;
   }
   return preview;

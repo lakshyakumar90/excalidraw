@@ -20,6 +20,7 @@ import { applyBoardPresetToElements, getBoardPreset, isBoardPresetId, type Board
 import { animateViewportTransition, computeSlideViewport, extractOrderedSlides, reorderSlides, type SlideDescriptor } from "@repo/engine";
 import { historyStore } from "@/lib/history/historyStore";
 import { scene } from "@/lib/scene/scene";
+import { setTextFontFamily } from "@/lib/selection/textFont";
 import { commitHistoryEntry } from "@/lib/sync/commits";
 import { getCurrentViewport, setCurrentViewport } from "@/lib/persistence/viewportStore";
 import { toolManager } from "@/lib/tools/toolManager";
@@ -61,7 +62,7 @@ export function CanvasWorkspace({
   );
   const initialPreset = savedScene?.appState?.boardPreset;
   const [boardPreset, setBoardPreset] = useState<BoardPresetId>(
-    isBoardPresetId(initialPreset) ? initialPreset : "excali-font",
+    isBoardPresetId(initialPreset) ? initialPreset : "sketch",
   );
   const [presence, setPresence] = useState<{
     participants: ActiveCollaborator[];
@@ -311,6 +312,7 @@ export function CanvasWorkspace({
             if (restyle) commit(() => {
               const elements = scene.getElements().filter((item) => !item.isDeleted && item.type !== "image");
               for (const item of applyBoardPresetToElements(elements, next)) scene.mutateElement(item.id, item);
+              setTextFontFamily(elements, getBoardPreset(next).fontFamily);
             });
           }}
           syncLabel={

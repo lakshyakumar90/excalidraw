@@ -1,9 +1,15 @@
 import { useRef, useState } from "react";
 import type { Viewport } from "@repo/common";
-import { getArrowMidpoint, measureText, sceneToViewport } from "@repo/engine";
+import {
+  getArrowMidpoint,
+  measureText,
+  sceneToViewport,
+  STICKY_TEXT_COLOR,
+} from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
 import { historyStore } from "@/lib/history/historyStore";
 import { commitHistoryEntry } from "@/lib/sync/commits";
+import { toolManager } from "@/lib/tools/toolManager";
 
 export interface TextEditorState {
   elementId: string;
@@ -22,7 +28,8 @@ export interface TextEditorState {
 }
 
 export function commitTextElement(editor: TextEditorState | null): void {
-  if (editor && editor.value.length === 0) {
+  const element = editor ? scene.getElement(editor.elementId) : undefined;
+  if (editor && editor.value.length === 0 && element?.type !== "sticky") {
     scene.removeElement(editor.elementId);
   }
   commitHistoryEntry(historyStore.endCapture(), "local");
@@ -47,24 +54,31 @@ export function TextEditorOverlay({
     viewport,
   );
   const textElement = scene.getElement(editor.elementId);
-  const caretColor =
-    textElement?.type === "text"
+  const isSticky = textElement?.type === "sticky";
+  const caretColor = isSticky
+    ? STICKY_TEXT_COLOR
+    : textElement?.type === "text"
       ? (textElement.strokeColor ?? "#1e1e1e")
       : "#1e1e1e";
+  const wrapWidth =
+    editor.wrapText || editor.containerId || isSticky
+      ? editor.inputWidth
+      : undefined;
   const textLayout = measureText(
     editor.value,
     editor.fontSize,
     editor.fontFamily,
-    editor.wrapText || editor.containerId ? editor.inputWidth : undefined,
+    wrapWidth,
   );
+  const boxHeight = isSticky
+    ? editor.inputHeight
+    : (textElement?.height ?? textLayout.height);
   const verticalOffset =
     editor.verticalAlign === "middle"
-      ? ((textElement?.height ?? textLayout.height) - textLayout.height) / 2
+      ? (boxHeight - textLayout.height) / 2
       : editor.verticalAlign === "bottom"
-        ? (textElement?.height ?? textLayout.height) - textLayout.height
+        ? boxHeight - textLayout.height
         : 0;
-  const wrapWidth =
-    editor.wrapText || editor.containerId ? editor.inputWidth : undefined;
   const caretPrefix = editor.value.slice(0, caretIndex);
   const caretLayout = measureText(
     caretPrefix,
@@ -95,6 +109,13 @@ export function TextEditorOverlay({
     commitTextElement(current);
     editorRef.current = null;
     onClose();
+    // Creating a text or sticky-note element is a creation gesture too:
+    // return to the select arrow so the new element can be moved immediately.
+    queueMicrotask(() => {
+      if (toolManager.getActiveTool() !== "selection") {
+        toolManager.setActiveTool("selection");
+      }
+    });
   };
 
   const frame = scene
@@ -132,7 +153,9 @@ export function TextEditorOverlay({
           aria-label="Text input"
           autoFocus
           defaultValue={initialEditor.value}
-          wrap={editor.wrapText || editor.containerId ? "soft" : "off"}
+          wrap={
+            editor.wrapText || editor.containerId || isSticky ? "soft" : "off"
+          }
           onFocus={(event) => {
             const end = event.currentTarget.value.length;
             event.currentTarget.setSelectionRange(end, end);
@@ -149,12 +172,16 @@ export function TextEditorOverlay({
             const container = current.containerId
               ? scene.getElement(current.containerId)
               : undefined;
+            const sticky = scene.getElement(current.elementId);
+            const noteText = sticky?.type === "sticky" ? sticky : undefined;
             const maxWidth =
-              container?.type === "rectangle"
-                ? (container.width ?? 0)
-                : current.wrapText
-                  ? current.inputWidth
-                  : undefined;
+              noteText
+                ? current.inputWidth
+                : container?.type === "rectangle"
+                  ? (container.width ?? 0)
+                  : current.wrapText
+                    ? current.inputWidth
+                    : undefined;
             const measured = measureText(
               value,
               current.fontSize,
@@ -179,35 +206,36 @@ export function TextEditorOverlay({
             const containerHeight =
               container?.type === "rectangle"
                 ? Math.max(container.height ?? 0, measured.height)
-                : current.wrapText
-                  ? Math.max(
-                      scene.getElement(current.elementId)?.height ?? 0,
-                      measured.height,
-                    )
-                  : measured.height;
+                : measured.height;
             if (
               container?.type === "rectangle" &&
               containerHeight > (container.height ?? 0)
             ) {
               scene.mutateElement(container.id, { height: containerHeight });
             }
-            scene.mutateElement(current.elementId, {
-              text: value,
-              width: maxWidth ?? inputWidth,
-              x: sceneX,
-              y: sceneY,
-              height: containerHeight,
-            });
+            if (noteText) {
+              // The note keeps its size; only the text content changes.
+              scene.mutateElement(noteText.id, { text: value });
+            } else {
+              scene.mutateElement(current.elementId, {
+                text: value,
+                width: maxWidth ?? inputWidth,
+                x: sceneX,
+                y: sceneY,
+                height: containerHeight,
+              });
+            }
             const nextEditor = {
               ...current,
               sceneX,
               sceneY,
               value,
               inputWidth,
-              inputHeight:
-                container?.type === "rectangle" || current.wrapText
+              inputHeight: noteText
+                ? current.inputHeight
+                : container?.type === "rectangle"
                   ? Math.max(containerHeight, inputHeight)
-                  : inputHeight,
+                  : containerHeight,
             };
             editorRef.current = nextEditor;
             setEditor(nextEditor);
@@ -224,7 +252,9 @@ export function TextEditorOverlay({
           }}
           onBlur={finish}
           spellCheck={false}
-          className="absolute inset-0 resize-none cursor-text overflow-hidden border-0 bg-transparent p-0 text-transparent outline-none pointer-events-auto"
+          className={`absolute inset-0 resize-none cursor-text overflow-hidden border-0 bg-transparent p-0 text-transparent outline-none pointer-events-auto ${
+            isSticky ? "sticky-text-input" : ""
+          }`}
           style={{
             width: "100%",
             height: "100%",

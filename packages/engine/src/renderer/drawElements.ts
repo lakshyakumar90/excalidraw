@@ -2,6 +2,7 @@ import type { Element } from "@repo/common";
 import { drawArrow, drawCurvedLine, drawLine } from "./drawConnectors";
 import { applyElementTransform } from "./drawTransform";
 import { drawDiamond, drawEllipse, drawRectangle } from "./drawPaths";
+import { drawSticky } from "./drawSticky";
 import { drawFreedraw, drawText } from "./drawText";
 
 export {
@@ -77,6 +78,9 @@ export function drawElement(
       break;
     case "text":
       drawText(context, element);
+      break;
+    case "sticky":
+      drawSticky(context, element);
       break;
     case "image": {
       context.save();

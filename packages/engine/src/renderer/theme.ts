@@ -13,12 +13,12 @@ export interface CanvasThemePalette {
 
 export const CANVAS_THEME_PALETTES: Readonly<Record<CanvasTheme, CanvasThemePalette>> = {
   dark: {
-    background: "#0D1117",
-    grid: "rgba(148, 163, 184, 0.12)",
-    dotGrid: "rgba(148, 163, 184, 0.24)",
-    origin: "rgba(148, 163, 184, 0.4)",
-    frameBorder: "rgba(148, 163, 184, 0.45)",
-    frameLabel: "#94A3B8",
+    background: "#080808",
+    grid: "rgba(255, 255, 255, 0.055)",
+    dotGrid: "rgba(255, 255, 255, 0.13)",
+    origin: "rgba(255, 255, 255, 0.26)",
+    frameBorder: "rgba(255, 255, 255, 0.32)",
+    frameLabel: "#A1A1AA",
   },
   light: {
     background: "#FFFFFF",

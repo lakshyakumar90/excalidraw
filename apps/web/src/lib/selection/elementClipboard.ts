@@ -124,6 +124,7 @@ function isClipboardElement(value: unknown): value is Element {
       "arrow",
       "freedraw",
       "text",
+      "sticky",
     ].includes(value.type) ||
     !isFiniteNumber(value.x) ||
     !isFiniteNumber(value.y)
@@ -212,7 +213,7 @@ function isClipboardElement(value: unknown): value is Element {
   }
 
   if (
-    value.type === "text" &&
+    (value.type === "text" || value.type === "sticky") &&
     (typeof value.text !== "string" ||
       !isFiniteNumber(value.fontSize) ||
       typeof value.fontFamily !== "string" ||

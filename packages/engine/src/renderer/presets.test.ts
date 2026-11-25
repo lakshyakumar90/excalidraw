@@ -8,18 +8,19 @@ import {
 import { sketchSettingsForPreset } from "./sketch/settings";
 
 describe("4 JojoPen-style board presets & multi-font engine", () => {
-  it("defines all 4 required board presets with distinct typography and palettes", () => {
+  it("defines all board presets with distinct typography and palettes", () => {
     expect(BOARD_PRESET_LIST.map((p) => p.id)).toEqual([
-      "black-and-white",
-      "excali-font",
-      "chalk-bold",
+      "sketch",
       "clean-sketch",
+      "chalk-bold",
+      "excali-font",
+      "black-and-white",
     ]);
 
     expect(BOARD_PRESETS["black-and-white"].dotGrid).toBe(true);
     expect(BOARD_PRESETS["excali-font"].roughness).toBe(1.2);
     expect(BOARD_PRESETS["excali-font"].fontFamily).toContain("Caveat");
-    expect(BOARD_PRESETS["chalk-bold"].canvasBackgroundDark).toBe("#141A18");
+    expect(BOARD_PRESETS["chalk-bold"].canvasBackgroundDark).toBe("#0E1210");
     expect(BOARD_PRESETS["chalk-bold"].strokeWidth).toBeGreaterThanOrEqual(3);
     expect(BOARD_PRESETS["chalk-bold"].chalkTexture).toBe(true);
     expect(BOARD_PRESETS["clean-sketch"].roughness).toBe(0.35);

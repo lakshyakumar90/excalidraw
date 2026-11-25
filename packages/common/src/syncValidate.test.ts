@@ -45,6 +45,29 @@ describe("validateSyncElement", () => {
     expect(validateSyncElement(rect({ width: -2 })).ok).toBe(false);
   });
 
+  it("validates sticky note payloads", () => {
+    const sticky = {
+      id: "s1",
+      type: "sticky",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 150,
+      text: "hello",
+      fontSize: 20,
+      fontFamily: "Inter",
+      textAlign: "left",
+      verticalAlign: "top",
+      version: 1,
+      versionNonce: 1,
+    };
+    expect(validateSyncElement(sticky).ok).toBe(true);
+    expect(validateSyncElement({ ...sticky, text: 42 }).ok).toBe(false);
+    expect(validateSyncElement({ ...sticky, textAlign: "sideways" }).ok).toBe(
+      false,
+    );
+  });
+
   it("validates per-type payloads", () => {
     const text = {
       id: "t1",

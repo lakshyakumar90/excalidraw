@@ -67,6 +67,13 @@ const TYPE_KEYS: Record<string, string[]> = {
     "textAlign",
     "verticalAlign",
   ],
+  sticky: [
+    "text",
+    "fontSize",
+    "fontFamily",
+    "textAlign",
+    "verticalAlign",
+  ],
   image: ["fileId", "status", "scale", "crop"],
 };
 
@@ -293,7 +300,8 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
         return { ok: false, error: "Invalid freedraw points" };
       }
       break;
-    case "text": {
+    case "text":
+    case "sticky": {
       if (
         typeof value.text !== "string" ||
         value.text.length > SYNC_MAX_TEXT_LENGTH
@@ -319,11 +327,19 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       if (!VERTICAL_ALIGNS.has(value.verticalAlign as string)) {
         return { ok: false, error: "Invalid vertical alignment" };
       }
-      if (value.containerId !== undefined && !isIdString(value.containerId)) {
-        return { ok: false, error: "Invalid container reference" };
-      }
-      if (value.wrapText !== undefined && typeof value.wrapText !== "boolean") {
-        return { ok: false, error: "Invalid wrap flag" };
+      if (value.type === "text") {
+        if (
+          value.containerId !== undefined &&
+          !isIdString(value.containerId)
+        ) {
+          return { ok: false, error: "Invalid container reference" };
+        }
+        if (
+          value.wrapText !== undefined &&
+          typeof value.wrapText !== "boolean"
+        ) {
+          return { ok: false, error: "Invalid wrap flag" };
+        }
       }
       break;
     }

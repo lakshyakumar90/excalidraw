@@ -15,6 +15,7 @@ export type {
   FreedrawElement,
   FreedrawPoint,
   TextElement,
+  StickyElement,
   ImageElement,
   Element,
 } from "./types.js";

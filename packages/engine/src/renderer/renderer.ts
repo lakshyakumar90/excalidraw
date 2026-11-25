@@ -9,6 +9,13 @@ import { drawArrow, drawCurvedLine, drawElement } from "./drawElements";
 import { drawCachedShape } from "./bitmapRendering";
 import { adaptElementForTheme, getCanvasThemePalette, type CanvasTheme } from "./theme";
 export { drawArrow, drawCurvedLine } from "./drawElements";
+export { drawSticky } from "./drawSticky";
+export {
+  STICKY_FOLD_COLOR,
+  STICKY_PAPER_COLOR,
+  STICKY_TEXT_COLOR,
+  STICKY_TEXT_PADDING,
+} from "../element/sticky";
 export { createElementBitmapCache } from "./bitmapRendering";
 
 export interface RenderContext {

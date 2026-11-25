@@ -8,6 +8,12 @@ import { getElementAxisAlignedBounds } from "../geometry/elementBounds";
 import { getElementLocalBounds } from "../geometry/elementLocalBounds";
 import { buildClosedStrokePath } from "../geometry/strokeOutline";
 import { measureText } from "../text/measureText";
+import {
+  STICKY_FOLD_COLOR,
+  STICKY_PAPER_COLOR,
+  STICKY_TEXT_COLOR,
+  STICKY_TEXT_PADDING,
+} from "../element/sticky";
 import { getSketchGeometry, getSketchLinePaths } from "./sketch/geometry";
 import { sketchPathToSvg } from "./sketch/canvasPath";
 import { sketchSettings } from "./sketch/settings";
@@ -204,6 +210,47 @@ function renderElement(
             ? "end"
             : "start";
       return `<g transform="${elementTransform(element)}" opacity="${(element.opacity ?? 100) / 100}"><text fill="${escapeXml(element.strokeColor ?? "#1e1e1e")}" font-family="${escapeXml(element.fontFamily)}" font-size="${fontSize}" text-anchor="${anchor}">${tspans}</text></g>`;
+    }
+    case "sticky": {
+      const width = Math.max(1, element.width ?? 0);
+      const height = Math.max(1, element.height ?? 0);
+      const fold = Math.min(26, width / 4, height / 4);
+      const padding = Math.min(STICKY_TEXT_PADDING, width / 6, height / 6);
+      const innerWidth = Math.max(1, width - padding * 2);
+      const innerHeight = Math.max(1, height - padding * 2);
+      const layout = measureText(
+        element.text,
+        element.fontSize,
+        element.fontFamily,
+        innerWidth,
+      );
+      const textX =
+        element.textAlign === "center"
+          ? padding + innerWidth / 2
+          : element.textAlign === "right"
+            ? padding + innerWidth
+            : padding;
+      const textY =
+        element.verticalAlign === "middle"
+          ? padding + Math.max(0, (innerHeight - layout.height) / 2)
+          : element.verticalAlign === "bottom"
+            ? padding + Math.max(0, innerHeight - layout.height)
+            : padding;
+      const anchor =
+        element.textAlign === "center"
+          ? "middle"
+          : element.textAlign === "right"
+            ? "end"
+            : "start";
+      const outline = `M 0 0 L ${width} 0 L ${width} ${height - fold} L ${width - fold} ${height} L 0 ${height} Z`;
+      const flap = `M ${width} ${height - fold} L ${width} ${height} L ${width - fold} ${height} Z`;
+      const tspans = layout.lines
+        .map(
+          (line, index) =>
+            `<tspan x="${textX}" y="${textY + index * layout.lineHeight}">${escapeXml(line)}</tspan>`,
+        )
+        .join("");
+      return `<g transform="${elementTransform(element)}" opacity="${(element.opacity ?? 100) / 100}"><path d="${outline}" fill="${STICKY_PAPER_COLOR}" stroke="rgba(90,70,0,0.22)"/><path d="${flap}" fill="${STICKY_FOLD_COLOR}"/><text fill="${STICKY_TEXT_COLOR}" font-family="${escapeXml(element.fontFamily)}" font-size="${element.fontSize}" text-anchor="${anchor}">${tspans}</text></g>`;
     }
     case "image": {
       const href = imageFiles.get(element.fileId);

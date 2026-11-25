@@ -6,6 +6,7 @@ import {
   getElementAtPosition,
   measureText,
   RenderLoop,
+  STICKY_TEXT_PADDING,
   viewportToScene,
 } from "@repo/engine";
 import { scene } from "@/lib/scene/scene";
@@ -53,6 +54,32 @@ export function createCanvasDoubleClickHandler({
       scenePoint,
       viewportRef.current.zoom,
     );
+    if (hitElement?.type === "sticky") {
+      commitTextElement(textEditorRef.current);
+      historyStore.startCapture();
+      const padding = Math.min(
+        STICKY_TEXT_PADDING,
+        (hitElement.width ?? 0) / 6,
+        (hitElement.height ?? 0) / 6,
+      );
+      const editor: TextEditorState = {
+        elementId: hitElement.id,
+        angle: hitElement.angle ?? 0,
+        fontSize: hitElement.fontSize,
+        fontFamily: hitElement.fontFamily,
+        textAlign: hitElement.textAlign,
+        verticalAlign: hitElement.verticalAlign,
+        sceneX: hitElement.x + padding,
+        sceneY: hitElement.y + padding,
+        value: hitElement.text,
+        inputWidth: Math.max(1, (hitElement.width ?? 0) - padding * 2),
+        inputHeight: Math.max(1, (hitElement.height ?? 0) - padding * 2),
+      };
+      textEditorRef.current = editor;
+      setTextEditorPosition(editor);
+      return;
+    }
+
     const container =
       hitElement?.type === "rectangle" || hitElement?.type === "arrow"
         ? hitElement

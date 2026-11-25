@@ -13,6 +13,7 @@ import {
   findBindingShape,
   createRenderState,
   createElementBitmapCache,
+  createStickyElement,
   createTextElement,
   getElementsAtPosition,
   RenderLoop,
@@ -20,6 +21,7 @@ import {
   renderStatic,
   viewportToScene,
   zoomAtPoint,
+  STICKY_TEXT_PADDING,
   type CanvasTheme,
 } from "@repo/engine";
 import { startLaser, moveLaser } from "@/lib/presence/laser";
@@ -407,7 +409,7 @@ export function useCanvasInteraction({
         interactiveCanvas.style.cursor = "grab";
       } else if (activeTool === "eraser") {
         interactiveCanvas.style.cursor = "none";
-      } else if (activeTool === "text") {
+      } else if (activeTool === "text" || activeTool === "sticky") {
         interactiveCanvas.style.cursor = "text";
       } else if (activeTool === "selection") {
         interactiveCanvas.style.cursor = selectionController.getCursor(
@@ -423,7 +425,9 @@ export function useCanvasInteraction({
     const unsubscribeToolManager = toolManager.subscribe(() => {
       if (observedTool !== toolManager.getActiveTool()) {
         observedTool = toolManager.getActiveTool();
-        resetGesture();
+        // Keep the active history capture when a sticky/text editor is open;
+        // it is closed by commitTextElement when editing finishes.
+        resetGesture(textEditorRef.current !== null);
       }
       if (toolManager.getActiveTool() !== "eraser") {
         eraserCursor = null;
@@ -800,6 +804,47 @@ export function useCanvasInteraction({
         return;
       }
 
+      if (toolManager.getActiveTool() === "sticky") {
+        event.preventDefault();
+        historyStore.startCapture();
+        const note = createStickyElement({
+          x: scenePoint.x - 100,
+          y: scenePoint.y - 75,
+          fontFamily: preset.fontFamily,
+          roughness: styleStore.getSnapshot().roughness,
+        });
+        scene.addElement(note);
+        const padding = Math.min(
+          STICKY_TEXT_PADDING,
+          (note.width ?? 0) / 6,
+          (note.height ?? 0) / 6,
+        );
+        const editor: TextEditorState = {
+          elementId: note.id,
+          angle: note.angle ?? 0,
+          fontSize: note.fontSize,
+          fontFamily: note.fontFamily,
+          textAlign: note.textAlign,
+          verticalAlign: note.verticalAlign,
+          sceneX: note.x + padding,
+          sceneY: note.y + padding,
+          value: "",
+          inputWidth: Math.max(1, (note.width ?? 0) - padding * 2),
+          inputHeight: Math.max(1, (note.height ?? 0) - padding * 2),
+        };
+        textEditorRef.current = editor;
+        setTextEditorPosition(editor);
+        renderLoop.invalidateAll();
+        // A note is a finished creation gesture the moment it is placed, even
+        // while its text editor is still open.
+        queueMicrotask(() => {
+          if (toolManager.getActiveTool() !== "selection") {
+            toolManager.setActiveTool("selection");
+          }
+        });
+        return;
+      }
+
       if (toolManager.getActiveTool() === "text") {
         event.preventDefault();
         commitTextElement(textEditorRef.current);
@@ -1164,13 +1209,13 @@ export function useCanvasInteraction({
       touchStart: [],
       touchBase: viewportRef.current,
     };
-    const resetGesture = () => {
+    const resetGesture = (preserveCapture = false) => {
       creationSnap = null;
       creationGuides = [];
       touchState.contacts.clear();
       touchState.navigating = false;
       touchState.penActive = false;
-      historyStore.cancelCapture();
+      if (!preserveCapture) historyStore.cancelCapture();
       toolManager.cancel();
       selectionController.cancelGesture();
       endGesturePreview();

@@ -9,6 +9,7 @@ import type {
   FreedrawElement,
   FreedrawPoint,
   TextElement,
+  StickyElement,
   ImageElement,
 } from "@repo/common";
 import { getPolylineBounds, toLocalPoints } from "../geometry";
@@ -17,6 +18,10 @@ import {
   DEFAULT_TEXT_FONT_SIZE,
   measureText,
 } from "../text";
+import {
+  STICKY_PAPER_COLOR,
+  STICKY_TEXT_COLOR,
+} from "./sticky";
 
 export type ElementOptions = Partial<BaseElement>;
 
@@ -106,6 +111,46 @@ export function createTextElement(
     isDeleted: false,
     orderKey: options.orderKey,
     updated: Date.now(),
+  };
+}
+
+export function createStickyElement(
+  options: ElementOptions & {
+    text?: string;
+    fontSize?: number;
+    fontFamily?: string;
+    textAlign?: StickyElement["textAlign"];
+    verticalAlign?: StickyElement["verticalAlign"];
+  } = {},
+): StickyElement {
+  return {
+    id: options.id ?? generateElementId(),
+    type: "sticky",
+    x: options.x ?? 0,
+    y: options.y ?? 0,
+    width: options.width ?? 200,
+    height: options.height ?? 150,
+    angle: options.angle ?? 0,
+    strokeColor: options.strokeColor ?? STICKY_TEXT_COLOR,
+    backgroundColor: options.backgroundColor ?? STICKY_PAPER_COLOR,
+    fillStyle: "solid",
+    strokeWidth: options.strokeWidth ?? 1,
+    roughness: options.roughness ?? 1,
+    opacity: options.opacity ?? 100,
+    seed: options.seed ?? generateSeed(),
+    groupIds: options.groupIds ?? [],
+    boundElements: options.boundElements ?? [],
+    frameId: options.frameId ?? null,
+    version: options.version ?? 1,
+    versionNonce: options.versionNonce ?? generateSeed(),
+    isDeleted: options.isDeleted ?? false,
+    orderKey: options.orderKey,
+    updated: options.updated ?? Date.now(),
+    text: options.text ?? "",
+    fontSize: options.fontSize ?? DEFAULT_TEXT_FONT_SIZE,
+    fontFamily: options.fontFamily ?? DEFAULT_TEXT_FONT_FAMILY,
+    textAlign: options.textAlign ?? "left",
+    verticalAlign: options.verticalAlign ?? "top",
   };
 }
 

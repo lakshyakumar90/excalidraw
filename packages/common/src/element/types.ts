@@ -9,6 +9,7 @@ export type ElementType =
   | "arrow"
   | "freedraw"
   | "text"
+  | "sticky"
   | "image";
 
 export type FillStyle = "solid" | "hachure" | "cross-hatch" | "none";
@@ -110,6 +111,16 @@ export interface TextElement extends BaseElement {
   verticalAlign: "top" | "middle" | "bottom";
 }
 
+/** A resizable yellow note with its text stored on the element itself. */
+export interface StickyElement extends BaseElement {
+  type: "sticky";
+  text: string;
+  fontSize: number;
+  fontFamily: string;
+  textAlign: "left" | "center" | "right";
+  verticalAlign: "top" | "middle" | "bottom";
+}
+
 export interface ImageElement extends BaseElement {
   type: "image";
   fileId: string;
@@ -131,4 +142,5 @@ export type Element =
   | ArrowElement
   | FreedrawElement
   | TextElement
+  | StickyElement
   | ImageElement;
