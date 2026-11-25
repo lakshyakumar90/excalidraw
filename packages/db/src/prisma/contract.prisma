@@ -215,3 +215,19 @@ model Chat {
   @@index([roomId])
   @@index([userId])
 }
+
+model RoomApiToken {
+  id          String             @id
+  roomId      Int
+  sceneId     String
+  tokenHash   String             @unique
+  role        String             @default("editor")
+  label       String?
+  expiresAt   TimestamptzString
+  revokedAt   TimestamptzString?
+  createdById String
+  createdAt   TimestamptzString  @default(now())
+
+  @@index([roomId])
+  @@index([createdById])
+}

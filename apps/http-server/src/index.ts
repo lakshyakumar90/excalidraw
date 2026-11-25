@@ -4,6 +4,7 @@ import { configureCollaborationLiveStore } from "@repo/backend-common";
 import { openRoomRedis } from "@repo/redis";
 import { configureInvitationRateLimiter } from "./invitationRateLimit.js";
 import { configureGlobalRateLimiter } from "./rateLimitMiddleware.js";
+import { configureMcpServerDeps } from "./routes/mcp.js";
 import { app, configureHealthChecks } from "./app.js";
 
 async function startServer() {
@@ -16,6 +17,7 @@ async function startServer() {
     configureCollaborationLiveStore(roomRedis);
     configureInvitationRateLimiter(roomRedis);
     configureGlobalRateLimiter(roomRedis);
+    configureMcpServerDeps({ getRoomRedis: () => roomRedis });
     configureHealthChecks({
       pingDb: () => pingDatabase(2_000),
       pingRedis: () => roomRedis.ping(2_000),
