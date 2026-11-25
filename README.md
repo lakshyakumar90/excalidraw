@@ -4,6 +4,29 @@ A TypeScript drawing application with guest storage, authenticated scenes, real-
 
 The in-app technical documentation portal is available at [`/docs`](http://localhost:3000/docs) while the web app is running. Its source notes are maintained in [`docs/project-notes`](docs/project-notes/README.md).
 
+## Production Upgrades (`upgrade` branch — Phases 1–5)
+
+Detailed step-by-step engineering notes for every upgrade live in [`notes/`](notes/README.md).
+
+- **Phase 1 — Realtime Scale & Backend Hardening**:
+  - $O(k)$ delta `HSET`/`HDEL` Lua CAS snapshot patching in [`packages/redis`](packages/redis/src/index.ts) + minimal delta computation in `collaboration.ts` (`<2 ms` patch on 5,000-element rooms).
+  - Multi-replica Redis `seenMutations` deduplication (`SET collab:mut:<sceneId>:<mutationId> 1 EX 300 NX`), deep Postgres `SELECT 1` + Redis `PING` `/health` probes (`200`/`503`), and parallel BullMQ flush worker (`concurrency=8`) with per-room Redis locks (`lock:flush:<sceneId>`).
+  - AWS SigV4 presigned S3/Cloudflare R2 image uploads (`/api/files/presign`, `/api/files/:fileId`), `2mb` Express JSON limit, and Redis sliding-window HTTP rate limiting (`120 req/min` global, `30 req/min` auth).
+- **Phase 2 — Dark/Light Theme Engine & 4 JojoPen Board Presets**:
+  - First-class Dark (`#0D1117`) and Light (`#FFFFFF`) canvas themes with zero-flash persistence, deterministic `adaptColorForTheme`, and theme-keyed `OffscreenCanvas` bitmap cache.
+  - 4 board visual presets (**Black & White**, **Excali Font**, **Chalk Bold**, **Clean Sketch**) with bundled `Caveat`, `Architects Daughter`, `Plus Jakarta Sans`, `Inter`, and `JetBrains Mono` fonts.
+- **Phase 3 — Full UI Redesign**:
+  - Minimalist floating canvas chrome (`FloatingCollabBar` with presenter viewport follow, `FloatingBottomControls`, `BoardPresetSwitcher`).
+  - Split-screen `/sign-in` & `/sign-up` redesign + `GuestSyncBanner` for local IndexedDB-to-cloud board migration.
+  - `/boards` (**My Boards**) dashboard with grid/list toggle, search/filters, preset/theme New Board modal, thumbnail generator, and interactive `SceneRevision` **Version History Drawer** (`/api/revisions`).
+- **Phase 4 — Slides, Live Diagram Code & Timed AI Drawing**:
+  - Canvas frame **Slides** (`slideOrder`), drag-to-reorder `SlidesFilmstrip`, and cubic-bezier animated **Present Mode** (`Cmd/Ctrl+Shift+P`).
+  - Live **Diagram Code** split-pane (`Mermaid` flowchart/sequence/state → zero-overlap topological auto-layout + non-destructive merge/replace).
+  - **`Cmd+K` AI Prompt-to-Diagram** (`/api/ai/generate-diagram`) with topological step-by-step animated playback (`TimedPlaybackQueue`), supporting **BYOK** (**OpenAI-compatible**, **Anthropic**, **Gemini**) and local CLI bridges (**OpenCode**, **Codex CLI**, **AntiGravity CLI**).
+- **Phase 5 — From-Scratch Streamable HTTP MCP Server**:
+  - `RoomApiToken` Prisma schema + SQL migration and `POST /api/mcp` JSON-RPC 2.0 Streamable HTTP MCP server (`get_scene_outline`, `create_diagram_from_graph`, `mermaid_to_canvas`, `patch_elements`, `render_scene_svg`) wired directly into `applyCommit` and live Redis Pub/Sub room sync.
+  - **Connect MCP** modal in the top-right collaboration bar with scoped token minting/revocation and copy-paste configs for **Cursor**, **Claude Code**, **OpenCode**, **Codex CLI**, and **AntiGravity CLI**.
+
 ## Requirements
 
 Node.js 24+, pnpm 11.25.0, PostgreSQL 15+, and Redis. Email delivery is needed for verification and invites; Google OAuth is optional.

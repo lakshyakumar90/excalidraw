@@ -26,3 +26,7 @@ Phase plans, agent instructions, completed implementation summaries, and verific
 - [phase-19-agent-prompt](./phase-19-agent-prompt.md)
 - [phase-19-implementation-summary](./phase-19-implementation-summary.md)
 - [phase-19-long-tail-agent-instructions](./phase-19-long-tail-agent-instructions.md)
+
+## Production Upgrade Notes (`upgrade` branch)
+
+- [Upgrade Notes Index (Steps 1.1 – 5.2)](../notes/README.md)
