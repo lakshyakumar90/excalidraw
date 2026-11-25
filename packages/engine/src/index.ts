@@ -6,3 +6,5 @@ export * from "./renderer";
 export * from "./tools";
 export * from "./text";
 export * from "./element";
+
+export * from "./slides/slides";

@@ -57,6 +57,8 @@ export interface RectangleElement extends BaseElement {
 export interface FrameElement extends BaseElement {
   type: "frame";
   name?: string;
+  title?: string;
+  slideOrder?: number;
 }
 
 export interface EllipseElement extends BaseElement {
