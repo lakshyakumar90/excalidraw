@@ -3,6 +3,7 @@ import { assertAuthConfiguration } from "@repo/auth";
 import { configureCollaborationLiveStore } from "@repo/backend-common";
 import { openRoomRedis } from "@repo/redis";
 import { configureInvitationRateLimiter } from "./invitationRateLimit.js";
+import { configureGlobalRateLimiter } from "./rateLimitMiddleware.js";
 import { app, configureHealthChecks } from "./app.js";
 
 async function startServer() {
@@ -14,6 +15,7 @@ async function startServer() {
     await roomRedis.redis.ping();
     configureCollaborationLiveStore(roomRedis);
     configureInvitationRateLimiter(roomRedis);
+    configureGlobalRateLimiter(roomRedis);
     configureHealthChecks({
       pingDb: () => pingDatabase(2_000),
       pingRedis: () => roomRedis.ping(2_000),

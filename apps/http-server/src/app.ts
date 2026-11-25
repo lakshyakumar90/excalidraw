@@ -3,9 +3,11 @@ import cors from "cors";
 import { authHandler, authWebOrigin } from "@repo/auth";
 import { pingDatabase } from "@repo/db";
 import { requireAuth } from "./middleware.js";
+import { createSlidingWindowRateLimiter } from "./rateLimitMiddleware.js";
 import { scenesRouter } from "./routes/scenes.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { libraryRouter } from "./routes/library.js";
+import { filesRouter } from "./routes/files.js";
 
 export interface HealthProbeConfig {
   pingDb?: () => Promise<boolean>;
@@ -29,10 +31,28 @@ app.use(
   }),
 );
 
+// Global sliding-window HTTP rate limiter (120 req/min per IP)
+app.use(
+  createSlidingWindowRateLimiter({
+    bucket: "global",
+    limit: 120,
+    windowMs: 60_000,
+  }),
+);
+
+// Stricter rate limit on auth routes (30 req/min per IP)
+const authRateLimiter = createSlidingWindowRateLimiter({
+  bucket: "auth",
+  limit: 30,
+  windowMs: 60_000,
+});
+
 // Better Auth must receive the raw request body, so mount it before express.json().
-app.all("/api/auth", authHandler);
-app.all("/api/auth/*splat", authHandler);
-app.use(express.json({ limit: "50mb" }));
+app.all("/api/auth", authRateLimiter, authHandler);
+app.all("/api/auth/*splat", authRateLimiter, authHandler);
+
+// Lowered from 50mb to 2mb now that binary image blobs upload via presigned S3/R2 URLs.
+app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", async (_req, res) => {
   const [dbOk, redisOk] = await Promise.all([
@@ -62,6 +82,7 @@ app.get("/me", requireAuth, (req, res) => {
   res.json({ userId: req.userId });
 });
 
+app.use("/api/files", requireAuth, filesRouter);
 app.use("/scenes", requireAuth, scenesRouter);
 app.use("/library", requireAuth, libraryRouter);
 

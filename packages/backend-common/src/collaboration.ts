@@ -179,11 +179,13 @@ function isValidFile(file: unknown, fileId: string): file is StoredSceneFile {
   if (typeof file.mimeType !== "string" || !file.mimeType.startsWith("image/")) {
     return false;
   }
-  if (
-    typeof file.dataURL !== "string" ||
-    !file.dataURL.startsWith("data:") ||
-    file.dataURL.length > COLLABORATION_MAX_FILE_BYTES
-  ) {
+  const validUrl =
+    typeof file.dataURL === "string" &&
+    (file.dataURL.startsWith("data:") ||
+      file.dataURL.startsWith("https://") ||
+      file.dataURL.startsWith("/api/files/")) &&
+    file.dataURL.length <= COLLABORATION_MAX_FILE_BYTES;
+  if (!validUrl) {
     return false;
   }
   return true;
