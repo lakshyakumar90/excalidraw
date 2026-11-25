@@ -4,7 +4,7 @@ import express from "express";
 import type { AddressInfo } from "node:net";
 import { createCollaborationService } from "@repo/backend-common";
 import { configureMcpServerDeps, mcpRouter } from "./mcp.js";
-import { mintRoomApiToken, revokeRoomApiToken } from "./mcpTokens.js";
+import { createRoomApiToken } from "./mcpTokens.js";
 
 test("POST /api/mcp handles initialize, tools/list, tools/call with live room broadcast, and returns 401 when token is revoked", async () => {
   let revision = 0;
@@ -24,20 +24,21 @@ test("POST /api/mcp handles initialize, tools/list, tools/call with live room br
     },
   });
 
+  const { token, record } = createRoomApiToken({
+    roomId: 42,
+    sceneId: "scene-mcp-42",
+    role: "editor",
+    createdById: "user-owner",
+  });
+  let revoked = false;
   configureMcpServerDeps({
+    verifyToken: async (value) => !revoked && value === token ? record : null,
     getCollaborationService: () => collab,
     getRoomRedis: () => ({
       publish: async (event) => {
         publishedEvents.push(event);
       },
     }),
-  });
-
-  const { token, record } = mintRoomApiToken({
-    roomId: 42,
-    sceneId: "scene-mcp-42",
-    role: "editor",
-    createdById: "user-owner",
   });
 
   const app = express();
@@ -152,7 +153,7 @@ test("POST /api/mcp handles initialize, tools/list, tools/call with live room br
     assert.ok(svgJson.result.content[0]!.text.startsWith("<svg "));
 
     // 5. Revoke token -> immediate 401
-    assert.equal(revokeRoomApiToken(record.id), true);
+    revoked = true;
     const revokedRes = await fetch(url, {
       method: "POST",
       headers: {

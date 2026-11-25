@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { getBoardPreset, type BoardPresetId } from "@repo/common";
 import type {
   Element,
   Point,
@@ -19,6 +20,7 @@ import {
   renderStatic,
   viewportToScene,
   zoomAtPoint,
+  type CanvasTheme,
 } from "@repo/engine";
 import { startLaser, moveLaser } from "@/lib/presence/laser";
 import { toolManager } from "@/lib/tools/toolManager";
@@ -77,6 +79,9 @@ import {
 } from "@/lib/canvas/input/touchNavigation";
 
 interface CanvasInteractionOptions {
+  theme: CanvasTheme;
+  presetId: BoardPresetId;
+  gridEnabled: boolean;
   staticCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   interactiveCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   viewportRef: React.RefObject<Viewport>;
@@ -104,6 +109,9 @@ interface CanvasInteractionOptions {
 }
 
 export function useCanvasInteraction({
+  theme,
+  presetId,
+  gridEnabled,
   staticCanvasRef,
   interactiveCanvasRef,
   viewportRef,
@@ -147,6 +155,10 @@ export function useCanvasInteraction({
     let height = 0;
     let pixelRatio = window.devicePixelRatio || 1;
     const bitmapCache = createElementBitmapCache();
+    const preset = getBoardPreset(presetId);
+    const revealTimes = new Map<string, number>();
+    let revealFrame = 0;
+    const revealDuration = 220;
     const eraserMarkedIds = new Set<string>();
     const eraserTrailPoints: EraserTrailPoint[] = [];
     let eraserCursor: Point | null = null;
@@ -167,19 +179,28 @@ export function useCanvasInteraction({
               width,
               height,
               viewport: viewportRef.current,
+              theme,
             },
-            eraserMarkedIds.size === 0
+            eraserMarkedIds.size === 0 && revealTimes.size === 0
               ? elements
-              : elements.map((element) =>
-                  eraserMarkedIds.has(element.id)
-                    ? {
-                        ...element,
-                        opacity: (element.opacity ?? 100) * 0.22,
-                      }
-                    : element,
-                ),
+              : elements.map((element) => {
+                  const start = revealTimes.get(element.id);
+                  const fade = start === undefined ? 1 :
+                    Math.max(0, Math.min(1, (performance.now() - start) / revealDuration));
+                  const erasing = eraserMarkedIds.has(element.id) ? 0.22 : 1;
+                  return fade === 1 && erasing === 1 ? element :
+                    { ...element, opacity: (element.opacity ?? 100) * fade * erasing };
+                }),
             // Screen cache is DPR-aware; exports and transient previews render directly.
-            { grid: false, origin: false, bitmapCache, pixelRatio },
+            {
+              grid: gridEnabled,
+              dotGrid: preset.dotGrid,
+              origin: false,
+              bitmapCache,
+              bypassBitmapCache: revealTimes.size > 0,
+              pixelRatio,
+              backgroundColorOverride: theme === "dark" ? preset.canvasBackgroundDark : preset.canvasBackgroundLight,
+            },
             imageAssets,
           );
         },
@@ -191,6 +212,7 @@ export function useCanvasInteraction({
               width,
               height,
               viewport: viewportRef.current,
+              theme,
             },
             (() => {
               const preview = toolManager.getPreviewElement();
@@ -521,8 +543,21 @@ export function useCanvasInteraction({
     const handlePointerMove = (event: PointerEvent) => {
       const point = getPointerPosition(event);
       if (toolManager.getActiveTool() === "laser") {
-        if (event.buttons & 1)
-          moveLaser(viewportToScene(point, viewportRef.current));
+        if (event.buttons & 1) {
+          const samples = event.getCoalescedEvents?.() ?? [];
+          if (samples.length > 1) {
+            moveLaser(
+              ...samples.map((sample) =>
+                viewportToScene(
+                  getPointerPosition(sample),
+                  viewportRef.current,
+                ),
+              ),
+            );
+          } else {
+            moveLaser(viewportToScene(point, viewportRef.current));
+          }
+        }
         return;
       }
 
@@ -571,17 +606,34 @@ export function useCanvasInteraction({
 
       if (toolManager.getActiveTool() === "eraser") {
         eraserCursor = point;
-        for (const sample of event.getCoalescedEvents?.() ?? []) {
+        const samples = event.getCoalescedEvents?.() ?? [];
+        for (const sample of samples) {
           addEraserTrailPoint(getPointerPosition(sample));
         }
         addEraserTrailPoint(point);
         if (eraserPointerId === event.pointerId) {
-          if (
-            eraseAlongSegment(lastEraserScenePoint, scenePoint, event.altKey)
-          ) {
-            renderLoop.invalidateStatic();
+          let changed = false;
+          for (const sample of samples) {
+            const sampleScenePoint = viewportToScene(
+              getPointerPosition(sample),
+              viewportRef.current,
+            );
+            changed =
+              eraseAlongSegment(
+                lastEraserScenePoint,
+                sampleScenePoint,
+                event.altKey,
+              ) || changed;
+            lastEraserScenePoint = sampleScenePoint;
           }
+          changed =
+            eraseAlongSegment(
+              lastEraserScenePoint,
+              scenePoint,
+              event.altKey,
+            ) || changed;
           lastEraserScenePoint = scenePoint;
+          if (changed) renderLoop.invalidateStatic();
         }
         interactiveCanvas.style.cursor = "none";
         renderLoop.invalidateInteractive();
@@ -754,6 +806,7 @@ export function useCanvasInteraction({
         historyStore.startCapture();
         const textElement = createTextElement({
           text: "",
+          fontFamily: preset.fontFamily,
           x: scenePoint.x,
           y: scenePoint.y,
         });
@@ -928,6 +981,7 @@ export function useCanvasInteraction({
     };
 
     const handleDoubleClick = createCanvasDoubleClickHandler({
+      fontFamily: preset.fontFamily,
       getPointerPosition,
       viewportRef,
       textEditorRef,
@@ -1068,6 +1122,27 @@ export function useCanvasInteraction({
       renderLoop.invalidateStatic();
       imageCache.sync();
     });
+    const redrawFonts = () => {
+      bitmapCache.clear();
+      renderLoop.invalidateAll();
+    };
+    let mounted = true;
+    void document.fonts.ready.then(() => { if (mounted) redrawFonts(); });
+    document.fonts.addEventListener("loadingdone", redrawFonts);
+    const advanceReveal = (now: number) => {
+      for (const [id, start] of revealTimes)
+        if (now - start >= revealDuration) revealTimes.delete(id);
+      renderLoop.invalidateStatic();
+      revealFrame = revealTimes.size ? requestAnimationFrame(advanceReveal) : 0;
+    };
+    const revealElements = (event: Event) => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const now = performance.now();
+      for (const id of (event as CustomEvent<string[]>).detail) revealTimes.set(id, now);
+      if (!revealFrame) revealFrame = requestAnimationFrame(advanceReveal);
+      renderLoop.invalidateStatic();
+    };
+    window.addEventListener("canvas-reveal", revealElements);
     const unsubscribeViewport = subscribeViewport(() => {
       viewportRef.current = getCurrentViewport();
       autosaveRef.current?.schedule();
@@ -1142,6 +1217,10 @@ export function useCanvasInteraction({
       unsubscribeSelectionStore();
       unsubscribeStyleStore();
       unsubscribeViewport();
+      mounted = false;
+      document.fonts.removeEventListener("loadingdone", redrawFonts);
+      window.removeEventListener("canvas-reveal", revealElements);
+      if (revealFrame) cancelAnimationFrame(revealFrame);
       unsubscribeRoomFiles();
       clearInterval(diagnosticsInterval);
       unsubscribe();
@@ -1176,6 +1255,9 @@ export function useCanvasInteraction({
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [
+    theme,
+    presetId,
+    gridEnabled,
     autosaveRef,
     closeContextMenu,
     insertImage,

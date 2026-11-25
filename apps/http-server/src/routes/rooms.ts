@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { issuePresenceTicket } from "@repo/auth";
+import {
+  createPresignedDownloadUrl,
+  createPresignedUpload,
+  MAX_UPLOAD_BYTES,
+  readObjectStorageConfigFromEnv,
+  signS3PresignedUrl,
+  validateImageUploadInput,
+} from "@repo/backend-common";
 import { createOrGetSceneRoom, db } from "@repo/db";
 import { RoomSchema, UpdateSceneSchema } from "@repo/validations";
 import {
@@ -14,6 +22,7 @@ import {
 } from "./roomRouteUtils.js";
 import { registerRoomInviteRoutes } from "./roomInvites.js";
 import { registerRoomLeaveRoute } from "./roomLeave.js";
+import { getObjectFileDownloadUrl } from "./files.js";
 
 export const roomsRouter: Router = Router();
 export { accessibleRoom } from "./roomRouteUtils.js";
@@ -159,10 +168,32 @@ roomsRouter.patch("/:roomId/scene", async (req, res) => {
   }
 });
 
+const roomAssetMarker = "/api/files/room-object";
+const roomAssetId = /^[a-zA-Z0-9_-]{1,128}$/;
+
+roomsRouter.post("/:roomId/files/presign", async (req, res) => {
+  const roomId = roomIdOf(req.params.roomId);
+  if (!roomId) return res.sendStatus(404);
+  const access = await accessibleRoom(roomId, req.userId!);
+  if (!access?.room.sceneId || access.role === "viewer") return res.sendStatus(404);
+  const config = readObjectStorageConfigFromEnv();
+  if (!config) return res.sendStatus(204);
+  const { fileId, mimeType, sizeBytes } = req.body ?? {};
+  const validation = validateImageUploadInput({ mimeType, sizeBytes });
+  if (!validation.ok || typeof fileId !== "string" || !roomAssetId.test(fileId))
+    return res.status(400).json({ message: "Invalid image metadata" });
+  const upload = createPresignedUpload({
+    ...validation,
+    fileId,
+    prefix: `rooms/${roomId}/${randomUUID()}`,
+  }, config);
+  return res.json({ uploadUrl: upload.uploadUrl, headers: upload.headers, objectKey: upload.objectKey });
+});
+
 roomsRouter.post("/:roomId/files", async (req, res) => {
   const roomId = roomIdOf(req.params.roomId);
   if (!roomId) return res.status(404).json({ message: "Room not found" });
-  const body = req.body as { fileId?: unknown; file?: unknown };
+  const body = req.body as { fileId?: unknown; file?: unknown; objectKey?: unknown };
   if (typeof body?.fileId !== "string" || body.fileId.length === 0) {
     return res.status(400).json({ message: "Invalid file upload" });
   }
@@ -173,12 +204,37 @@ roomsRouter.post("/:roomId/files", async (req, res) => {
     const role = toCommitRole(access.role);
     if (!role)
       return res.status(404).json({ message: "Editable room not found" });
+    let file = body.file;
+    if (body.objectKey !== undefined) {
+      const config = readObjectStorageConfigFromEnv();
+      const { objectKey, fileId } = body;
+      const metadata = file as { mimeType?: unknown; created?: unknown } | null;
+      const segments = typeof objectKey === "string" ? objectKey.split("/") : [];
+      if (!config || typeof objectKey !== "string" || !roomAssetId.test(fileId) ||
+          segments.length !== 4 || segments[0] !== "rooms" || segments[1] !== String(roomId) ||
+          !/^[0-9a-f-]{36}$/.test(segments[2]!) ||
+          !["png", "jpg", "webp", "svg"].some((ext) => segments[3] === `${fileId}.${ext}`))
+        return res.status(400).json({ message: "Invalid room object reference" });
+      const head = await fetch(signS3PresignedUrl({ config, method: "HEAD", objectKey }), {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5000),
+      });
+      const mimeType = head.headers.get("content-type");
+      const size = Number(head.headers.get("content-length"));
+      if (!head.ok || mimeType !== metadata?.mimeType || size <= 0 || size > MAX_UPLOAD_BYTES ||
+          !validateImageUploadInput({ mimeType, sizeBytes: size }).ok)
+        return res.status(400).json({ message: "Room image upload could not be verified" });
+      file = { id: fileId, mimeType, created: metadata?.created, dataURL: `${roomAssetMarker}/${objectKey}` };
+    } else if (typeof (file as { dataURL?: unknown } | null)?.dataURL === "string" &&
+        (file as { dataURL: string }).dataURL.startsWith(roomAssetMarker)) {
+      return res.status(400).json({ message: "Invalid room object reference" });
+    }
     const result = await syncService().attachFile({
       sceneId: access.room.sceneId,
       userId: req.userId!,
       role,
       fileId: body.fileId,
-      file: body.file,
+      file,
     });
     if (!result.saved && result.reason === "missing-scene")
       return res.status(404).json({ message: "Editable room not found" });
@@ -211,6 +267,18 @@ roomsRouter.get("/:roomId/files/:fileId", async (req, res) => {
     } | null;
     const file = data?.files?.[fileId];
     if (!file) return res.status(404).json({ message: "File not found" });
+    const record = file as { dataURL?: string };
+    if (record.dataURL?.startsWith(`${roomAssetMarker}/`)) {
+      const downloadUrl = createPresignedDownloadUrl(record.dataURL.slice(roomAssetMarker.length + 1));
+      if (!downloadUrl) return res.sendStatus(503);
+      return res.json({ file: { ...record, downloadUrl } });
+    }
+    const sharedFileId = /^\/api\/files\/([a-zA-Z0-9_-]+)$/.exec(record.dataURL ?? "")?.[1];
+    if (sharedFileId) {
+      const downloadUrl = await getObjectFileDownloadUrl(sharedFileId);
+      if (!downloadUrl) return res.sendStatus(404);
+      return res.json({ file: { ...record, downloadUrl } });
+    }
     return res.json({ file });
   } catch (error) {
     console.error("Room file read error:", error);

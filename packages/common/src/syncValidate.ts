@@ -51,7 +51,7 @@ const BASE_KEYS = new Set([
 ]);
 
 const TYPE_KEYS: Record<string, string[]> = {
-  frame: ["name"],
+  frame: ["name", "title", "slideOrder"],
   rectangle: [],
   ellipse: [],
   diamond: [],
@@ -257,6 +257,10 @@ export function validateSyncElement(value: unknown): SyncValidationResult {
       if (
         (value.angle ?? 0) !== 0 ||
         value.frameId ||
+        (value.title !== undefined &&
+          (typeof value.title !== "string" || value.title.length > 100)) ||
+        (value.slideOrder !== undefined &&
+          (!isFiniteNumber(value.slideOrder) || !Number.isSafeInteger(value.slideOrder) || value.slideOrder < 0)) ||
         (value.name !== undefined &&
           (typeof value.name !== "string" || value.name.length > 100))
       )

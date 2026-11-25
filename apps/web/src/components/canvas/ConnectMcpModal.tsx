@@ -108,7 +108,7 @@ export function ConnectMcpModal({
   const numericRoomId = Number(roomId ?? 0);
   const mcpUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin.replace(/\/$/, "")}/api/mcp`
+      ? new URL(apiUrl("/api/mcp"), window.location.origin).href
       : apiUrl("/api/mcp");
 
   useEffect(() => {
@@ -240,7 +240,7 @@ export function ConnectMcpModal({
             type="button"
             disabled={loading}
             onClick={() => void handleMint()}
-            className="sm:col-span-4 rounded-xl bg-[var(--accent)] py-2 font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            className="sm:col-span-4 rounded-xl bg-[var(--accent)] py-2 font-semibold text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] disabled:opacity-50"
           >
             {loading ? "Minting scoped token…" : "Mint New Room API Token"}
           </button>
@@ -264,7 +264,7 @@ export function ConnectMcpModal({
                 onClick={() => setClientTab(id)}
                 className={`rounded-full px-3 py-1 font-medium ${
                   clientTab === id
-                    ? "bg-[var(--accent)] text-white"
+                    ? "bg-[var(--accent)] text-[var(--accent-fg)]"
                     : "border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 }`}
               >

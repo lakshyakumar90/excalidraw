@@ -44,7 +44,7 @@ export function EditorActionsMenu({
 
   if (!open) return null;
   const button =
-    "min-h-11 rounded-lg px-3 text-left text-sm font-medium leading-5 text-neutral-950 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600";
+    "min-h-10 rounded-lg px-3 text-left text-xs font-medium leading-4 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
   const choosePanel = (panel: EditorPanel) => {
     setOpen(false);
     onOpenPanel(
@@ -58,10 +58,10 @@ export function EditorActionsMenu({
   return (
     <section
       aria-label="Canvas actions"
-      className="editor-actions-menu fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-[70] w-[min(24rem,calc(100vw-1rem))] -translate-x-1/2 rounded-xl border border-neutral-200 bg-white p-3 text-neutral-950 shadow-lg sm:p-2"
+      className="editor-actions-menu fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-3 z-[70] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 p-2 text-[var(--text-primary)] shadow-2xl backdrop-blur-md"
     >
       <div className="mb-1 flex items-center justify-between px-2 py-1">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700 sm:text-xs">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
           Canvas actions
         </h2>
         <button
@@ -71,7 +71,7 @@ export function EditorActionsMenu({
             setOpen(false);
             trigger.current?.focus();
           }}
-          className="grid h-10 w-10 place-items-center rounded-lg bg-neutral-100 text-lg font-semibold text-neutral-950 hover:bg-neutral-200 sm:h-9 sm:w-9"
+          className="grid h-7 w-7 place-items-center rounded-lg text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
         >
           ×
         </button>
@@ -79,7 +79,7 @@ export function EditorActionsMenu({
       <div className="grid grid-cols-2 gap-1">
         <button className={button} onClick={() => choosePanel("search")}>
           Find text{" "}
-          <span className="block text-xs font-normal text-neutral-600">
+          <span className="block text-[11px] font-normal text-[var(--text-muted)]">
             Ctrl/⌘ F
           </span>
         </button>
@@ -105,7 +105,7 @@ export function EditorActionsMenu({
         </button>
         {readOnly && (
           <button
-            className={`${button} ${toolManager.getActiveTool() === "laser" ? "bg-neutral-900 text-white" : ""}`}
+            className={`${button} ${toolManager.getActiveTool() === "laser" ? "bg-[var(--accent)] text-[var(--accent-fg)]" : ""}`}
             aria-pressed={toolManager.getActiveTool() === "laser"}
             onClick={() => {
               toolManager.setActiveTool("laser");
@@ -123,7 +123,7 @@ export function EditorActionsMenu({
           }}
         >
           Zen mode{" "}
-          <span className="block text-xs font-normal text-neutral-600">
+          <span className="block text-[11px] font-normal text-[var(--text-muted)]">
             Alt Z
           </span>
         </button>

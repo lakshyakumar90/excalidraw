@@ -19,6 +19,25 @@ function empty(): ToolResult {
   return { previewElement: null, committedElement: null };
 }
 
+/** Light three-sample smoothing that keeps the stroke endpoints in place. */
+function smoothPoints(points: readonly FreedrawPoint[]): FreedrawPoint[] {
+  if (points.length < 3) return [...points];
+  const result: FreedrawPoint[] = [points[0]!];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]!;
+    const current = points[index]!;
+    const next = points[index + 1]!;
+    result.push({
+      x: (previous.x + 2 * current.x + next.x) / 4,
+      y: (previous.y + 2 * current.y + next.y) / 4,
+      pressure:
+        (previous.pressure + 2 * current.pressure + next.pressure) / 4,
+    });
+  }
+  result.push(points[points.length - 1]!);
+  return result;
+}
+
 export class FreedrawTool implements Tool {
   readonly type = "freedraw";
 
@@ -77,7 +96,10 @@ export class FreedrawTool implements Tool {
       });
     }
 
-    const simplifiedPoints = simplifyPoints(points, SIMPLIFY_TOLERANCE);
+    const simplifiedPoints = simplifyPoints(
+      smoothPoints(points),
+      SIMPLIFY_TOLERANCE,
+    );
 
     if (simplifiedPoints.length < 2) {
       this.state = {
@@ -114,7 +136,7 @@ export class FreedrawTool implements Tool {
 
   private createPreview(points: readonly FreedrawPoint[]): FreedrawElement | null {
     if (points.length < 2) return null;
-    return createFreedrawElementFromPoints([...points]);
+    return createFreedrawElementFromPoints(smoothPoints(points));
   }
 
   private appendPoint(

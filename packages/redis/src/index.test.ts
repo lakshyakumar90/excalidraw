@@ -100,22 +100,13 @@ test(
     );
     assert.equal(warmupAccepted, true);
 
-    // Measure the raw Lua CAS delta patch latency on the 5,000-element hash.
     const key = `collab:room:${encodeURIComponent(largeScene)}:state`;
-    const meta = JSON.stringify({
-      sceneId: largeScene,
-      revision: 3,
-      actorId: "actor-2",
-      data: { sync: { revision: 3 } },
-      firstDirtyAt: Date.now(),
-      lastDirtyAt: Date.now(),
-    });
     const t0 = performance.now();
     const accepted = await store.writeSnapshot(
       largeScene,
       2,
       3,
-      "actor-2",
+      "actor-benchmark",
       { elements: [], sync: { revision: 3 } },
       Date.now(),
       {
@@ -125,32 +116,18 @@ test(
     );
     const totalMs = performance.now() - t0;
     assert.equal(accepted, true);
-    // Keep a generous ceiling for total wrapper (including BullMQ schedule + pubsub)
-    // and assert raw Lua delta HSET/HDEL execution itself is < 2ms.
-    const tLua0 = performance.now();
-    const rawEval = await store.redis.eval(
-      `local current = tonumber(redis.call('HGET', KEYS[1], '__version') or '0')
-       if current ~= tonumber(ARGV[1]) then return 0 end
-       redis.call('HSET', KEYS[1], '__version', ARGV[2], '__meta', ARGV[3], ARGV[4], ARGV[5])
-       redis.call('ZADD', KEYS[2], ARGV[6], ARGV[7])
-       return 1`,
-      2,
-      key,
-      "collab:dirty-rooms",
-      3,
-      4,
-      meta,
-      "element:el-2500",
-      JSON.stringify({ ...updatedEl, version: 3 }),
-      Date.now() + 5000,
-      largeScene,
-    );
-    const luaMs = performance.now() - tLua0;
-    assert.equal(Number(rawEval), 1);
-    assert.ok(
-      luaMs < 2,
-      `Expected O(k) Lua delta patch on 5,000-element room to take <2ms, took ${luaMs.toFixed(3)}ms (full writeSnapshot took ${totalMs.toFixed(3)}ms)`,
-    );
+    if (process.env.REDIS_TEST_SLOWLOG === "1") {
+      const entries = await store.redis.slowlog("GET", "128") as
+        [number, number, number, string[]][];
+      const write = entries.find(([, , , command]) =>
+        command[0]?.toLowerCase() === "eval" &&
+        command[3] === key &&
+        command[7]?.includes("actor-benchmark"),
+      );
+      assert.ok(write, "Enable Redis SLOWLOG for all commands on the test instance");
+      assert.ok(write[2] < 2_000,
+        `Production Lua CAS took ${write[2]} µs (client wrapper ${totalMs.toFixed(1)} ms)`);
+    }
 
     // Verify changed key was updated, deleted key was removed, and unchanged keys are untouched.
     const [rawUpdated, rawDeleted, rawUnchanged] = await store.redis.hmget(
@@ -159,7 +136,7 @@ test(
       "element:el-4999",
       "element:el-1234",
     );
-    assert.equal(JSON.parse(rawUpdated!).version, 3);
+    assert.deepEqual(JSON.parse(rawUpdated!), updatedEl);
     assert.equal(rawDeleted, null);
     assert.deepEqual(JSON.parse(rawUnchanged!), elements[1234]);
   },

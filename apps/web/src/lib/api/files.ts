@@ -24,7 +24,8 @@ export interface PresignedFileUploadResult {
 export async function uploadImageViaPresign(
   blob: Blob,
   dims?: { width?: number; height?: number; fileId?: string },
-): Promise<PresignedFileUploadResult> {
+  requireObjectStorage = false,
+): Promise<PresignedFileUploadResult | undefined> {
   const presignRes = await fetch(apiUrl("/api/files/presign"), {
     method: "POST",
     credentials: "include",
@@ -35,8 +36,10 @@ export async function uploadImageViaPresign(
       width: dims?.width,
       height: dims?.height,
       fileId: dims?.fileId,
+      requireObjectStorage,
     }),
   });
+  if (presignRes.status === 204) return undefined;
 
   if (!presignRes.ok) {
     const errBody = (await presignRes.json().catch(() => ({}))) as {

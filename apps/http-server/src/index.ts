@@ -5,6 +5,8 @@ import { openRoomRedis } from "@repo/redis";
 import { configureInvitationRateLimiter } from "./invitationRateLimit.js";
 import { configureGlobalRateLimiter } from "./rateLimitMiddleware.js";
 import { configureMcpServerDeps } from "./routes/mcp.js";
+import { configureRevisionBroadcast } from "./routes/revisions.js";
+import { configureFileMetadataStore } from "./routes/files.js";
 import { app, configureHealthChecks } from "./app.js";
 
 async function startServer() {
@@ -18,6 +20,8 @@ async function startServer() {
     configureInvitationRateLimiter(roomRedis);
     configureGlobalRateLimiter(roomRedis);
     configureMcpServerDeps({ getRoomRedis: () => roomRedis });
+    configureRevisionBroadcast(roomRedis);
+    configureFileMetadataStore(roomRedis.redis);
     configureHealthChecks({
       pingDb: () => pingDatabase(2_000),
       pingRedis: () => roomRedis.ping(2_000),

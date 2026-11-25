@@ -68,6 +68,7 @@ export function createTextElement(
   options: ElementOptions & {
     text: string;
     fontSize?: number;
+    fontFamily?: string;
     textAlign?: TextElement["textAlign"];
     verticalAlign?: TextElement["verticalAlign"];
     containerId?: string;
@@ -75,7 +76,7 @@ export function createTextElement(
   },
 ): TextElement {
   const fontSize = options.fontSize ?? DEFAULT_TEXT_FONT_SIZE;
-  const fontFamily = DEFAULT_TEXT_FONT_FAMILY;
+  const fontFamily = options.fontFamily ?? DEFAULT_TEXT_FONT_FAMILY;
   const { width: measuredWidth, height } = measureText(
     options.text,
     fontSize,

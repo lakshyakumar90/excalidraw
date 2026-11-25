@@ -1,4 +1,5 @@
 import express, { Router } from "express";
+import type { RoomRedis } from "@repo/redis";
 import {
   createPresignedDownloadUrl,
   createPresignedUpload,
@@ -22,6 +23,24 @@ interface StoredFileMeta {
 // In-process registry mapping fileId -> object metadata (and local dev binary blobs when S3 is unconfigured).
 const fileRegistry = new Map<string, StoredFileMeta>();
 const localBlobStore = new Map<string, { buffer: Buffer; mimeType: string }>();
+let metadataRedis: RoomRedis["redis"] | undefined;
+
+export function configureFileMetadataStore(redis: RoomRedis["redis"]) {
+  metadataRedis = redis;
+}
+
+async function readFileMeta(fileId: string) {
+  const local = fileRegistry.get(fileId);
+  if (local || !metadataRedis) return local;
+  const stored = await metadataRedis.get(`files:metadata:${fileId}`);
+  return stored ? JSON.parse(stored) as StoredFileMeta : undefined;
+}
+
+export async function getObjectFileDownloadUrl(fileId: string) {
+  const meta = await readFileMeta(fileId);
+  if (meta?.storageMode !== "s3") return null;
+  return createPresignedDownloadUrl(meta.objectKey);
+}
 
 export const filesRouter: Router = Router();
 
@@ -30,32 +49,32 @@ export const filesRouter: Router = Router();
  * Validates MIME type and size (<= 10 MB) and returns a presigned S3/R2 PUT URL
  * (or local dev PUT URL when S3_BUCKET is not configured).
  */
-filesRouter.post("/presign", (req, res) => {
-  const { mimeType, sizeBytes, width, height, fileId } = (req.body ?? {}) as {
+filesRouter.post("/presign", async (req, res) => {
+  const { mimeType, sizeBytes, width, height, requireObjectStorage } = (req.body ?? {}) as {
     mimeType?: unknown;
     sizeBytes?: unknown;
     width?: unknown;
     height?: unknown;
-    fileId?: unknown;
+    requireObjectStorage?: unknown;
   };
 
+  const config = readObjectStorageConfigFromEnv();
+  if (!config && requireObjectStorage === true) return res.sendStatus(204);
   const validation = validateImageUploadInput({ mimeType, sizeBytes });
   if (!validation.ok) {
     res.status(400).json({ error: validation.error });
     return;
   }
 
-  const config = readObjectStorageConfigFromEnv();
   const presigned = createPresignedUpload(
     {
       mimeType: validation.mimeType,
       sizeBytes: validation.sizeBytes,
-      fileId: typeof fileId === "string" && fileId.length > 0 ? fileId : undefined,
     },
     config,
   );
 
-  fileRegistry.set(presigned.fileId, {
+  const metadata: StoredFileMeta = {
     fileId: presigned.fileId,
     objectKey: presigned.objectKey,
     mimeType: validation.mimeType,
@@ -65,7 +84,10 @@ filesRouter.post("/presign", (req, res) => {
     uploadedBy: req.userId ?? "anonymous",
     createdAt: Date.now(),
     storageMode: presigned.storageMode,
-  });
+  };
+  if (metadata.storageMode === "s3" && metadataRedis)
+    await metadataRedis.set(`files:metadata:${metadata.fileId}`, JSON.stringify(metadata));
+  else fileRegistry.set(metadata.fileId, metadata);
 
   res.status(201).json({
     ...presigned,
@@ -88,12 +110,12 @@ filesRouter.put(
   (req, res) => {
     const fileId = String(req.params.fileId ?? "");
     const meta = fileRegistry.get(fileId);
-    if (!meta || meta.storageMode !== "local") {
+    if (!meta || meta.storageMode !== "local" || meta.uploadedBy !== req.userId) {
       res.status(404).json({ error: "Presigned local upload not found." });
       return;
     }
     const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    if (body.length === 0 || body.length > MAX_UPLOAD_BYTES) {
+    if (body.length !== meta.sizeBytes || req.get("content-type") !== meta.mimeType) {
       res.status(400).json({ error: "Invalid image payload size." });
       return;
     }
@@ -106,10 +128,10 @@ filesRouter.put(
  * GET /api/files/:fileId
  * Redirects to a short-lived presigned S3/R2 GET URL (or serves local dev blob).
  */
-filesRouter.get("/:fileId", (req, res) => {
+filesRouter.get("/:fileId", async (req, res) => {
   const fileId = String(req.params.fileId ?? "");
-  const meta = fileRegistry.get(fileId);
-  if (!meta) {
+  const meta = await readFileMeta(fileId);
+  if (!meta || meta.uploadedBy !== req.userId) {
     res.status(404).json({ error: "File not found." });
     return;
   }
@@ -120,7 +142,8 @@ filesRouter.get("/:fileId", (req, res) => {
       res.status(503).json({ error: "Object storage is not configured." });
       return;
     }
-    res.redirect(302, url);
+    if (req.query.url === "1") res.json({ url });
+    else res.redirect(302, url);
     return;
   }
 

@@ -5,12 +5,12 @@ import { authClient } from "@repo/auth/client";
 
 export function AccountLink() {
   const { data: session, isPending } = authClient.useSession();
-  const label = isPending ? "Account" : session ? "My scenes" : "Sign in";
+  const label = isPending ? "Account" : session ? "My boards" : "Sign in";
 
   return (
     <Link
       href={session ? "/dashboard" : "/login"}
-      className="editor-account-link rounded-lg border border-neutral-200 bg-white/95 px-3 text-center text-sm font-medium text-neutral-700 shadow-sm backdrop-blur transition hover:bg-white hover:text-neutral-950"
+      className="editor-account-link h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 px-3 text-center text-xs font-medium text-[var(--text-primary)] shadow-lg backdrop-blur-md transition hover:bg-[var(--bg-hover)]"
     >
       {label}
     </Link>

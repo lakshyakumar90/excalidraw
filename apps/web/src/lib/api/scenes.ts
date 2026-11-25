@@ -1,4 +1,4 @@
-import type { Element, Viewport } from "@repo/common";
+import type { BoardPresetId, Element, Viewport } from "@repo/common";
 
 import { apiRequest } from "./request";
 
@@ -35,10 +35,15 @@ export interface SceneSummary {
   title: string;
   createdAt: string;
   updatedAt: string;
+  role?: "owned" | "shared";
+  roomId?: number | null;
+  preset?: BoardPresetId;
+  thumbnail?: string;
+  thumbnailTheme?: "light" | "dark";
 }
 
-export async function listScenes(): Promise<SceneSummary[]> {
-  const result = await apiRequest<{ scenes: SceneSummary[] }>("/scenes");
+export async function listScenes(workspace = false): Promise<SceneSummary[]> {
+  const result = await apiRequest<{ scenes: SceneSummary[] }>(workspace ? "/scenes?workspace=true" : "/scenes");
   return result.scenes;
 }
 

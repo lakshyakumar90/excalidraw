@@ -42,7 +42,7 @@ export function Icon({
 
 function Shortcut({ children }: { children: string }) {
   return (
-    <kbd className="whitespace-nowrap rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 font-mono text-[11px] text-neutral-700 shadow-[0_1px_0_rgba(15,23,42,0.08)]">
+    <kbd className="whitespace-nowrap rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-1 font-mono text-[11px] text-[var(--text-primary)]">
       {children}
     </kbd>
   );
@@ -56,8 +56,8 @@ function ShortcutRow({
   shortcut: string;
 }) {
   return (
-    <div className="flex min-h-10 items-center justify-between gap-4 border-b border-neutral-100 py-2 last:border-0">
-      <span className="text-sm text-neutral-700">{action}</span>
+    <div className="flex min-h-9 items-center justify-between gap-4 border-b border-[var(--border-subtle)] py-1.5 last:border-0">
+      <span className="text-xs text-[var(--text-primary)]">{action}</span>
       <Shortcut>{shortcut}</Shortcut>
     </div>
   );
@@ -100,7 +100,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/45 p-4 backdrop-blur-[2px]"
+      className="animate-fade-in fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4 backdrop-blur-xs"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -111,17 +111,17 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-labelledby="help-title"
         tabIndex={-1}
-        className="flex max-h-[min(86vh,52rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-neutral-900 shadow-2xl outline-none"
+        className="animate-pop-up flex max-h-[min(86vh,52rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-primary)] shadow-2xl outline-none"
       >
-        <header className="flex items-start justify-between gap-5 border-b border-neutral-200 px-6 py-5 sm:px-8">
+        <header className="flex items-start justify-between gap-5 border-b border-[var(--border-subtle)] px-6 py-4 sm:px-7">
           <div>
             <h2
               id="help-title"
-              className="text-lg font-semibold tracking-tight"
+              className="text-base font-semibold tracking-tight"
             >
               Canvas guide
             </h2>
-            <p className="mt-1 text-sm text-neutral-500">
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">
               Drawing, selecting, and moving around the canvas.
             </p>
           </div>
@@ -129,7 +129,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             type="button"
             aria-label="Close help"
             onClick={onClose}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
           >
             <Icon name="close" />
           </button>
@@ -191,7 +191,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
                   action="Move selected elements"
                   shortcut="Arrow keys"
                 />
-                <p className="pt-3 text-xs leading-5 text-neutral-500">
+                <p className="pt-3 text-xs leading-5 text-[var(--text-muted)]">
                   Use the Hand tool to pan the canvas. With Select active, click
                   an element to select it; Alt-click cycles through overlapping
                   elements. Drag on empty canvas to select multiple elements.
@@ -200,7 +200,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         </div>
-        <footer className="border-t border-neutral-200 px-6 py-3 text-xs text-neutral-500 sm:px-8">
+        <footer className="border-t border-[var(--border-subtle)] px-6 py-3 text-xs text-[var(--text-muted)] sm:px-7">
           Shortcuts work when the canvas is active. Ctrl shortcuts also accept ⌘
           on Mac.
         </footer>

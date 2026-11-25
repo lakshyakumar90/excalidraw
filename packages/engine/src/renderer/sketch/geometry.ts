@@ -1,5 +1,6 @@
 import type { Element, Point } from "@repo/common";
 import { deriveSeed, mulberry32 } from "./prng";
+import { getRoughPathPoints } from "./roughPath";
 import { sketchSettings } from "./settings";
 
 export type SketchCommand =
@@ -357,43 +358,63 @@ function ellipseOutlines(
   });
 }
 
-/** Generate deterministic open strokes for lines and arrow shafts. */
+function toLineCommands(points: readonly Point[]): SketchCommand[] {
+  return points.map((point, index) => ({
+    type: index === 0 ? ("M" as const) : ("L" as const),
+    x: point.x,
+    y: point.y,
+  }));
+}
+
+/** Midpoint-quadratic smoothing: smooth curves with exact endpoints. */
+function toSmoothCommands(points: readonly Point[]): SketchCommand[] {
+  const first = points[0];
+  if (!first) return [];
+  if (points.length < 3) return toLineCommands(points);
+
+  const commands: SketchCommand[] = [{ type: "M", x: first.x, y: first.y }];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const current = points[index]!;
+    const next = points[index + 1]!;
+    commands.push({
+      type: "Q",
+      cx: current.x,
+      cy: current.y,
+      x: (current.x + next.x) / 2,
+      y: (current.y + next.y) / 2,
+    });
+  }
+  const last = points[points.length - 1]!;
+  commands.push({ type: "L", x: last.x, y: last.y });
+  return commands;
+}
+
+/** Generate deterministic, smoothly wobbling strokes for lines and arrows. */
 export function getSketchLinePaths(
   points: readonly Point[],
   element: Element,
   stream = 0,
 ): SketchCommand[][] {
   if (points.length < 2) return [];
-  const settings = sketchSettings(element.roughness);
-  if (settings.amplitude === 0) {
-    return [
-      [
-        ...points.map((p, index) => ({
-          type: index === 0 ? ("M" as const) : ("L" as const),
-          x: p.x,
-          y: p.y,
-        })),
-      ],
-    ];
+  if (sketchSettings(element.roughness).amplitude === 0) {
+    return [toLineCommands(points)];
   }
-  return [0, 1].map((pass) => {
-    const random = mulberry32(
-      deriveSeed(element.seed, 0x4c494e45 + stream * 17 + pass),
-    );
-    return points
-      .slice(0, -1)
-      .flatMap((start, index) =>
-        bezierEdge(
-          start,
-          points[index + 1]!,
-          random,
-          settings.amplitude,
-          0,
-          settings.amplitude * 0.12,
-          pass ? settings.doubleStrokeOffset : 0,
-        ),
-      );
-  });
+
+  const main = toSmoothCommands(getRoughPathPoints(points, false, element));
+
+  // Only the loosest sloppiness gets a faint companion stroke; arrowheads
+  // (stream > 0) always stay as a single clean line.
+  if ((element.roughness ?? 1) < 2 || stream > 0) return [main];
+
+  const seed = (deriveSeed(element.seed, 0x4c494e45 + stream * 17) ^ 0x9e3779b9) >>> 0;
+  const companion = toSmoothCommands(
+    getRoughPathPoints(points, false, {
+      ...element,
+      seed,
+      roughness: 0.35,
+    }),
+  );
+  return [main, companion];
 }
 
 function hatchSegments(

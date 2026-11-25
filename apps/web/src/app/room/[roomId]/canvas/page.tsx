@@ -55,6 +55,7 @@ export default function RoomCanvasPage() {
             title: room.name,
             elements: room.scene.data.elements as Element[],
             viewport: viewportFromSceneData(room.scene.data),
+            appState: room.scene.data.appState,
             ...(room.role === "viewer"
               ? {}
               : { saveData: (sceneData: Parameters<typeof saveRoomScene>[1]) => saveRoomScene(roomId, sceneData) }),
@@ -73,10 +74,27 @@ export default function RoomCanvasPage() {
     );
   }
   return (
-    <main className="grid min-h-screen place-items-center bg-[#faf9f6] p-5 text-neutral-900">
-      <p role={error ? "alert" : "status"}>
-        {error || (room ? "This room has no editable scene." : "Loading room…")}
-      </p>
+    <main className="grid min-h-screen place-items-center bg-[var(--bg-canvas)] p-5 text-[var(--text-primary)]">
+      {error || room ? (
+        <p role={error ? "alert" : "status"} className="text-xs text-[var(--text-muted)]">
+          {error || "This room has no editable scene."}
+        </p>
+      ) : (
+        <div
+          className="w-full max-w-md space-y-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6"
+          role="status"
+          aria-label="Loading room"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 animate-pulse rounded-xl bg-[var(--bg-hover)]" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3.5 w-36 animate-pulse rounded-md bg-[var(--bg-hover)]" />
+              <div className="h-2.5 w-52 animate-pulse rounded-md bg-[var(--bg-elevated)]" />
+            </div>
+          </div>
+          <div className="h-28 animate-pulse rounded-xl bg-[var(--bg-elevated)]" />
+        </div>
+      )}
     </main>
   );
 }

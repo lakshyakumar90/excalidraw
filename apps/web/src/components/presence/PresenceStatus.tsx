@@ -31,7 +31,7 @@ export function PresenceStatus({
       <p
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 rounded-full border border-black/10 bg-white/95 px-3 py-1.5 text-xs font-medium text-neutral-700 shadow-lg backdrop-blur"
+        className="flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-lg backdrop-blur-md"
       >
         <span aria-hidden="true" className={`h-2 w-2 rounded-full ${dot}`} />
         {STATUS_COPY[status]}
@@ -39,7 +39,7 @@ export function PresenceStatus({
       {detail && status === "offline" && (
         <p
           role="alert"
-          className="max-w-md rounded-lg border border-black/10 bg-white/95 px-3 py-1.5 text-center text-xs text-neutral-600 shadow-lg backdrop-blur"
+          className="max-w-md rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 px-3 py-1.5 text-center text-xs text-[var(--text-muted)] shadow-lg backdrop-blur-md"
         >
           {detail}
         </p>

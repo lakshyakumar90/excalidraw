@@ -81,8 +81,8 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
         <div className="dashboard-room-empty">
           <span className="dashboard-room-mark" aria-hidden="true">＋</span>
           <div>
-            <p className="font-semibold text-neutral-800">A shared space for your next idea</p>
-            <p className="mt-1 text-sm text-neutral-600">Start with a blank canvas or choose a saved scene.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">A shared space for your next idea</p>
+            <p className="mt-0.5 text-xs text-[var(--text-muted)]">Start with a blank canvas or choose a saved scene.</p>
           </div>
         </div>
       ) : (
@@ -92,10 +92,10 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
               <Link href={`/room/${room.id}`} className="dashboard-room-card min-w-0 flex-1">
                 <span className="dashboard-room-mark" aria-hidden="true">▧</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-neutral-900">{room.slug}</span>
-                  <span className="mt-1 block text-sm text-neutral-600">{room.role} · Shared canvas</span>
+                  <span className="block truncate text-sm font-semibold text-[var(--text-primary)]">{room.slug}</span>
+                  <span className="mt-0.5 block text-xs text-[var(--text-muted)]">{room.role} · Shared canvas</span>
                 </span>
-                <span aria-hidden="true" className="text-lg text-neutral-400">↗</span>
+                <span aria-hidden="true" className="text-base text-[var(--text-muted)]">↗</span>
               </Link>
               <RoomActions roomId={String(room.id)} name={room.slug} owner={room.role === "owner"} onComplete={() => setRooms((items) => items.filter((item) => item.id !== room.id))} />
             </li>
@@ -103,7 +103,7 @@ export function RoomsPanel({ scenes }: { scenes: SceneSummary[] }) {
         </ul>
       )}
 
-      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-xs text-rose-400">{error}</p>}
 
       <dialog
         ref={dialog}

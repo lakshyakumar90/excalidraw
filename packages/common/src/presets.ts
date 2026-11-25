@@ -90,11 +90,11 @@ export const BOARD_PRESET_LIST: readonly BoardPresetConfig[] = [
 ];
 
 export function isBoardPresetId(value: unknown): value is BoardPresetId {
-  return typeof value === "string" && value in BOARD_PRESETS;
+  return typeof value === "string" && Object.hasOwn(BOARD_PRESETS, value);
 }
 
 export function getBoardPreset(presetId: BoardPresetId = "excali-font"): BoardPresetConfig {
-  return BOARD_PRESETS[presetId] ?? BOARD_PRESETS["excali-font"];
+  return isBoardPresetId(presetId) ? BOARD_PRESETS[presetId] : BOARD_PRESETS["excali-font"];
 }
 
 /**

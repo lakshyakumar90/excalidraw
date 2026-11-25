@@ -15,6 +15,7 @@ model User {
   libraryItems LibraryItem[]
   sessions   Session[]
   accounts   Account[]
+  roomApiTokens RoomApiToken[]
   createdAt  TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -41,6 +42,7 @@ model Room {
   scene     Scene?       @relation(fields: [sceneId], references: [id], onDelete: Cascade)
   invites   Invite[]
   joinCodes JoinCode[]
+  apiTokens RoomApiToken[]
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 }
@@ -219,6 +221,7 @@ model Chat {
 model RoomApiToken {
   id          String             @id
   roomId      Int
+  room        Room               @relation(fields: [roomId], references: [id], onDelete: Cascade)
   sceneId     String
   tokenHash   String             @unique
   role        String             @default("editor")
@@ -227,6 +230,7 @@ model RoomApiToken {
   revokedAt   TimestamptzString?
   createdById String
   createdAt   TimestamptzString  @default(now())
+  createdBy   User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([roomId])
   @@index([createdById])

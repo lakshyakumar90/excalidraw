@@ -86,12 +86,15 @@ export function resizeSelectedGroup(
   const scaleY = vertical
     ? (point.y - anchorY) / ((top ? b.minY : b.maxY) - anchorY || 1)
     : null;
-  const scale =
+  const rawScale =
     scaleX !== null && scaleY !== null
       ? Math.abs(scaleX) >= Math.abs(scaleY)
         ? scaleX
         : scaleY
       : (scaleX ?? scaleY ?? 1);
+  // Keep a minimum positive scale so a group cannot flip inside out when the
+  // pointer is dragged past the anchored edge.
+  const scale = Math.max(0.02, rawScale);
   for (const original of originals) {
     const nextX = anchorX + (original.x - anchorX) * scale;
     const nextY = anchorY + (original.y - anchorY) * scale;

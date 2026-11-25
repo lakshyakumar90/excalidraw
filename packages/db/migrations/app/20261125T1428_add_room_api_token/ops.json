@@ -1,0 +1,245 @@
+[
+  {
+    "id": "table.roomApiToken",
+    "label": "Create table \"roomApiToken\"",
+    "summary": "Creates table \"roomApiToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "roomApiToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"roomApiToken\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"roomApiToken\"",
+        "sql": "CREATE TABLE \"public\".\"roomApiToken\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"createdById\" text NOT NULL,\n  \"expiresAt\" timestamptz NOT NULL,\n  \"id\" text NOT NULL,\n  \"label\" text,\n  \"revokedAt\" timestamptz,\n  \"role\" text DEFAULT 'editor' NOT NULL,\n  \"roomId\" int4 NOT NULL,\n  \"sceneId\" text NOT NULL,\n  \"tokenHash\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"roomApiToken\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.roomApiToken.roomApiToken_tokenHash_key",
+    "label": "Add unique constraint on \"roomApiToken\" (tokenHash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "roomApiToken_tokenHash_key",
+        "table": "roomApiToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"roomApiToken_tokenHash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomApiToken_tokenHash_key",
+          "public",
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"roomApiToken_tokenHash_key\"",
+        "sql": "ALTER TABLE \"public\".\"roomApiToken\" ADD CONSTRAINT \"roomApiToken_tokenHash_key\" UNIQUE (\"tokenHash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"roomApiToken_tokenHash_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomApiToken_tokenHash_key",
+          "public",
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.roomApiToken.roomApiToken_createdById_idx_8bf640ed",
+    "label": "Create index \"roomApiToken_createdById_idx_8bf640ed\" on \"roomApiToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "roomApiToken_createdById_idx_8bf640ed",
+        "table": "roomApiToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"roomApiToken_createdById_idx_8bf640ed\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"roomApiToken_createdById_idx_8bf640ed\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"roomApiToken_createdById_idx_8bf640ed\"",
+        "sql": "CREATE INDEX \"roomApiToken_createdById_idx_8bf640ed\" ON \"public\".\"roomApiToken\" (\"createdById\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"roomApiToken_createdById_idx_8bf640ed\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"roomApiToken_createdById_idx_8bf640ed\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.roomApiToken.roomApiToken_roomId_idx_fe51d647",
+    "label": "Create index \"roomApiToken_roomId_idx_fe51d647\" on \"roomApiToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "roomApiToken_roomId_idx_fe51d647",
+        "table": "roomApiToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"roomApiToken_roomId_idx_fe51d647\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"roomApiToken_roomId_idx_fe51d647\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"roomApiToken_roomId_idx_fe51d647\"",
+        "sql": "CREATE INDEX \"roomApiToken_roomId_idx_fe51d647\" ON \"public\".\"roomApiToken\" (\"roomId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"roomApiToken_roomId_idx_fe51d647\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"roomApiToken_roomId_idx_fe51d647\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.roomApiToken.roomApiToken_roomId_fkey",
+    "label": "Add foreign key \"roomApiToken_roomId_fkey\" on \"roomApiToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "roomApiToken_roomId_fkey",
+        "table": "roomApiToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"roomApiToken_roomId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomApiToken_roomId_fkey",
+          "public",
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"roomApiToken_roomId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"roomApiToken\"\nADD CONSTRAINT \"roomApiToken_roomId_fkey\"\nFOREIGN KEY (\"roomId\")\nREFERENCES \"public\".\"room\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"roomApiToken_roomId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomApiToken_roomId_fkey",
+          "public",
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.roomApiToken.roomApiToken_createdById_fkey",
+    "label": "Add foreign key \"roomApiToken_createdById_fkey\" on \"roomApiToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "roomApiToken_createdById_fkey",
+        "table": "roomApiToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"roomApiToken_createdById_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomApiToken_createdById_fkey",
+          "public",
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"roomApiToken_createdById_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"roomApiToken\"\nADD CONSTRAINT \"roomApiToken_createdById_fkey\"\nFOREIGN KEY (\"createdById\")\nREFERENCES \"public\".\"user\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"roomApiToken_createdById_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "roomApiToken_createdById_fkey",
+          "public",
+          "\"public\".\"roomApiToken\""
+        ]
+      }
+    ]
+  }
+]

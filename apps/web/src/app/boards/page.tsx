@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { authClient } from "@repo/auth/client";
+import { GuestDrawingOffer } from "@/components/dashboard/GuestDrawingOffer";
+import { ChitranBrand } from "@/components/brand/ChitranLogo";
+import { SelectDropdown } from "@/components/ui/SelectDropdown";
 import {
   BOARD_PRESET_LIST,
   type BoardPresetId,
@@ -10,6 +15,7 @@ import { useCanvasTheme } from "@/lib/theme";
 import {
   createScene,
   deleteScene,
+  getScene,
   listScenes,
   renameScene,
   type SceneSummary,
@@ -18,7 +24,14 @@ import {
 type FilterRole = "all" | "owned" | "shared" | "recent";
 type ViewMode = "grid" | "list";
 
+function boardHref(board: SceneSummary) {
+  return board.roomId ? `/room/${board.roomId}/canvas` : `/canvas/${encodeURIComponent(board.id)}`;
+}
+
 export default function MyBoardsPage() {
+  const router = useRouter();
+  const { data: session, isPending: authPending } = authClient.useSession();
+  const userId = session?.user.id;
   const { theme, setTheme, toggleTheme } = useCanvasTheme();
   const [boards, setBoards] = useState<SceneSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,14 +48,22 @@ export default function MyBoardsPage() {
   const [newTheme, setNewTheme] = useState<"dark" | "light">(theme);
   const [creating, setCreating] = useState(false);
 
-  // Rename & delete state
+  // Rename, delete & 3-dot menu state
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [mountNow] = useState(() => Date.now());
 
   useEffect(() => {
+    if (authPending) return;
+    if (!userId) {
+      const returnTo = `/boards${window.location.search}`;
+      router.replace(`/sign-in?returnTo=${encodeURIComponent(returnTo)}`);
+      return;
+    }
     let active = true;
-    void listScenes()
+    void listScenes(true)
       .then((items) => {
         if (active) setBoards(items);
       })
@@ -56,7 +77,7 @@ export default function MyBoardsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authPending, router, userId]);
 
   const filteredBoards = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -66,12 +87,15 @@ export default function MyBoardsPage() {
       }
       if (roleFilter === "recent") {
         const updated = new Date(board.updatedAt).getTime();
-        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const sevenDaysAgo = mountNow - 7 * 24 * 60 * 60 * 1000;
         if (updated < sevenDaysAgo) return false;
       }
+      if (roleFilter === "owned" && board.role === "shared") return false;
+      if (roleFilter === "shared" && board.role !== "shared") return false;
+      if (presetFilter !== "all" && (board.preset ?? "excali-font") !== presetFilter) return false;
       return true;
     });
-  }, [boards, search, roleFilter]);
+  }, [boards, search, roleFilter, presetFilter, mountNow]);
 
   async function handleCreateBoard() {
     setCreating(true);
@@ -80,8 +104,9 @@ export default function MyBoardsPage() {
       setTheme(newTheme);
       const created = await createScene(newTitle.trim() || "Untitled Board", {
         elements: [],
+        appState: { boardPreset: newPreset, theme: newTheme },
       });
-      setBoards((prev) => [created, ...prev]);
+      setBoards((prev) => [{ ...created, preset: newPreset }, ...prev]);
       setNewModalOpen(false);
       setNewTitle("Untitled Board");
     } catch (err) {
@@ -93,10 +118,9 @@ export default function MyBoardsPage() {
 
   async function handleDuplicate(board: SceneSummary) {
     try {
-      const copy = await createScene(`${board.title || "Untitled"} (Copy)`, {
-        elements: [],
-      });
-      setBoards((prev) => [copy, ...prev]);
+      const source = await getScene(board.id);
+      const copy = await createScene(`${board.title || "Untitled"} (Copy)`, source.data);
+      setBoards((prev) => [{ ...copy, preset: board.preset, thumbnail: board.thumbnail }, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to duplicate board.");
     }
@@ -107,7 +131,7 @@ export default function MyBoardsPage() {
     if (!title) return;
     try {
       const updated = await renameScene(id, title);
-      setBoards((prev) => prev.map((b) => (b.id === id ? updated : b)));
+      setBoards((prev) => prev.map((b) => (b.id === id ? { ...b, title: updated.title, updatedAt: updated.updatedAt } : b)));
       setRenamingId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to rename board.");
@@ -125,96 +149,88 @@ export default function MyBoardsPage() {
   }
 
   return (
-    <main className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/90 px-6 py-3.5 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2 font-semibold">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-bold text-white">
-                E
-              </span>
-              <span>My Boards</span>
-            </Link>
-            <Link
-              href="/dashboard"
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            >
-              Rooms &amp; Invites
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="rounded-full border border-[var(--border-subtle)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            >
-              {theme === "dark" ? "☀ Light" : "☾ Dark"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setNewModalOpen(true)}
-              className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[var(--accent-hover)]"
-            >
-              + New Board
-            </button>
-          </div>
+    <main className="dashboard-page min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+      <header className="dashboard-topbar">
+        <Link href="/" className="dashboard-brand">
+          <ChitranBrand />
+        </Link>
+        <nav className="dashboard-topbar-nav" aria-label="Boards navigation">
+          <Link href="/boards" className="!text-[var(--text-primary)]">My Boards</Link>
+          <Link href="/dashboard">Workspace &amp; Rooms</Link>
+        </nav>
+        <div className="flex items-center justify-self-end gap-2">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setNewModalOpen(true)}
+            className="h-9 rounded-xl bg-[var(--accent)] px-3.5 text-xs font-semibold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)]"
+          >
+            + New Board
+          </button>
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 py-8">
+      <section className="mx-auto max-w-6xl px-5 py-7">
+        {userId && <GuestDrawingOffer userId={userId} onSaved={(saved) =>
+          setBoards((current) => [saved, ...current.filter((board) => board.id !== saved.id)])
+        } />}
         {/* Search & filters */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-1 min-w-[220px] max-w-md items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-2">
+          <div className="flex h-9 min-w-[220px] flex-1 max-w-sm items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 transition focus-within:border-[var(--border-soft)]">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search boards by title…"
-              className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+              className="w-full border-0 bg-transparent text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:outline-none focus-visible:outline-none"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
             {(["all", "owned", "shared", "recent"] as FilterRole[]).map((role) => (
               <button
                 key={role}
                 type="button"
                 onClick={() => setRoleFilter(role)}
-                className={`rounded-full px-3 py-1.5 font-medium capitalize transition-colors ${
+                className={`h-9 rounded-xl px-3 font-medium capitalize transition-colors ${
                   roleFilter === role
-                    ? "bg-[var(--accent)] text-white"
-                    : "border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                    : "border border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 {role === "shared" ? "Shared with me" : role}
               </button>
             ))}
 
-            <select
-              aria-label="Filter by board preset"
+            <SelectDropdown
+              ariaLabel="Filter by board preset"
               value={presetFilter}
-              onChange={(e) =>
-                setPresetFilter(e.target.value as BoardPresetId | "all")
-              }
-              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs text-[var(--text-primary)]"
-            >
-              <option value="all">All presets</option>
-              {BOARD_PRESET_LIST.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setPresetFilter(val as BoardPresetId | "all")}
+              options={[
+                { value: "all", label: "All presets" },
+                ...BOARD_PRESET_LIST.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
 
-            <div className="flex rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-0.5">
+            <div className="flex h-9 items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`rounded-full px-2.5 py-1 ${
+                className={`h-full rounded-lg px-2.5 text-xs font-medium transition ${
                   viewMode === "grid"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)]"
+                    ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 Grid
@@ -222,10 +238,10 @@ export default function MyBoardsPage() {
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                className={`rounded-full px-2.5 py-1 ${
+                className={`h-full rounded-lg px-2.5 text-xs font-medium transition ${
                   viewMode === "list"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--text-muted)]"
+                    ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 }`}
               >
                 List
@@ -235,14 +251,22 @@ export default function MyBoardsPage() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-300">
+          <div className="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-400">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="py-16 text-center text-sm text-[var(--text-muted)]">
-            Loading your boards…
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Loading boards">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                <div className="aspect-video animate-pulse bg-[var(--bg-elevated)]" />
+                <div className="space-y-2 p-4">
+                  <div className="h-3.5 w-32 animate-pulse rounded bg-[var(--bg-hover)]" />
+                  <div className="h-2.5 w-24 animate-pulse rounded bg-[var(--bg-elevated)]" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredBoards.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-surface)] py-16 text-center">
@@ -252,7 +276,7 @@ export default function MyBoardsPage() {
             <button
               type="button"
               onClick={() => setNewModalOpen(true)}
-              className="mt-4 rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white"
+              className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)]"
             >
               Create your first board
             </button>
@@ -262,87 +286,120 @@ export default function MyBoardsPage() {
             {filteredBoards.map((board) => (
               <article
                 key={board.id}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition-shadow hover:shadow-lg"
+                className="group relative flex flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] transition hover:border-[var(--border-soft)]"
               >
                 <Link
-                  href={`/canvas/${encodeURIComponent(board.id)}`}
-                  className="flex aspect-video items-center justify-center bg-[var(--bg-surface)] border-b border-[var(--border-subtle)]"
+                  href={boardHref(board)}
+                  className="flex aspect-video items-center justify-center overflow-hidden rounded-t-2xl border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]"
                 >
-                  <span className="text-xs font-mono text-[var(--text-muted)]">
-                    Open Canvas →
-                  </span>
+                  {board.thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={board.thumbnail}
+                      alt=""
+                      className={`h-full w-full object-cover ${
+                        theme !== (board.thumbnailTheme ?? "dark")
+                          ? "invert hue-rotate-180 opacity-90"
+                          : ""
+                      }`}
+                    />
+                  ) : (
+                    <span className="font-mono text-xs text-[var(--text-muted)] transition group-hover:text-[var(--text-primary)]">
+                      Open Canvas →
+                    </span>
+                  )}
                 </Link>
-                <div className="flex flex-col gap-2 p-4">
+                <div className="flex items-center justify-between gap-2 p-4">
                   {renamingId === board.id ? (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex w-full items-center gap-1.5">
                       <input
                         value={renameDraft}
                         onChange={(e) => setRenameDraft(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") void handleRename(board.id);
+                          if (e.key === "Escape") setRenamingId(null);
                         }}
-                        className="flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-1 text-xs"
+                        className="flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2.5 py-1 text-xs text-[var(--text-primary)] outline-none"
                         autoFocus
                       />
                       <button
                         type="button"
                         onClick={() => void handleRename(board.id)}
-                        className="rounded-lg bg-[var(--accent)] px-2.5 py-1 text-xs text-white"
+                        className="rounded-lg bg-[var(--accent)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-fg)]"
                       >
                         Save
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-start justify-between gap-2">
-                      <Link
-                        href={`/canvas/${encodeURIComponent(board.id)}`}
-                        className="truncate text-sm font-semibold hover:text-[var(--accent)]"
-                      >
-                        {board.title || "Untitled Board"}
-                      </Link>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-                    <span>
-                      Updated {new Date(board.updatedAt).toLocaleDateString()}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRenamingId(board.id);
-                          setRenameDraft(board.title || "");
-                        }}
-                        className="hover:text-[var(--text-primary)]"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDuplicate(board)}
-                        className="hover:text-[var(--text-primary)]"
-                      >
-                        Duplicate
-                      </button>
-                      {deletingId === board.id ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(board.id)}
-                          className="font-semibold text-rose-400"
+                    <>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={boardHref(board)}
+                          className="block truncate text-sm font-semibold text-[var(--text-primary)] hover:underline"
                         >
-                          Confirm?
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDeletingId(board.id)}
-                          className="hover:text-rose-400"
-                        >
-                          Delete
-                        </button>
+                          {board.title || "Untitled Board"}
+                        </Link>
+                        <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
+                          Updated {new Date(board.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {board.role !== "shared" && (
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            aria-label="Board options"
+                            onClick={() => setMenuId((curr) => (curr === board.id ? null : board.id))}
+                            className="grid h-8 w-8 place-items-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                          >
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                              <circle cx="5" cy="12" r="1.8" />
+                              <circle cx="12" cy="12" r="1.8" />
+                              <circle cx="19" cy="12" r="1.8" />
+                            </svg>
+                          </button>
+                          {menuId === board.id && (
+                            <div className="animate-pop-up absolute right-0 bottom-[calc(100%+6px)] z-30 w-36 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1 text-xs shadow-2xl">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMenuId(null);
+                                  setRenamingId(board.id);
+                                  setRenameDraft(board.title || "");
+                                }}
+                                className="w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-[var(--bg-hover)]"
+                              >
+                                Rename
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMenuId(null);
+                                  void handleDuplicate(board);
+                                }}
+                                className="w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-[var(--bg-hover)]"
+                              >
+                                Duplicate
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (deletingId === board.id) {
+                                    setMenuId(null);
+                                    void handleDelete(board.id);
+                                  } else {
+                                    setDeletingId(board.id);
+                                  }
+                                }}
+                                className="w-full rounded-lg px-2.5 py-1.5 text-left text-rose-400 hover:bg-rose-500/10"
+                              >
+                                {deletingId === board.id ? "Confirm delete" : "Delete"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  </div>
+                    </>
+                  )}
                 </div>
               </article>
             ))}
@@ -355,27 +412,34 @@ export default function MyBoardsPage() {
                 className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
               >
                 <Link
-                  href={`/canvas/${encodeURIComponent(board.id)}`}
-                  className="font-medium hover:text-[var(--accent)]"
+                  href={boardHref(board)}
+                  className="font-medium text-[var(--text-primary)] hover:underline"
                 >
                   {board.title || "Untitled Board"}
                 </Link>
                 <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
                   <span>{new Date(board.updatedAt).toLocaleDateString()}</span>
-                  <button
-                    type="button"
-                    onClick={() => void handleDuplicate(board)}
-                    className="hover:text-[var(--text-primary)]"
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete(board.id)}
-                    className="hover:text-rose-400"
-                  >
-                    Delete
-                  </button>
+                  {board.role !== "shared" && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDuplicate(board)}
+                      className="hover:text-[var(--text-primary)]"
+                    >
+                      Duplicate
+                    </button>
+                  )}
+                  {board.role !== "shared" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (deletingId === board.id) void handleDelete(board.id);
+                        else setDeletingId(board.id);
+                      }}
+                      className="hover:text-rose-400"
+                    >
+                      {deletingId === board.id ? "Confirm delete" : "Delete"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -383,25 +447,44 @@ export default function MyBoardsPage() {
         )}
       </section>
 
-      {/* New Board Modal */}
+      {/* New Board Modal (larger, click-outside to close) */}
       {newModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold">Create New Board</h2>
+        <div
+          className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-xs"
+          onClick={() => setNewModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create New Board"
+            className="animate-pop-up w-full max-w-lg rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold">Create New Board</h2>
+              <button
+                type="button"
+                onClick={() => setNewModalOpen(false)}
+                aria-label="Close"
+                className="grid h-8 w-8 place-items-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+              >
+                ✕
+              </button>
+            </div>
             <div className="mt-4 space-y-4 text-sm">
               <div>
-                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">
                   Board Title
                 </label>
                 <input
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none"
+                  className="h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-soft)]"
                 />
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs text-[var(--text-muted)]">
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">
                   Visual Preset
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -410,13 +493,13 @@ export default function MyBoardsPage() {
                       key={preset.id}
                       type="button"
                       onClick={() => setNewPreset(preset.id)}
-                      className={`rounded-xl border p-2.5 text-left text-xs transition-colors ${
+                      className={`rounded-xl border p-3 text-left text-xs transition-colors ${
                         newPreset === preset.id
-                          ? "border-[var(--accent)] bg-[var(--accent)]/15"
-                          : "border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+                          ? "border-[var(--accent)] bg-[var(--bg-surface)]"
+                          : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] hover:border-[var(--border-soft)]"
                       }`}
                     >
-                      <div className="font-semibold">{preset.name}</div>
+                      <div className="font-semibold text-[var(--text-primary)]">{preset.name}</div>
                       <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
                         {preset.description}
                       </div>
@@ -426,7 +509,7 @@ export default function MyBoardsPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs text-[var(--text-muted)]">
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">
                   Canvas Theme
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -435,10 +518,10 @@ export default function MyBoardsPage() {
                       key={mode}
                       type="button"
                       onClick={() => setNewTheme(mode)}
-                      className={`rounded-xl border py-2 text-xs font-medium capitalize ${
+                      className={`rounded-xl border py-2.5 text-xs font-medium capitalize transition ${
                         newTheme === mode
-                          ? "border-[var(--accent)] bg-[var(--accent)]/15"
-                          : "border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+                          ? "border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                          : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-[var(--text-muted)]"
                       }`}
                     >
                       {mode} mode
@@ -452,7 +535,7 @@ export default function MyBoardsPage() {
               <button
                 type="button"
                 onClick={() => setNewModalOpen(false)}
-                className="rounded-full border border-[var(--border-subtle)] px-4 py-1.5 text-xs"
+                className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
               >
                 Cancel
               </button>
@@ -460,7 +543,7 @@ export default function MyBoardsPage() {
                 type="button"
                 disabled={creating}
                 onClick={() => void handleCreateBoard()}
-                className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                className="rounded-xl bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
               >
                 {creating ? "Creating…" : "Create Board"}
               </button>

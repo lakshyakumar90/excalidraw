@@ -20,6 +20,7 @@ import {
 } from "@/components/canvas/text/TextEditorOverlay";
 
 interface DoubleClickOptions {
+  fontFamily?: string;
   getPointerPosition: (event: MouseEvent) => Point;
   viewportRef: RefObject<Viewport>;
   textEditorRef: RefObject<TextEditorState | null>;
@@ -28,6 +29,7 @@ interface DoubleClickOptions {
 }
 
 export function createCanvasDoubleClickHandler({
+  fontFamily,
   getPointerPosition,
   viewportRef,
   textEditorRef,
@@ -75,6 +77,7 @@ export function createCanvasDoubleClickHandler({
         historyStore.startCapture();
         if (container.type === "rectangle") {
           textElement = createTextElement({
+            fontFamily,
             text: "",
             x: container.x,
             y: container.y,
@@ -89,6 +92,7 @@ export function createCanvasDoubleClickHandler({
           const midpoint = getArrowMidpoint(container);
           const emptyTextMetrics = measureText("");
           textElement = createTextElement({
+            fontFamily,
             text: "",
             x: midpoint.x - 10,
             y: midpoint.y - emptyTextMetrics.height / 2,
@@ -179,6 +183,7 @@ export function createCanvasDoubleClickHandler({
     commitTextElement(textEditorRef.current);
     historyStore.startCapture();
     const textElement = createTextElement({
+      fontFamily,
       text: "",
       x: scenePoint.x,
       y: scenePoint.y,

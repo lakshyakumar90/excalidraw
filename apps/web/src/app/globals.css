@@ -4,15 +4,22 @@
 
 :root,
 [data-theme="dark"] {
-  --bg-canvas: #0d1117;
-  --bg-surface: #111318;
-  --bg-elevated: #181c24;
-  --border-subtle: rgba(148, 163, 184, 0.16);
-  --border-soft: rgba(148, 163, 184, 0.24);
-  --text-primary: #f1f5f9;
-  --text-muted: #94a3b8;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
+  --bg-canvas: #111111;
+  --bg-surface: #161616;
+  --bg-elevated: #1c1c1c;
+  --bg-hover: #262626;
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-soft: rgba(255, 255, 255, 0.16);
+  --text-primary: #f4f4f5;
+  --text-muted: #8e8e93;
+  --accent: #ffffff;
+  --accent-fg: #111111;
+  --accent-hover: #e4e4e7;
+  --focus-ring: rgba(255, 255, 255, 0.38);
+  --danger: #ef4444;
+  --danger-surface: rgba(239, 68, 68, 0.12);
+  --success: #22c55e;
+  --success-surface: rgba(34, 197, 94, 0.12);
 
   /* Legacy aliases kept in sync for existing components */
   --background: var(--bg-canvas);
@@ -21,19 +28,26 @@
 }
 
 [data-theme="light"] {
-  --bg-canvas: #ffffff;
-  --bg-surface: #f8fafc;
+  --bg-canvas: #fafafa;
+  --bg-surface: #ffffff;
   --bg-elevated: #ffffff;
-  --border-subtle: #e2e8f0;
-  --border-soft: #cbd5e1;
-  --text-primary: #0f172a;
-  --text-muted: #64748b;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  --bg-hover: #f4f4f5;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.15);
+  --text-primary: #111111;
+  --text-muted: #71717a;
+  --accent: #111111;
+  --accent-fg: #ffffff;
+  --accent-hover: #27272a;
+  --focus-ring: rgba(17, 17, 17, 0.28);
+  --danger: #dc2626;
+  --danger-surface: rgba(220, 38, 38, 0.08);
+  --success: #16a34a;
+  --success-surface: rgba(22, 163, 74, 0.08);
 
   --background: var(--bg-canvas);
   --foreground: var(--text-primary);
-  --surface-muted: #f1f5f9;
+  --surface-muted: #f4f4f5;
 }
 
 @theme inline {
@@ -47,6 +61,72 @@ body {
   background: var(--bg-canvas);
   color: var(--text-primary);
   font-family: var(--font-sans);
+}
+
+.auth-grid-bg {
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(to right, var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+@keyframes chitran-pop-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes chitran-drawer-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chitran-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-pop-up {
+  animation: chitran-pop-up 170ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-drawer-right {
+  animation: chitran-drawer-right 210ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-in {
+  animation: chitran-fade-in 160ms ease-out both;
+}
+
+@keyframes chitran-draw-stroke {
+  from {
+    stroke-dashoffset: var(--draw-len, 2400);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-draw-stroke {
+  stroke-dasharray: var(--draw-len, 2400);
+  stroke-dashoffset: var(--draw-len, 2400);
+  animation: chitran-draw-stroke 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes text-editor-caret-blink {
@@ -84,6 +164,6 @@ summary {
   -webkit-tap-highlight-color: transparent;
 }
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }

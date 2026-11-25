@@ -271,3 +271,43 @@ test("room image files upload before the referencing commit saves", async () => 
     );
   });
 });
+
+test("room object storage uploads binary bytes and returns a fresh download URL to members", {
+  skip: !process.env.S3_BUCKET,
+}, async () => {
+  await withRoomStack(async (base) => {
+    const headers = { "Content-Type": "application/json", "x-user": "alice" };
+    const bytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aPxoAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const request = await fetch(`${base}/room/1/files/presign`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ fileId: "object-file", mimeType: "image/png", sizeBytes: bytes.length }),
+    });
+    assert.equal(request.status, 200);
+    const target = await request.json() as {
+      uploadUrl: string; objectKey: string; headers: Record<string, string>;
+    };
+    const upload = await fetch(target.uploadUrl, { method: "PUT", headers: target.headers, body: bytes });
+    assert.equal(upload.status, 200);
+    const attached = await fetch(`${base}/room/1/files`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        fileId: "object-file",
+        objectKey: target.objectKey,
+        file: { id: "object-file", mimeType: "image/png", created: 1 },
+      }),
+    });
+    assert.equal(attached.status, 200, await attached.text());
+    const peer = await fetch(`${base}/room/1/files/object-file`, { headers: { "x-user": "carol" } });
+    assert.equal(peer.status, 200);
+    const { file } = await peer.json() as { file: { dataURL: string; downloadUrl: string } };
+    assert.ok(file.dataURL.startsWith("/api/files/room-object/"));
+    const downloaded = await fetch(file.downloadUrl);
+    assert.equal(downloaded.status, 200);
+    assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), bytes);
+  });
+});

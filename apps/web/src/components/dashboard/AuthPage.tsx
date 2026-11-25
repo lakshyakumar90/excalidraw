@@ -2,9 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { authClient } from "@repo/auth/client";
+import { ChitranBrand } from "@/components/brand/ChitranLogo";
 import { AuthPanel } from "./AuthPanel";
+
+function drawStyle(len: number, delayMs: number): CSSProperties {
+  return {
+    "--draw-len": len,
+    animationDelay: `${delayMs}ms`,
+  } as CSSProperties;
+}
 
 export function AuthPage({
   mode,
@@ -26,111 +34,194 @@ export function AuthPage({
       : `/sign-in${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ""}`;
 
   return (
-    <main className="min-h-dvh bg-[var(--bg-canvas)] text-[var(--text-primary)] grid lg:grid-cols-2">
-      {/* Left: Dark interactive sketch preview & product positioning */}
-      <section className="relative hidden lg:flex flex-col justify-between overflow-hidden border-r border-[var(--border-subtle)] bg-[#0B0F17] p-10 text-slate-100">
-        <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500 text-sm font-bold text-white shadow-sm">
-              E
-            </span>
-            <span className="text-lg">Excalidraw Studio</span>
-          </Link>
-          <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-3 py-1 text-xs text-slate-300">
-            Realtime · Slides · AI · MCP
-          </span>
-        </div>
+    <main className="auth-grid-bg relative flex min-h-dvh flex-col overflow-hidden text-[var(--text-primary)]">
+      {/* Animated Architectural Artboard Blueprint (draws on open) */}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 1000 720"
+        preserveAspectRatio="xMidYMid slice"
+        className="pointer-events-none fixed inset-0 h-full w-full opacity-65"
+      >
+        <g stroke="var(--border-soft)" strokeWidth="1" fill="none">
+          {/* Outer artboard frame */}
+          <rect
+            x="220"
+            y="60"
+            width="560"
+            height="600"
+            className="animate-draw-stroke"
+            style={drawStyle(2320, 0)}
+          />
+          {/* Inner dashed safe-area frame */}
+          <rect
+            x="260"
+            y="100"
+            width="480"
+            height="520"
+            strokeDasharray="4 4"
+            className="animate-fade-in"
+            style={{ animationDelay: "250ms" }}
+          />
+          {/* Diagonal construction lines */}
+          <line
+            x1="220"
+            y1="60"
+            x2="780"
+            y2="660"
+            strokeOpacity="0.45"
+            className="animate-draw-stroke"
+            style={drawStyle(850, 150)}
+          />
+          <line
+            x1="780"
+            y1="60"
+            x2="220"
+            y2="660"
+            strokeOpacity="0.45"
+            className="animate-draw-stroke"
+            style={drawStyle(850, 220)}
+          />
+          {/* Concentric & overlapping circles */}
+          <circle
+            cx="500"
+            cy="360"
+            r="240"
+            strokeOpacity="0.85"
+            className="animate-draw-stroke"
+            style={drawStyle(1510, 220)}
+          />
+          <circle
+            cx="500"
+            cy="360"
+            r="175"
+            strokeOpacity="0.4"
+            className="animate-draw-stroke"
+            style={drawStyle(1100, 320)}
+          />
+          <circle
+            cx="500"
+            cy="360"
+            r="110"
+            strokeOpacity="0.45"
+            className="animate-draw-stroke"
+            style={drawStyle(700, 420)}
+          />
+          {/* Overlapping offset circles */}
+          <circle
+            cx="370"
+            cy="240"
+            r="120"
+            strokeOpacity="0.35"
+            className="animate-draw-stroke"
+            style={drawStyle(760, 460)}
+          />
+          <circle
+            cx="630"
+            cy="480"
+            r="120"
+            strokeOpacity="0.35"
+            className="animate-draw-stroke"
+            style={drawStyle(760, 520)}
+          />
+          {/* Overlapping rounded squircle & rotated keylines */}
+          <rect
+            x="280"
+            y="120"
+            width="440"
+            height="480"
+            rx="64"
+            strokeOpacity="0.45"
+            className="animate-draw-stroke"
+            style={drawStyle(1840, 350)}
+          />
+          <rect
+            x="320"
+            y="160"
+            width="360"
+            height="400"
+            rx="32"
+            strokeOpacity="0.35"
+            className="animate-draw-stroke"
+            style={drawStyle(1520, 480)}
+          />
+          <rect
+            x="360"
+            y="220"
+            width="280"
+            height="280"
+            rx="16"
+            transform="rotate(45 500 360)"
+            strokeOpacity="0.28"
+            className="animate-draw-stroke"
+            style={drawStyle(1120, 560)}
+          />
+        </g>
 
-        {/* Subtle interactive sketch canvas preview */}
-        <div className="my-8 rounded-2xl border border-slate-800/90 bg-[#0D1117] p-6 shadow-2xl">
-          <svg
-            viewBox="0 0 480 250"
-            className="w-full h-auto"
-            aria-label="Collaborative architecture sketch preview"
+        {/* Coordinate ticks & Chitran annotations */}
+        <g
+          fill="var(--text-muted)"
+          fontFamily="var(--font-mono)"
+          fontSize="10"
+          opacity="0.7"
+          className="animate-fade-in"
+          style={{ animationDelay: "500ms" }}
+        >
+          <text x="224" y="48">24 × 24 artboard</text>
+          <text x="315" y="48">4</text>
+          <text x="410" y="48">8</text>
+          <text x="496" y="48">12</text>
+          <text x="588" y="48">16</text>
+          <text x="682" y="48">20</text>
+          <text x="200" y="165">4</text>
+          <text x="200" y="265">8</text>
+          <text x="195" y="365">12</text>
+          <text x="195" y="465">16</text>
+          <text x="195" y="565">20</text>
+          <text x="272" y="116">2px stroke · hand-drawn</text>
+          <text x="645" y="154">keyline · r64</text>
+          <text x="790" y="210">1 unit = 1 px</text>
+          <text x="284" y="612">realtime · crdt sync</text>
+          <text x="625" y="612">ai · mcp ready</text>
+          <text x="635" y="678">chitran · infinite canvas</text>
+        </g>
+      </svg>
+
+      {/* Top bar */}
+      <header className="relative z-10 flex items-center justify-between px-5 py-4 sm:px-8">
+        <Link href="/" className="flex items-center gap-2.5">
+          <ChitranBrand />
+        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={switchHref}
+            className="rounded-xl px-3 py-1.5 text-xs font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
-            <defs>
-              <pattern id="auth-dots" width="20" height="20" patternUnits="userSpaceOnUse">
-                <circle cx="2" cy="2" r="1" fill="rgba(148,163,184,0.22)" />
-              </pattern>
-            </defs>
-            <rect width="480" height="250" rx="12" fill="url(#auth-dots)" />
-            <rect x="32" y="42" width="128" height="62" rx="10" fill="rgba(99,102,241,0.14)" stroke="#818CF8" strokeWidth="2" />
-            <text x="96" y="78" textAnchor="middle" fill="#E2E8F0" fontSize="13" fontWeight="600">Canvas Client</text>
-            <rect x="200" y="42" width="128" height="62" rx="10" fill="rgba(16,185,129,0.14)" stroke="#34D399" strokeWidth="2" />
-            <text x="264" y="78" textAnchor="middle" fill="#E2E8F0" fontSize="13" fontWeight="600">Redis Delta CAS</text>
-            <rect x="364" y="42" width="90" height="62" rx="10" fill="rgba(245,158,11,0.14)" stroke="#FBBF24" strokeWidth="2" />
-            <text x="409" y="78" textAnchor="middle" fill="#E2E8F0" fontSize="13" fontWeight="600">Postgres</text>
-            <rect x="112" y="154" width="248" height="58" rx="10" fill="rgba(168,85,247,0.14)" stroke="#C084FC" strokeWidth="2" strokeDasharray="6 4" />
-            <text x="236" y="188" textAnchor="middle" fill="#F1F5F9" fontSize="13" fontWeight="600">Streamable HTTP MCP · AI Agents</text>
-            <path d="M160 73 L196 73" stroke="#94A3B8" strokeWidth="2" markerEnd="url(#arrow)" />
-            <path d="M328 73 L360 73" stroke="#94A3B8" strokeWidth="2" />
-            <path d="M236 154 L264 106" stroke="#C084FC" strokeWidth="2" strokeDasharray="4 3" />
-          </svg>
-        </div>
-
-        <div className="space-y-3">
-          <h1 className="text-3xl font-bold tracking-tight text-white">
-            {mode === "login"
-              ? "Sketch fast. Ship architecture together."
-              : "Your infinite whiteboard, upgraded."}
-          </h1>
-          <p className="max-w-md text-sm leading-relaxed text-slate-400">
-            Dark &amp; light themes, 4 handcrafted board presets, frame-based Slides,
-            live Mermaid diagram code, and built-in MCP agent sync.
-          </p>
-          <div className="flex flex-wrap gap-2 pt-2 text-xs text-slate-300">
-            <span className="rounded-full bg-slate-800/80 px-3 py-1">Black &amp; White</span>
-            <span className="rounded-full bg-slate-800/80 px-3 py-1">Excali Font</span>
-            <span className="rounded-full bg-slate-800/80 px-3 py-1">Chalk Bold</span>
-            <span className="rounded-full bg-slate-800/80 px-3 py-1">Clean Sketch</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Right: Crisp Auth Card */}
-      <section className="flex flex-col justify-between p-6 sm:p-10">
-        <header className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-semibold lg:hidden">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent)] text-xs font-bold text-white">
-              E
-            </span>
-            <span>Excalidraw</span>
+            {mode === "login" ? "Create account" : "Sign in"}
           </Link>
-          <div className="ml-auto flex items-center gap-4 text-sm">
-            <Link
-              href={switchHref}
-              className="font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            >
-              {mode === "login" ? "Create account" : "Sign in"}
-            </Link>
-            <Link
-              href="/"
-              className="rounded-full border border-[var(--border-subtle)] px-3.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
-            >
-              Open canvas
-            </Link>
-          </div>
-        </header>
-
-        <div className="mx-auto my-auto w-full max-w-md py-8">
-          {session?.user.emailVerified ? (
-            <div
-              className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6 text-center text-sm text-[var(--text-muted)]"
-              role="status"
-            >
-              Opening your workspace…
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6 shadow-xl">
-              <AuthPanel mode={mode} returnTo={returnTo} />
-            </div>
-          )}
+          <Link
+            href="/"
+            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/90 px-3.5 py-1.5 text-xs font-medium text-[var(--text-primary)] backdrop-blur-md transition hover:bg-[var(--bg-hover)]"
+          >
+            Open canvas
+          </Link>
         </div>
+      </header>
 
-        <footer className="text-center text-xs text-[var(--text-muted)]">
-          Guest drawings stored locally in IndexedDB can be migrated to your cloud workspace after sign-in.
-        </footer>
-      </section>
+      {/* Centered glassmorphic card */}
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-12 pt-4">
+        {session?.user.emailVerified ? (
+          <div
+            className="animate-pop-up w-full max-w-[400px] rounded-2xl border border-[var(--border-soft)] bg-[var(--bg-elevated)]/85 p-6 text-center text-xs text-[var(--text-muted)] shadow-2xl backdrop-blur-xl"
+            role="status"
+          >
+            Redirecting to your workspace…
+          </div>
+        ) : (
+          <div className="animate-pop-up w-full max-w-[400px] [&_section]:bg-[var(--bg-elevated)]/85 [&_section]:backdrop-blur-xl [&_section]:border-[var(--border-soft)]">
+            <AuthPanel mode={mode} returnTo={returnTo} />
+          </div>
+        )}
+      </div>
     </main>
   );
 }

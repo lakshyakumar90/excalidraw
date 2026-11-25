@@ -41,6 +41,7 @@ export async function generateBoardThumbnail(
     );
     if (!blob) return { dataUrl };
     const uploaded = await uploadImageViaPresign(blob, { width, height });
+    if (!uploaded) return { dataUrl };
     return {
       dataUrl,
       remoteUrl: uploaded.downloadUrl,

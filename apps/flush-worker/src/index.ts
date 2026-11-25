@@ -18,14 +18,23 @@ async function start() {
   await rooms.redis.ping();
   const worker = await rooms.startWorker(async (snapshot) => {
     const head = await readSyncHead(db, snapshot.sceneId);
+    if (!head && !await db.orm!.public!.Scene.where({ id: snapshot.sceneId }).select("id").first())
+      return false;
     if (!head || head.revision < snapshot.revision) {
-      await insertSceneRevision(
-        db,
-        snapshot.sceneId,
-        snapshot.revision,
-        snapshot.data,
-        snapshot.actorId,
-      );
+      try {
+        await insertSceneRevision(
+          db,
+          snapshot.sceneId,
+          snapshot.revision,
+          snapshot.data,
+          snapshot.actorId,
+        );
+      } catch (error) {
+        if (error && typeof error === "object" && "sqlState" in error && error.sqlState === "23503" &&
+            !await db.orm!.public!.Scene.where({ id: snapshot.sceneId }).select("id").first())
+          return false;
+        throw error;
+      }
     }
     await retainLatestSceneRevisions(db, snapshot.sceneId, ROOM_SNAPSHOT_KEEP);
   }, FLUSH_WORKER_CONCURRENCY);

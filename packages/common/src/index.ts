@@ -10,3 +10,4 @@ export * from "./library.js";
 export * from "./laser.js";
 
 export * from "./presets.js";
+export * from "./diagram.js";

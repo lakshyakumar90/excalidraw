@@ -6,7 +6,7 @@ import {
   measureText,
 } from "../text";
 import { applyElementTransform } from "./drawTransform";
-import { strokePoints, tracePoints } from "./drawPaths";
+import { strokePoints, traceSmoothPoints } from "./drawPaths";
 export function drawFreedraw(
   context: CanvasRenderingContext2D,
   element: FreedrawElement,
@@ -34,7 +34,7 @@ export function drawFreedraw(
   applyElementTransform(context, element);
   context.globalAlpha = opacity / 100;
   context.fillStyle = strokeColor;
-  tracePoints(context, path, true);
+  traceSmoothPoints(context, path, true);
   context.fill();
   strokePoints(context, element, path, true);
   context.restore();

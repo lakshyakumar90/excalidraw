@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import type { Element } from "@repo/common";
+import { BOARD_PRESET_LIST, type Element } from "@repo/common";
 import { ColorPicker } from "@/components/styles/ColorPicker";
 import { toolManager } from "@/lib/tools/toolManager";
 import { scene } from "@/lib/scene/scene";
@@ -36,14 +36,7 @@ const Z_ORDER_ACTIONS = [
 ];
 
 export function StylePanel() {
-  const [isCollapsed, setIsCollapsed] = useState(true);
-  useEffect(() => {
-    const query = matchMedia("(max-width:1199px)");
-    const update = () => setIsCollapsed(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   useEffect(() => {
     const close = (event: Event) => {
       if (
@@ -150,19 +143,19 @@ export function StylePanel() {
     <aside
       aria-label="Style properties"
       data-collapsed={isCollapsed}
-      className={`editor-style-panel fixed z-50 flex flex-col overflow-hidden border border-neutral-200 bg-white text-neutral-900 ${
-        isCollapsed ? "w-auto" : "w-[min(17rem,calc(100vw-0.5rem))]"
+      className={`editor-style-panel fixed z-50 flex flex-col overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 text-[var(--text-primary)] backdrop-blur-md ${
+        isCollapsed ? "w-auto" : "w-[min(16.5rem,calc(100vw-0.5rem))]"
       }`}
     >
       <header
-        className={`flex items-center justify-between gap-4 px-4 ${isCollapsed ? "py-3" : "pb-4 pt-5"}`}
+        className={`flex items-center justify-between gap-3 px-3 ${isCollapsed ? "py-2" : "pb-3 pt-3.5"}`}
       >
         <div className={isCollapsed ? "flex items-center gap-3" : ""}>
-          <h2 className="text-sm font-semibold tracking-[-0.02em] text-neutral-900">
+          <h2 className="text-sm font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
             Style
           </h2>
           {!isCollapsed && (
-            <p className="mt-1 text-[11px] text-neutral-500">
+            <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               {selectedCount > 0
                 ? `${selectedCount} element${selectedCount === 1 ? "" : "s"} selected`
                 : `Defaults for ${TOOL_NAMES[activeTool]}`}
@@ -183,7 +176,7 @@ export function StylePanel() {
               new CustomEvent("editor-panel-open", { detail: "styles" }),
             );
           }}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
         >
           <svg
             aria-hidden="true"
@@ -251,7 +244,7 @@ export function StylePanel() {
                         : "transparent",
                     )
                   }
-                  className="rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="rounded-lg px-2 py-1 text-xs font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
                 >
                   {style.backgroundColor === "transparent"
                     ? "Transparent"
@@ -264,7 +257,7 @@ export function StylePanel() {
 
         <Section title="Shape">
           <div className="space-y-2">
-            <p className="text-[11px] font-medium text-neutral-600">Fill</p>
+            <p className="text-[11px] font-medium text-[var(--text-muted)]">Fill</p>
             <ChoiceGroup
               label="Fill style"
               value={style.fillStyle}
@@ -274,7 +267,7 @@ export function StylePanel() {
                   value: "none",
                   label: "No fill",
                   mark: (
-                    <span className="h-4 w-4 rounded border border-neutral-400" />
+                    <span className="h-4 w-4 rounded border border-[var(--border-soft)]" />
                   ),
                 },
                 {
@@ -294,7 +287,7 @@ export function StylePanel() {
                 },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+            <p className="pt-1 text-[11px] font-medium text-[var(--text-muted)]">
               Stroke width
             </p>
             <ChoiceGroup
@@ -319,7 +312,7 @@ export function StylePanel() {
                 },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+            <p className="pt-1 text-[11px] font-medium text-[var(--text-muted)]">
               Stroke style
             </p>
             <ChoiceGroup
@@ -348,7 +341,7 @@ export function StylePanel() {
                 },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+            <p className="pt-1 text-[11px] font-medium text-[var(--text-muted)]">
               Sloppiness
             </p>
             <ChoiceGroup
@@ -373,7 +366,7 @@ export function StylePanel() {
                 },
               ]}
             />
-            <p className="pt-1 text-[11px] font-medium text-neutral-600">
+            <p className="pt-1 text-[11px] font-medium text-[var(--text-muted)]">
               Edges
             </p>
             <ChoiceGroup
@@ -420,6 +413,29 @@ export function StylePanel() {
                 },
               ]}
             />
+            {selectedElements.some((item) => item.type === "text") && (
+              <Field label="Font family">
+                <select
+                  aria-label="Font family"
+                  value={selectedElements.find((item) => item.type === "text")?.fontFamily ?? ""}
+                  onChange={(event) => {
+                    const fontFamily = event.target.value;
+                    if (!fontFamily) return;
+                    const { changes } = historyStore.commitUpdate(() => {
+                      for (const item of selectedElements)
+                        if (item.type === "text") scene.mutateElement(item.id, { fontFamily });
+                    });
+                    commitHistoryEntry(changes, "local");
+                  }}
+                  className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2 py-1 text-xs text-[var(--text-primary)]"
+                >
+                  <option value="">Current font</option>
+                  {BOARD_PRESET_LIST.map((preset) => (
+                    <option key={preset.id} value={preset.fontFamily}>{preset.name}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label="Opacity">
               <div className="flex w-32 items-center gap-2">
                 <input
@@ -432,9 +448,9 @@ export function StylePanel() {
                   onChange={(event) =>
                     update("opacity", Number(event.target.value))
                   }
-                  className="min-w-0 flex-1 accent-indigo-400"
+                  className="min-w-0 flex-1 accent-[var(--accent)]"
                 />
-                <span className="w-9 text-right text-xs tabular-nums text-neutral-500">
+                <span className="w-9 text-right text-xs tabular-nums text-[var(--text-muted)]">
                   {style.opacity}%
                 </span>
               </div>
@@ -447,7 +463,7 @@ export function StylePanel() {
             <div
               role="group"
               aria-label="Layer order"
-              className="grid grid-cols-2 gap-2"
+              className="grid grid-cols-2 gap-1.5"
             >
               {Z_ORDER_ACTIONS.map(({ action, label }) => (
                 <button
@@ -460,7 +476,7 @@ export function StylePanel() {
                     );
                     commitHistoryEntry(orderChanges, "local");
                   }}
-                  className="flex h-9 items-center justify-center rounded-md border border-neutral-200 bg-neutral-100 px-2 text-xs font-medium text-neutral-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex h-8 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
                 >
                   {label}
                 </button>

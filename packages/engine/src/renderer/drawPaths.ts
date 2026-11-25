@@ -1,59 +1,10 @@
 import type { Element, Point } from "@repo/common";
 import { getSketchGeometry, getSketchLinePaths } from "./sketch/geometry";
+import { getRoughPathPoints } from "./sketch/roughPath";
 import { traceSketchPath } from "./sketch/canvasPath";
 import { applyElementTransform } from "./drawTransform";
 
-export function getRoughPathPoints(
-  points: readonly Point[],
-  closed: boolean,
-  element: Element,
-): Point[] {
-  const roughness = Math.max(0, element.roughness ?? 0);
-  if (roughness === 0 || points.length < 2) return [...points];
-
-  let state = (element.seed ?? 1) >>> 0;
-  if (state === 0) state = 0x6d2b79f5;
-  const random = () => {
-    state += 0x6d2b79f5;
-    let value = state;
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
-  };
-
-  const amplitude = Math.min(4, roughness * 0.8);
-  const result: Point[] = [];
-  const segmentCount = closed ? points.length : points.length - 1;
-
-  for (let index = 0; index < segmentCount; index += 1) {
-    const start = points[index];
-    const end = points[(index + 1) % points.length];
-    if (!start || !end) continue;
-
-    result.push(start);
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const length = Math.hypot(dx, dy);
-    const subdivisions = Math.max(1, Math.ceil(length / 8));
-    const normalX = length === 0 ? 0 : -dy / length;
-    const normalY = length === 0 ? 0 : dx / length;
-
-    for (let step = 1; step < subdivisions; step += 1) {
-      const t = step / subdivisions;
-      const jitter = (random() * 2 - 1) * amplitude;
-      result.push({
-        x: start.x + dx * t + normalX * jitter,
-        y: start.y + dy * t + normalY * jitter,
-      });
-    }
-  }
-
-  if (!closed) {
-    const last = points[points.length - 1];
-    if (last) result.push(last);
-  }
-  return result;
-}
+export { getRoughPathPoints } from "./sketch/roughPath";
 
 export function tracePoints(
   context: CanvasRenderingContext2D,
@@ -68,6 +19,50 @@ export function tracePoints(
     const point = points[index];
     if (point) context.lineTo(point.x, point.y);
   }
+  if (closed) context.closePath();
+}
+
+/**
+ * Catmull-Rom smoothing that passes exactly through every point. Used for
+ * freehand strokes and other sampled paths so they render as smooth curves
+ * rather than connecting sharp line segments.
+ */
+export function traceSmoothPoints(
+  context: CanvasRenderingContext2D,
+  points: readonly Point[],
+  closed = false,
+): void {
+  const first = points[0];
+  if (!first) return;
+  if (points.length < 3) {
+    tracePoints(context, points, closed);
+    return;
+  }
+
+  const count = points.length;
+  const segments = closed ? count : count - 1;
+  context.beginPath();
+  context.moveTo(first.x, first.y);
+
+  for (let index = 0; index < segments; index += 1) {
+    const p1 = points[index]!;
+    const p2 = points[(index + 1) % count]!;
+    const p0 = closed
+      ? points[(index - 1 + count) % count]!
+      : points[Math.max(0, index - 1)]!;
+    const p3 = closed
+      ? points[(index + 2) % count]!
+      : points[Math.min(count - 1, index + 2)]!;
+    context.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y,
+    );
+  }
+
   if (closed) context.closePath();
 }
 
@@ -100,7 +95,9 @@ export function strokePoints(
 ): void {
   applyStrokeAppearance(context, element);
   if (closed) {
-    tracePoints(context, getRoughPathPoints(points, true, element), true);
+    traceSmoothPoints(context, getRoughPathPoints(points, true, element), true);
+    context.lineJoin = "round";
+    context.lineCap = "round";
     context.stroke();
     return;
   }

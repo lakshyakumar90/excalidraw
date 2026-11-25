@@ -7,6 +7,7 @@ import {
 import { renderSceneToSvg } from "./svgRenderer";
 import { getSketchGeometry } from "./sketch/geometry";
 import { sketchPathToSvg } from "./sketch/canvasPath";
+import { sketchSettings } from "./sketch/settings";
 
 describe("renderSceneToSvg", () => {
   it("renders vector shapes with content bounds and optional background", () => {
@@ -25,7 +26,18 @@ describe("renderSceneToSvg", () => {
       padding: 10,
       background: "#fff",
     });
-    expect(svg).toContain('width="126" height="76"');
+    const settings = sketchSettings(rectangle.roughness);
+    const paintPadding =
+      settings.amplitude + settings.overshoot + (rectangle.strokeWidth ?? 1) / 2;
+    const expectedWidth = Math.ceil(
+      (rectangle.width ?? 0) + paintPadding * 2 + 10 * 2,
+    );
+    const expectedHeight = Math.ceil(
+      (rectangle.height ?? 0) + paintPadding * 2 + 10 * 2,
+    );
+    expect(svg).toContain(
+      `width="${expectedWidth}" height="${expectedHeight}"`,
+    );
     expect(svg).toContain('<path d="M ');
     expect(svg).toContain('stroke-dasharray="4 2.5"');
     expect(svg).toContain('fill="#f00"');

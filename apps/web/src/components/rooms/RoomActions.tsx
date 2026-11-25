@@ -42,7 +42,7 @@ export function RoomActions({
     <>
       <button
         type="button"
-        className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-blue-600"
+        className="inline-flex min-h-10 shrink-0 items-center rounded-xl px-3 text-xs font-medium text-rose-400 transition hover:bg-rose-500/10 focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
         onClick={() => {
           setError("");
           dialog.current?.showModal();

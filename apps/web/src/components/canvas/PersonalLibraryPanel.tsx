@@ -32,7 +32,7 @@ export function PersonalLibraryPanel({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
   const button =
-    "min-h-11 inline-flex items-center justify-center rounded-lg px-3 text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 disabled:opacity-40";
+    "min-h-9 inline-flex items-center justify-center rounded-lg px-3 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-40";
 
   useEffect(() => {
     permission.current = readOnly;
@@ -92,7 +92,7 @@ export function PersonalLibraryPanel({
 
   return (
     <>
-      <p className="mb-3 text-sm text-neutral-600">
+      <p className="mb-3 text-xs text-[var(--text-muted)]">
         {signedIn
           ? "Private stamps saved to your account."
           : "Stamps saved on this device. Sign in for an account library."}
@@ -115,7 +115,7 @@ export function PersonalLibraryPanel({
           required
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-neutral-300 px-3 text-sm focus:outline-2 focus:outline-violet-600"
+          className="min-h-9 min-w-0 flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-2 focus:outline-[var(--focus-ring)]"
         />
         <button
           className={button}
@@ -124,13 +124,13 @@ export function PersonalLibraryPanel({
           Save
         </button>
       </form>
-      <p className="mt-2 text-xs text-neutral-600">
+      <p className="mt-2 text-[11px] text-[var(--text-muted)]">
         Select a group on the canvas before saving.
       </p>
       {!items.length && !busy && (
-        <p className="my-4 text-sm">Your library is empty.</p>
+        <p className="my-4 text-xs text-[var(--text-muted)]">Your library is empty.</p>
       )}
-      <ul className="mt-3 divide-y divide-neutral-100">
+      <ul className="mt-3 divide-y divide-[var(--border-subtle)]">
         {items.map((item) => (
           <li key={item.id} className="py-2">
             <button

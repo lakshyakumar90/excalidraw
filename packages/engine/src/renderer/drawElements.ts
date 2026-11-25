@@ -44,7 +44,7 @@ export function drawElement(
       );
       context.fillStyle = "#495057";
       context.font = "14px sans-serif";
-      context.fillText(element.name || "Frame", element.x, element.y - 6);
+      context.fillText(element.title || element.name || "Frame", element.x, element.y - 6);
       context.restore();
       break;
     case "rectangle":

@@ -178,20 +178,21 @@ export async function fetchPresenceTicket(roomId: string): Promise<string> {
 export async function uploadRoomFile(
   roomId: string,
   fileId: string,
-  file: { id: string; mimeType: string; dataURL: string; created: number },
+  file: { id: string; mimeType: string; dataURL?: string; created: number },
+  objectKey?: string,
 ): Promise<number> {
   const result = await apiRequest<{ revision: number }>(
     `/room/${encodeURIComponent(roomId)}/files`,
     {
       method: "POST",
-      body: JSON.stringify({ fileId, file }),
+      body: JSON.stringify({ fileId, file, objectKey }),
     },
   );
   return result.revision;
 }
 
-export async function fetchRoomFile(roomId: string, fileId: string): Promise<SceneFileData> {
-  const result = await apiRequest<{ file: SceneFileData }>(
+export async function fetchRoomFile(roomId: string, fileId: string): Promise<SceneFileData & { downloadUrl?: string }> {
+  const result = await apiRequest<{ file: SceneFileData & { downloadUrl?: string } }>(
     `/room/${encodeURIComponent(roomId)}/files/${encodeURIComponent(fileId)}`,
   );
   return result.file;

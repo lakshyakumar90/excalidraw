@@ -13,8 +13,8 @@ export interface SketchSettings {
 /** Existing persisted roughness values map to Architect, Artist, Cartoonist. */
 export const SKETCH_PRESETS: Readonly<Record<0 | 1 | 2, SketchSettings>> = {
   0: { amplitude: 0, overshoot: 0, doubleStrokeOffset: 0 },
-  1: { amplitude: 1.25, overshoot: 1.1, doubleStrokeOffset: 0.7 },
-  2: { amplitude: 2.6, overshoot: 2.2, doubleStrokeOffset: 1.45 },
+  1: { amplitude: 0.55, overshoot: 0.35, doubleStrokeOffset: 0.18 },
+  2: { amplitude: 1.15, overshoot: 0.7, doubleStrokeOffset: 0.4 },
 };
 
 export function sketchSettings(roughness: number | undefined): SketchSettings {

@@ -1,38 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Element } from "@repo/common";
-import { scene } from "@/lib/scene/scene";
-import { selectionStore } from "@/lib/selection/selectionStore";
-import { getCurrentViewport } from "@/lib/persistence/viewportStore";
-import { downloadExcalidrawFile } from "@/lib/persistence/excalidrawFile";
+import { authClient } from "@repo/auth/client";
 import {
   applyImportedDocument,
   publishImportStatus,
   readExcalidrawFile,
 } from "@/lib/persistence/importDocument";
-import { exportElementsToPng } from "@/lib/persistence/rasterExport";
-import { exportElementsToSvg } from "@/lib/persistence/svgExport";
 
 export function FileMenu() {
   const [open, setOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
-  const [pngScale, setPngScale] = useState(2);
-  const [transparentBackground, setTransparentBackground] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selectedIds = useSyncExternalStore(
-    selectionStore.subscribe,
-    selectionStore.getSnapshot,
-    selectionStore.getSnapshot,
-  );
-  const selectedElements = [...selectedIds]
-    .map((id) => scene.getElement(id))
-    .filter(
-      (element): element is Element => !!element && !element.isDeleted,
-    );
+  const { data: session } = authClient.useSession();
 
   useEffect(() => {
     const onStatus = (event: Event) => {
@@ -73,8 +57,11 @@ export function FileMenu() {
     }
   };
 
+  const itemClass =
+    "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-hover)]";
+
   return (
-    <div ref={wrapperRef} className="relative order-last ml-auto shrink-0">
+    <div ref={wrapperRef} className="relative shrink-0">
       <input
         ref={fileInputRef}
         type="file"
@@ -92,190 +79,116 @@ export function FileMenu() {
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
-        aria-label="More options"
-        title="More options"
-        className="grid h-10 w-10 place-items-center rounded-md text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        aria-label="Menu"
+        title="Menu"
+        className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 text-[var(--text-primary)] shadow-xl backdrop-blur-md transition hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
       >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-          <circle cx="5" cy="12" r="1.8" />
-          <circle cx="12" cy="12" r="1.8" />
-          <circle cx="19" cy="12" r="1.8" />
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+          <path d="M4 7h16M4 12h16M4 17h16" />
         </svg>
       </button>
+
       {open && (
         <div
           role="menu"
-          aria-label="File actions"
-          className="absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-neutral-200 bg-white p-2 shadow-xl"
+          aria-label="Chitran menu"
+          className="animate-pop-up absolute left-0 top-[calc(100%+8px)] z-[60] w-60 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-xs text-[var(--text-primary)] shadow-2xl"
         >
+          <Link href="/boards" onClick={() => setOpen(false)} className={itemClass}>
+            <span>My boards</span>
+          </Link>
+          <Link href="/dashboard" onClick={() => setOpen(false)} className={itemClass}>
+            <span>Dashboard &amp; Rooms</span>
+          </Link>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              void downloadExcalidrawFile(scene.getElements(), getCurrentViewport())
-                .then(() => publishImportStatus("Drawing exported"))
-                .catch((error: unknown) =>
-                  publishImportStatus(
-                    error instanceof Error ? error.message : "Could not export this drawing",
-                  ),
-                );
               setOpen(false);
+              window.dispatchEvent(new CustomEvent("open-ai-palette"));
             }}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className={itemClass}
           >
-            Export .excalidraw
+            <span>Connect AI</span>
+          </button>
+
+          <div className="my-1 border-t border-[var(--border-subtle)]" />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent("open-export-modal"));
+            }}
+            className={itemClass}
+          >
+            <span>Export…</span>
           </button>
           <button
             type="button"
             role="menuitem"
             onClick={() => fileInputRef.current?.click()}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className={itemClass}
           >
-            Import .excalidraw
-          </button>
-          <div className="my-1 border-t border-neutral-100" />
-          <label className="flex items-center justify-between gap-4 px-3 py-2 text-sm text-neutral-700">
-            PNG scale
-            <select
-              aria-label="PNG scale"
-              value={pngScale}
-              onChange={(event) => setPngScale(Number(event.target.value))}
-              className="rounded border border-neutral-200 bg-white px-2 py-1 text-sm"
-            >
-              <option value={1}>1×</option>
-              <option value={2}>2×</option>
-              <option value={3}>3×</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-700">
-            <input
-              type="checkbox"
-              checked={transparentBackground}
-              onChange={(event) =>
-                setTransparentBackground(event.target.checked)
-              }
-            />
-            Transparent background
-          </label>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              void exportElementsToPng(scene.getElements(), {
-                scale: pngScale,
-                transparentBackground,
-              })
-                .then(() => publishImportStatus("PNG exported"))
-                .catch((error: unknown) =>
-                  publishImportStatus(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not export the PNG",
-                  ),
-                );
-              setOpen(false);
-            }}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Export PNG
+            <span>Import .excalidraw</span>
           </button>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              void exportElementsToSvg(scene.getElements())
-                .then(() => publishImportStatus("SVG exported"))
-                .catch((error: unknown) =>
-                  publishImportStatus(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not export the SVG",
-                  ),
-                );
               setOpen(false);
+              window.dispatchEvent(new Event("editor-help-open"));
             }}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className={itemClass}
           >
-            Export SVG
-          </button>
-          <div className="my-1 border-t border-neutral-100" />
-          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-            Selection only ({selectedElements.length})
-          </div>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={selectedElements.length === 0}
-            onClick={() => {
-              void downloadExcalidrawFile(
-                  selectedElements,
-                  getCurrentViewport(),
-                  "selection.excalidraw",
-                )
-                .then(() => publishImportStatus("Selection exported"))
-                .catch((error: unknown) =>
-                  publishImportStatus(
-                    error instanceof Error ? error.message : "Could not export selection",
-                  ),
-                );
-              setOpen(false);
-            }}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Export selection as .excalidraw
+            <span>Keyboard shortcuts</span>
+            <kbd className="rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-muted)]">
+              ?
+            </kbd>
           </button>
           <button
             type="button"
             role="menuitem"
-            disabled={selectedElements.length === 0}
             onClick={() => {
-              void exportElementsToPng(selectedElements, {
-                scale: pngScale,
-                transparentBackground,
-              })
-                .then(() => publishImportStatus("Selection exported as PNG"))
-                .catch((error: unknown) =>
-                  publishImportStatus(
-                    error instanceof Error ? error.message : "Could not export selection",
-                  ),
-                );
               setOpen(false);
+              window.dispatchEvent(new CustomEvent("open-mcp-modal"));
             }}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className={itemClass}
           >
-            Export selection as PNG
+            <span>Connect MCP agent</span>
           </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={selectedElements.length === 0}
-            onClick={() => {
-              void exportElementsToSvg(selectedElements)
-                .then(() => publishImportStatus("Selection exported as SVG"))
-                .catch((error: unknown) =>
-                  publishImportStatus(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not export selection",
-                  ),
-                );
-              setOpen(false);
-            }}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+
+          <div className="my-1 border-t border-[var(--border-subtle)]" />
+
+          <Link
+            href={session ? "/dashboard" : "/login"}
+            onClick={() => setOpen(false)}
+            className={itemClass}
           >
-            Export selection as SVG
-          </button>
+            <span className="flex items-center gap-2">
+              {!session && (
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5">
+                  <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.5 3.8-5.4 3.8-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.4 14.6 2.5 12 2.5 6.8 2.5 2.5 6.8 2.5 12S6.8 21.5 12 21.5c6.9 0 9.1-4.8 9.1-7.3 0-.5-.1-.9-.1-1.3H12Z" />
+                </svg>
+              )}
+              <span>{session ? "My account" : "Sign in"}</span>
+            </span>
+          </Link>
         </div>
       )}
-      {importStatus && typeof document !== "undefined" && createPortal(
-        <div
-          role="status"
-          className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm text-white shadow-xl"
-        >
-          {importStatus}
-        </div>,
-        document.body,
-      )}
+
+      {importStatus &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="status"
+            className="animate-pop-up fixed bottom-4 left-1/2 z-[100] -translate-x-1/2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3.5 py-2 text-xs font-medium text-[var(--text-primary)] shadow-2xl"
+          >
+            {importStatus}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

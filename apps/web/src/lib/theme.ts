@@ -24,14 +24,14 @@ export function applyDocumentTheme(theme: CanvasTheme): void {
   }
 }
 
-export function useCanvasTheme() {
-  const [theme, setThemeState] = useState<CanvasTheme>("dark");
+export function useCanvasTheme(initialTheme?: CanvasTheme) {
+  const [theme, setThemeState] = useState<CanvasTheme>(initialTheme ?? "dark");
 
   useEffect(() => {
-    const current = readStoredTheme();
+    const current = initialTheme ?? readStoredTheme();
     setThemeState(current);
     applyDocumentTheme(current);
-  }, []);
+  }, [initialTheme]);
 
   const setTheme = useCallback((next: CanvasTheme) => {
     setThemeState(next);

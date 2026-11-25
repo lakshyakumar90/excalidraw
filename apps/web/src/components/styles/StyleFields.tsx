@@ -6,14 +6,14 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <details open className="group border-t border-neutral-200 pt-3">
-      <summary className="mb-3 flex cursor-pointer list-none items-center justify-between rounded-sm text-xs font-medium text-neutral-700 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 [&::-webkit-details-marker]:hidden">
+    <details open className="group border-t border-[var(--border-subtle)] pt-2.5">
+      <summary className="mb-2.5 flex cursor-pointer list-none items-center justify-between rounded-sm text-xs font-medium text-[var(--text-muted)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] [&::-webkit-details-marker]:hidden">
         {title}
         <svg
           aria-hidden="true"
           viewBox="0 0 16 16"
           fill="none"
-          className="h-4 w-4 transition-transform group-open:rotate-180"
+          className="h-3.5 w-3.5 transition-transform group-open:rotate-180"
         >
           <path
             d="m4 6 4 4 4-4"
@@ -37,7 +37,7 @@ export function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex min-h-9 items-center justify-between gap-3 text-xs text-neutral-700">
+    <label className="flex min-h-8 items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
       <span>{label}</span>
       {children}
     </label>
@@ -56,7 +56,7 @@ export function ChoiceGroup<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="group" aria-label={label} className="flex gap-2">
+    <div role="group" aria-label={label} className="flex gap-1.5">
       {options.map((option) => (
         <button
           key={String(option.value)}
@@ -65,10 +65,10 @@ export function ChoiceGroup<T extends string | number>({
           aria-pressed={value === option.value}
           title={option.label}
           onClick={() => onChange(option.value)}
-          className={`grid h-9 w-9 place-items-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+          className={`grid h-8 w-8 place-items-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${
             value === option.value
-              ? "border-indigo-300 bg-indigo-100 text-indigo-950"
-              : "border-neutral-200 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-neutral-950"
+              ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)]"
+              : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           }`}
         >
           {option.mark ?? <span className="text-[10px]">{option.label}</span>}

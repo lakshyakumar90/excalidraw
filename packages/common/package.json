@@ -27,5 +27,8 @@
     "build": "tsc -b",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "dagre-d3-es": "7.0.14"
   }
 }

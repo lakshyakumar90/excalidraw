@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { createCollaborationService } from "@repo/backend-common";
 import { db, roomForScene } from "@repo/db";
+import { BOARD_PRESET_LIST } from "@repo/common";
 import { CreateSceneSchema, UpdateSceneSchema } from "@repo/validations";
 import { guestImportRouter } from "./guestImport.js";
 
@@ -33,6 +34,35 @@ async function withSyncHead<T extends { id: string; data: unknown }>(
 
 scenesRouter.get("/", async (req, res) => {
   try {
+    if (req.query.workspace === "true") {
+      const tables = db.orm!.public!;
+      const userId = req.userId!;
+      const [owned, memberships] = await Promise.all([
+        tables.Scene.where({ ownerId: userId }).all(),
+        tables.RoomMember.where({ userId }).include("room").all(),
+      ]);
+      const sharedIds = [...new Set(memberships.flatMap(({ room }) => room.sceneId ? [room.sceneId] : []))];
+      const sharedRooms = new Map(memberships.map(({ room }) => [room.sceneId, room.id]));
+      const shared = await Promise.all(sharedIds.map((id) => tables.Scene.where({ id }).first()));
+      const scenes = [...owned, ...shared.filter((scene) => scene && scene.ownerId !== userId)]
+        .flatMap((scene) => {
+          if (!scene) return [];
+          const { id, title, createdAt, updatedAt } = scene;
+          const appState = (scene.data as { appState?: Record<string, unknown> } | null)?.appState;
+          const thumbnail = appState?.thumbnail;
+          return [{
+            id, title, createdAt, updatedAt,
+            role: scene.ownerId === userId ? "owned" : "shared",
+            roomId: sharedRooms.get(id),
+            preset: BOARD_PRESET_LIST.find((preset) => preset.id === appState?.boardPreset)?.id ?? "excali-font",
+            thumbnail: typeof thumbnail === "string" && thumbnail.length <= 100_000 &&
+              /^data:image\/(webp|png);base64,/.test(thumbnail) ? thumbnail : undefined,
+            thumbnailTheme: appState?.theme === "light" ? "light" : "dark",
+          }];
+        })
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return res.json({ scenes });
+    }
     const scenes = await db
       .orm!.public!.Scene.where({ ownerId: req.userId! })
       .select("id", "title", "createdAt", "updatedAt")

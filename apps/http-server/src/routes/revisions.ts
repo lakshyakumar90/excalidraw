@@ -1,15 +1,29 @@
 import { Router } from "express";
-import { randomUUID } from "node:crypto";
-import { db } from "@repo/db";
-import { createCollaborationService } from "@repo/backend-common";
+import { randomInt, randomUUID } from "node:crypto";
+import { db, getRoomSceneAccess, roomForScene } from "@repo/db";
+import { createCollaborationService, readStoredSync } from "@repo/backend-common";
+import type { RoomRedis } from "@repo/redis";
 
 export const revisionsRouter: Router = Router();
+let roomRedis: Pick<RoomRedis, "publish"> | undefined;
+
+export function configureRevisionBroadcast(redis: Pick<RoomRedis, "publish">) {
+  roomRedis = redis;
+}
+
+async function getRevisionRole(sceneId: string, userId: string) {
+  const room = await roomForScene(db, sceneId);
+  if (room) return (await getRoomSceneAccess(db, room.roomId, userId))?.role;
+  const scene = await db.orm!.public!.Scene.where({ id: sceneId, ownerId: userId }).first();
+  return scene ? "owner" : undefined;
+}
 
 interface RevisionSummary {
   revision: number;
   actorId: string;
   createdAt: string;
   elementCount: number;
+  author?: string;
 }
 
 /**
@@ -25,8 +39,7 @@ revisionsRouter.get("/:sceneId", async (req, res) => {
   }
 
   try {
-    const scene = await db.orm!.public!.Scene.where({ id: sceneId }).first();
-    if (!scene) {
+    if (!await getRevisionRole(sceneId, userId)) {
       res.status(404).json({ error: "Scene not found." });
       return;
     }
@@ -53,11 +66,27 @@ revisionsRouter.get("/:sceneId", async (req, res) => {
       };
     });
 
-    res.json({ sceneId, revisions });
+    const authorIds = [...new Set(revisions.map((entry) => entry.actorId).filter(Boolean))];
+    const authors = await Promise.all(authorIds.map(async (id) => {
+      const author = await db.orm!.public!.User.where({ id }).select("name").first();
+      return [id, author?.name] as const;
+    }));
+    const authorNames = new Map(authors);
+    res.json({ sceneId, revisions: revisions.map((entry) => ({ ...entry, author: authorNames.get(entry.actorId) })) });
   } catch (error) {
     console.error("Failed to list scene revisions:", error);
     res.status(500).json({ error: "Could not load version history." });
   }
+});
+
+revisionsRouter.get("/:sceneId/:revision", async (req, res) => {
+  const { sceneId } = req.params;
+  const revision = Number(req.params.revision);
+  if (!req.userId || !Number.isSafeInteger(revision) || revision < 0 ||
+      !await getRevisionRole(sceneId, req.userId)) return res.sendStatus(404);
+  const row = await db.orm!.public!.SceneRevision.where({ sceneId, revision }).first();
+  if (!row) return res.sendStatus(404);
+  return res.json({ elements: readStoredSync(row.data).elements });
 });
 
 /**
@@ -75,6 +104,10 @@ revisionsRouter.post("/:sceneId/:revision/restore", async (req, res) => {
   }
 
   try {
+    if (await getRevisionRole(sceneId, userId) !== "owner") {
+      res.status(404).json({ error: "Scene not found." });
+      return;
+    }
     const targetRow = await db.orm!.public!.SceneRevision.where({
       sceneId,
       revision: targetRevision,
@@ -84,31 +117,34 @@ revisionsRouter.post("/:sceneId/:revision/restore", async (req, res) => {
       return;
     }
 
-    const snapshotData = targetRow.data as {
-      elements?: Record<string, unknown>[];
-      appState?: Record<string, unknown>;
-      files?: Record<string, unknown>;
-    } | null;
-
-    const now = Date.now();
-    const restoredElements = (
-      Array.isArray(snapshotData?.elements) ? snapshotData.elements : []
-    ).map((el) => ({
-      ...el,
-      version: Number((el as { version?: number }).version ?? 1) + 1000,
-      versionNonce: Math.floor(Math.random() * 2_000_000_000),
-      updated: now,
-    }));
-
+    const snapshotData = readStoredSync(targetRow.data);
     const collab = createCollaborationService({ store: db });
+    const current = await collab.readSyncScene(sceneId);
+    if (!current) return res.sendStatus(404);
+    const desired = new Map(snapshotData.elements.filter((element) => !element.isDeleted).map((element) => [element.id, element]));
+    const previous = new Map(current.elements.map((element) => [element.id, element]));
+    const ids = new Set([...desired.keys(), ...current.elements.filter((element) => !element.isDeleted).map((element) => element.id)]);
+    const now = Date.now();
+    const restoredElements = [...ids].map((id) => {
+      const target = desired.get(id);
+      const before = previous.get(id);
+      return {
+        ...(target ?? before!),
+        isDeleted: !target,
+        version: Math.max(target?.version ?? 0, before?.version ?? 0, current.tombstones[id]?.version ?? 0) + 1,
+        versionNonce: randomInt(2_147_483_647),
+        updated: now,
+      };
+    });
+    const mutationId = `restore-${targetRevision}-${randomUUID()}`;
     const result = await collab.applyCommit({
       sceneId,
       userId,
       role: "owner",
       elements: restoredElements,
-      appState: snapshotData?.appState,
-      files: snapshotData?.files,
-      mutationId: `restore-${targetRevision}-${randomUUID()}`,
+      appState: snapshotData.appState,
+      files: snapshotData.files,
+      mutationId,
     });
 
     if (!result.saved) {
@@ -116,10 +152,19 @@ revisionsRouter.post("/:sceneId/:revision/restore", async (req, res) => {
       return;
     }
 
+    const room = await roomForScene(db, sceneId);
+    if (room && roomRedis) {
+      await roomRedis.publish({
+        type: "room.broadcast",
+        roomId: room.roomId,
+        sceneId,
+        message: { type: "elements.committed", revision: result.revision, elements: result.winners, mutationId },
+      }).catch((error: unknown) => console.error("Revision broadcast failed:", error));
+    }
     res.json({
       restoredFrom: targetRevision,
       newRevision: result.revision,
-      elementCount: restoredElements.length,
+      elementCount: desired.size,
     });
   } catch (error) {
     console.error("Failed to restore scene revision:", error);

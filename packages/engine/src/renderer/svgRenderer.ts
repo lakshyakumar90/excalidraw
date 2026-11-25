@@ -105,7 +105,7 @@ function renderElement(
   const groupStart = `<g data-element-id="${escapeXml(element.id)}" transform="${elementTransform(element)}" ${attrs}>`;
   switch (element.type) {
     case "frame": {
-      return `<g transform="${elementTransform(element)}"><rect width="${element.width ?? 0}" height="${element.height ?? 0}" fill="none" stroke="#868e96"/><text y="-6" font-size="14" fill="#495057">${escapeXml(element.name || "Frame")}</text></g>`;
+      return `<g transform="${elementTransform(element)}"><rect width="${element.width ?? 0}" height="${element.height ?? 0}" fill="none" stroke="#868e96"/><text y="-6" font-size="14" fill="#495057">${escapeXml(element.title || element.name || "Frame")}</text></g>`;
     }
     case "rectangle": {
       return `${groupStart}${renderSketchShape(element)}</g>`;

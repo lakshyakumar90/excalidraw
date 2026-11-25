@@ -48,6 +48,23 @@ export function RoomPresence({
     participantsRef.current = participants;
   }, [participants]);
   useEffect(() => {
+    window.dispatchEvent(new CustomEvent("room-presence-status", {
+      detail: {
+        participants: participants.filter((person) => person.userId !== selfUserId && person.viewport),
+        following: activeFollowing,
+        syncState: sync.scene === "synced" ? "saved" : sync.scene === "offline" ? "offline" : "syncing",
+      },
+    }));
+  }, [participants, selfUserId, activeFollowing, sync.scene]);
+  useEffect(() => {
+    const toggle = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      setFollowing((current) => current === id ? null : id);
+    };
+    window.addEventListener("room-follow-toggle", toggle);
+    return () => window.removeEventListener("room-follow-toggle", toggle);
+  }, []);
+  useEffect(() => {
     followState.active = Boolean(activeFollowing);
     if (!activeFollowing || status !== "live") return;
     let frame = 0,

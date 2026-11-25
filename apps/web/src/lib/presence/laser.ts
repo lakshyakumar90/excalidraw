@@ -77,15 +77,18 @@ export function startLaser() {
   seq = 0;
   last = 0;
 }
-export function moveLaser(point: { x: number; y: number }) {
+export function moveLaser(...points: { x: number; y: number }[]) {
+  if (points.length === 0) return;
   const now = performance.now();
-  if (now - last < 33) return;
+  if (now - last < 24) return;
   last = now;
+  // Coalesced pointer samples are sent in a single frame so the trail follows
+  // the real gesture instead of jumping between throttled points.
   const frame: LaserFrame = {
     type: "laser.move",
     gestureId,
     seq: seq++,
-    points: [point],
+    points: points.slice(-32).map((point) => ({ x: point.x, y: point.y })),
   };
   receiveLaser({ ...frame, connectionId: "local", userId: "local" });
   getRoomSyncBridge()?.laser?.(frame);

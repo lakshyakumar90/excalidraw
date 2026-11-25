@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useGuestImport } from "@/hooks/dashboard/useGuestImport";
-import { primaryButton, secondaryButton } from "./dashboardStyles";
 import type { SavedScene } from "@/lib/api/scenes";
 
+/**
+ * Automatically saves any pending guest drawing to the user's account once
+ * authenticated and surfaces a minimal, non-intrusive status pill.
+ */
 export function GuestDrawingOffer({
   userId,
   onSaved,
@@ -11,59 +15,42 @@ export function GuestDrawingOffer({
   onSaved: (scene: SavedScene) => void;
 }) {
   const guest = useGuestImport(userId, onSaved);
-  if (!guest.drawing && !guest.savedId && !guest.error) return null;
+  const autoSavedRef = useRef(false);
+
+  useEffect(() => {
+    if (guest.drawing && !guest.savedId && !guest.saving && !autoSavedRef.current) {
+      autoSavedRef.current = true;
+      void guest.save();
+    }
+  }, [guest]);
+
+  if (!guest.savedId && !guest.error) return null;
+
   return (
-    <section
-      className="mb-6 rounded-2xl border border-violet-200 bg-violet-50 p-5"
-      aria-label="Guest drawing"
+    <div
+      role={guest.error ? "alert" : "status"}
+      className={`animate-pop-up mb-4 flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2 text-xs ${
+        guest.error
+          ? "border-rose-500/30 bg-rose-500/10 text-rose-400"
+          : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)]"
+      }`}
     >
-      {guest.savedId ? (
-        <div role="status">
-          <p className="font-medium">
-            Your guest drawing is saved to your account.
-          </p>
-          <p className="mt-1 text-sm text-neutral-600">
-            The original is still available on your guest canvas.
-          </p>
-          <Link
-            href={`/canvas/${encodeURIComponent(guest.savedId)}`}
-            className={`${primaryButton} mt-4 inline-flex`}
-          >
-            Open saved drawing
-          </Link>
-        </div>
-      ) : guest.drawing ? (
+      {guest.error ? (
+        <span>{guest.error}</span>
+      ) : (
         <>
-          <h2 className="font-semibold">
-            Save your guest drawing to your account
-          </h2>
-          <p className="mt-1 text-sm text-neutral-600">
-            Copy your drawing, images, and canvas position. Your local guest
-            drawing stays intact.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              className={primaryButton}
-              disabled={guest.saving}
-              onClick={() => void guest.save()}
-            >
-              {guest.saving ? "Saving…" : "Save guest drawing"}
-            </button>
-            <button
-              className={secondaryButton}
-              disabled={guest.saving}
-              onClick={guest.dismiss}
-            >
-              Not now
-            </button>
-          </div>
+          <span className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span>Your guest drawing was saved to your account.</span>
+          </span>
+          <Link
+            href={`/canvas/${encodeURIComponent(guest.savedId!)}`}
+            className="shrink-0 font-medium text-[var(--text-primary)] underline underline-offset-4"
+          >
+            Open board
+          </Link>
         </>
-      ) : null}
-      {guest.error && (
-        <p role="alert" className="mt-3 text-sm text-red-700">
-          {guest.error}
-        </p>
       )}
-    </section>
+    </div>
   );
 }

@@ -49,8 +49,8 @@ const architectsDaughter = Architects_Daughter({
 });
 
 export const metadata: Metadata = {
-  title: "Excalidraw",
-  description: "A collaborative drawing canvas with Slides, AI, and MCP.",
+  title: "Chitran",
+  description: "Chitran — collaborative drawing canvas with Slides, AI, and MCP.",
 };
 
 const THEME_INIT_SCRIPT = `

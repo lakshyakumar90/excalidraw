@@ -1,7 +1,7 @@
 "use client";
 
 import type { SavedCanvasScene } from "@/lib/canvas/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RoomRole } from "@repo/common";
@@ -11,17 +11,29 @@ import { EditorExtras } from "./EditorExtras";
 import { LaserOverlay } from "@/components/presence/LaserOverlay";
 import { Canvas } from "@/components/canvas/Canvas";
 import { CanvasControls } from "@/components/canvas/CanvasControls";
-import { StylePanel } from "@/components/styles/StylePanel";
+import { SelectionActionBar } from "@/components/canvas/SelectionActionBar";
+import { SandsOfTime } from "@/components/canvas/SandsOfTime";
+import { Toolbar } from "@/components/toolbar/Toolbar";
 import { useCanvasTheme } from "@/lib/theme";
-import { FloatingCollabBar } from "./FloatingCollabBar";
-import { BoardPresetSwitcher } from "@/components/toolbar/BoardPresetSwitcher";
-import type { BoardPresetId } from "@repo/common";
+import { FloatingCollabBar, type ActiveCollaborator, type SyncIndicatorState } from "./FloatingCollabBar";
+import { applyBoardPresetToElements, getBoardPreset, isBoardPresetId, type BoardPresetId, type Element } from "@repo/common";
+import { animateViewportTransition, computeSlideViewport, extractOrderedSlides, reorderSlides, type SlideDescriptor } from "@repo/engine";
+import { historyStore } from "@/lib/history/historyStore";
+import { scene } from "@/lib/scene/scene";
+import { commitHistoryEntry } from "@/lib/sync/commits";
+import { getCurrentViewport, setCurrentViewport } from "@/lib/persistence/viewportStore";
+import { toolManager } from "@/lib/tools/toolManager";
+import { styleStore } from "@/lib/styles/styleStore";
 import { ConnectMcpModal } from "./ConnectMcpModal";
 import { AiCommandPalette } from "./AiCommandPalette";
 import { DiagramCodePane } from "./DiagramCodePane";
 import { VersionHistoryDrawer } from "./VersionHistoryDrawer";
 import { SlidesFilmstrip } from "./SlidesFilmstrip";
 import { PresentModeOverlay } from "./PresentModeOverlay";
+import { ExportModal } from "./ExportModal";
+import { PersonalLibraryPanel } from "./PersonalLibraryPanel";
+import { selectionStore } from "@/lib/selection/selectionStore";
+import { authClient } from "@repo/auth/client";
 
 export function CanvasWorkspace({
   savedScene,
@@ -31,6 +43,7 @@ export function CanvasWorkspace({
   roomRole?: RoomRole;
 }) {
   const router = useRouter();
+  const { data: session, isPending: authPending } = authClient.useSession();
   const [roleState, setRoleState] = useState(() => ({
     sourceRole: roomRole,
     activeRole: roomRole,
@@ -41,49 +54,100 @@ export function CanvasWorkspace({
   const accessRemoved = roleStateMatchesProps && roleState.accessRemoved;
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState("");
-  const [sharing, setSharing] = useState(false);
-  const { theme, toggleTheme } = useCanvasTheme();
-  const [boardPreset, setBoardPreset] = useState<BoardPresetId>("excali-font");
-  const [followingConnectionId, setFollowingConnectionId] = useState<string | null>(null);
+  const [, setSharing] = useState(false);
+  const initialTheme = savedScene?.appState?.theme;
+  const { theme, toggleTheme } = useCanvasTheme(
+    initialTheme === "light" || initialTheme === "dark" ? initialTheme : undefined,
+  );
+  const initialPreset = savedScene?.appState?.boardPreset;
+  const [boardPreset, setBoardPreset] = useState<BoardPresetId>(
+    isBoardPresetId(initialPreset) ? initialPreset : "excali-font",
+  );
+  const [presence, setPresence] = useState<{
+    participants: ActiveCollaborator[];
+    following: string | null;
+    syncState: SyncIndicatorState;
+  } | null>(null);
   const [mcpOpen, setMcpOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [slidesOpen, setSlidesOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [activeDrawer, setActiveDrawer] = useState<
+    "ai" | "slides" | "code" | "history" | "library" | null
+  >(null);
+  const aiOpen = activeDrawer === "ai";
+  const codeOpen = activeDrawer === "code";
+  const historyOpen = activeDrawer === "history";
+  const slidesOpen = activeDrawer === "slides";
+  const libraryOpen = activeDrawer === "library";
+  const [sandsOpen, setSandsOpen] = useState(false);
+  const [sandsCount, setSandsCount] = useState(0);
+  const toggleDrawer = (
+    name: "ai" | "slides" | "code" | "history" | "library",
+  ) => {
+    setSandsOpen(false);
+    setActiveDrawer((curr) => (curr === name ? null : name));
+  };
   const [presentMode, setPresentMode] = useState(false);
   const [presentIndex, setPresentIndex] = useState(0);
   const [laserActive, setLaserActive] = useState(false);
+  const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
+  const [gridOverride, setGridOverride] = useState<boolean | null>(null);
+  const gridEnabled = gridOverride ?? getBoardPreset(boardPreset).dotGrid;
+  const cancelCamera = useRef<(() => void) | null>(null);
+  useSyncExternalStore(scene.subscribe, scene.getSnapshot, () => 0);
+  const slides = extractOrderedSlides(scene.getElements());
+  const slideCount = slides.length;
+
+  useEffect(() => () => cancelCamera.current?.(), []);
+
+  useEffect(() => {
+    const onPresenceStatus = (event: Event) =>
+      setPresence((event as CustomEvent<NonNullable<typeof presence>>).detail);
+    window.addEventListener("room-presence-status", onPresenceStatus);
+    return () => window.removeEventListener("room-presence-status", onPresenceStatus);
+  }, []);
 
   useEffect(() => {
     const onOpenMcp = () => setMcpOpen(true);
-    const onOpenAi = () => setAiOpen(true);
-    const onToggleCode = () => setCodeOpen((v) => !v);
-    const onToggleHistory = () => setHistoryOpen((v) => !v);
-    const onToggleSlides = () => setSlidesOpen((v) => !v);
+    const onOpenExport = () => setExportOpen(true);
+    const onOpenAi = () => {
+      setSandsOpen(false);
+      setActiveDrawer("ai");
+    };
+    const onToggleCode = () => toggleDrawer("code");
+    const onToggleHistory = () => toggleDrawer("history");
+    const onToggleSlides = () => toggleDrawer("slides");
+    const onOpenLibrary = () => toggleDrawer("library");
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setAiOpen((v) => !v);
+        toggleDrawer("ai");
       } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
-        setPresentMode((v) => !v);
+        if (slideCount > 0) {
+          setPresentIndex(0);
+          setPresentMode((v) => !v);
+        }
       }
     };
     window.addEventListener("open-mcp-modal", onOpenMcp);
+    window.addEventListener("open-export-modal", onOpenExport);
     window.addEventListener("open-ai-palette", onOpenAi);
     window.addEventListener("toggle-diagram-code", onToggleCode);
     window.addEventListener("toggle-version-history", onToggleHistory);
     window.addEventListener("toggle-slides-panel", onToggleSlides);
+    window.addEventListener("editor-open-library", onOpenLibrary);
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("open-mcp-modal", onOpenMcp);
+      window.removeEventListener("open-export-modal", onOpenExport);
       window.removeEventListener("open-ai-palette", onOpenAi);
       window.removeEventListener("toggle-diagram-code", onToggleCode);
       window.removeEventListener("toggle-version-history", onToggleHistory);
       window.removeEventListener("toggle-slides-panel", onToggleSlides);
+      window.removeEventListener("editor-open-library", onOpenLibrary);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [slideCount]);
   useEffect(() => {
     const onAccessChanged = (event: Event) => {
       const role = (event as CustomEvent<{ role: RoomRole | null }>).detail
@@ -99,6 +163,68 @@ export function CanvasWorkspace({
       window.removeEventListener("room-access-changed", onAccessChanged);
   }, [roomRole]);
   const readOnly = activeRole === "viewer" || accessRemoved;
+  const slide = slides[Math.min(presentIndex, Math.max(0, slides.length - 1))];
+  const slideX = slide?.x;
+  const slideY = slide?.y;
+  const slideWidth = slide?.width;
+  const slideHeight = slide?.height;
+  useEffect(() => {
+    if (!presentMode || slideX === undefined || slideY === undefined ||
+        slideWidth === undefined || slideHeight === undefined) return;
+    const next = computeSlideViewport(
+      { x: slideX, y: slideY, width: slideWidth, height: slideHeight },
+      window.innerWidth, window.innerHeight,
+    );
+    return animateViewportTransition(getCurrentViewport(), next,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 420,
+      setCurrentViewport);
+  }, [presentMode, slideX, slideY, slideWidth, slideHeight]);
+
+  useEffect(() => {
+    const preset = getBoardPreset(boardPreset);
+    styleStore.set("strokeColor", preset.defaultStrokeColor);
+    styleStore.set("backgroundColor", preset.defaultBackgroundColor);
+    styleStore.set("strokeWidth", preset.strokeWidth);
+    styleStore.set("roughness", preset.roughness);
+  }, [boardPreset]);
+
+  function commit(update: () => void) {
+    if (readOnly) return;
+    const { changes } = historyStore.commitUpdate(update);
+    commitHistoryEntry(changes, "local");
+  }
+
+  function insertElements(elements: Element[], mode: "insert" | "replace", groupId?: string) {
+    if (elements.length === 0) return;
+    const previous = mode === "replace"
+      ? scene.getElements().filter((item) => !item.isDeleted && item.groupIds?.includes(groupId ?? ""))
+      : [];
+    const viewport = getCurrentViewport();
+    const minX = Math.min(...elements.map((item) => item.x));
+    const minY = Math.min(...elements.map((item) => item.y));
+    const x = previous.length ? Math.min(...previous.map((item) => item.x)) : (140 - viewport.scrollX) / viewport.zoom;
+    const y = previous.length ? Math.min(...previous.map((item) => item.y)) : (140 - viewport.scrollY) / viewport.zoom;
+    const nextIds = new Set(elements.map((item) => item.id));
+    commit(() => {
+      for (const item of previous) if (!nextIds.has(item.id)) scene.removeElement(item.id);
+      for (const item of elements) {
+        const next = { ...item, x: item.x + x - minX, y: item.y + y - minY, isDeleted: false };
+        if (scene.getElement(item.id)) scene.mutateElement(item.id, next);
+        else scene.addElement(next);
+      }
+    });
+  }
+
+  function selectSlide(selected: SlideDescriptor) {
+    setActiveSlideId(selected.id);
+    cancelCamera.current?.();
+    cancelCamera.current = animateViewportTransition(
+      getCurrentViewport(),
+      computeSlideViewport(selected, window.innerWidth, window.innerHeight),
+      300,
+      setCurrentViewport,
+    );
+  }
   async function shareCurrentScene() {
     if (!savedScene?.id) return;
     setSharing(true);
@@ -118,38 +244,57 @@ export function CanvasWorkspace({
       setSharing(false);
     }
   }
+  void session;
+  void authPending;
   return (
-    <main className="editor-workspace fixed inset-0 overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      <Canvas savedScene={savedScene} readOnly={readOnly} />
+    <main className={`editor-workspace fixed inset-0 overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)] ${presentMode ? "editor-zen" : ""}`}>
+      <Canvas savedScene={savedScene} theme={theme} presetId={boardPreset} gridEnabled={gridEnabled && !presentMode} readOnly={readOnly || (presentMode && !laserActive)} />
       <LaserOverlay />
       <EditorExtras readOnly={readOnly} roomId={savedScene?.roomSync?.roomId} />
-      <div data-editor-chrome>
-        <CanvasControls readOnly={readOnly} />
-        <div className="fixed bottom-4 right-4 z-40 hidden md:block">
-          <BoardPresetSwitcher
-            value={boardPreset}
-            onChange={(next) => {
-              setBoardPreset(next);
-              window.dispatchEvent(new CustomEvent("board-preset-changed", { detail: { presetId: next } }));
-            }}
-          />
-        </div>
+      <div data-editor-chrome hidden={presentMode}>
+        <Toolbar />
+        <CanvasControls readOnly={readOnly} gridEnabled={gridEnabled} onToggleGrid={() => setGridOverride(!gridEnabled)} />
+        <SelectionActionBar
+          readOnly={readOnly}
+          onOpenAiClean={() => {
+            setSandsOpen(false);
+            setActiveDrawer("ai");
+          }}
+        />
         <FloatingCollabBar
           theme={theme}
           onToggleTheme={toggleTheme}
-          followingConnectionId={followingConnectionId}
+          collaborators={presence?.participants}
+          syncState={presence?.syncState ?? (savedScene?.roomSync ? "syncing" : "saved")}
+          followingConnectionId={presence?.following}
           onToggleFollow={(connId) =>
-            setFollowingConnectionId((cur) => (cur === connId ? null : connId))
+            window.dispatchEvent(new CustomEvent("room-follow-toggle", { detail: connId }))
           }
           onOpenShare={savedScene?.id && !savedScene.roomSync ? () => void shareCurrentScene() : undefined}
-          onOpenAiPalette={() => window.dispatchEvent(new CustomEvent("open-ai-palette"))}
-          onOpenDiagramCode={() => window.dispatchEvent(new CustomEvent("toggle-diagram-code"))}
-          onOpenSlides={() => window.dispatchEvent(new CustomEvent("toggle-slides-panel"))}
-          onOpenHistory={() => window.dispatchEvent(new CustomEvent("toggle-version-history"))}
+          onOpenAiPalette={() => toggleDrawer("ai")}
+          onOpenSands={() => {
+            setActiveDrawer(null);
+            setSandsOpen((v) => !v);
+          }}
+          sandsOpen={sandsOpen}
+          sandsCount={sandsCount}
+          onOpenDiagramCode={() => toggleDrawer("code")}
+          onOpenSlides={() => toggleDrawer("slides")}
+          onOpenHistory={() => toggleDrawer("history")}
           onOpenMcp={() => window.dispatchEvent(new CustomEvent("open-mcp-modal"))}
+          aiOpen={aiOpen}
+          slidesOpen={slidesOpen}
+          codeOpen={codeOpen}
+          historyOpen={historyOpen}
+          libraryOpen={libraryOpen}
           roomId={savedScene?.roomSync?.roomId}
         />
-        {!readOnly && <StylePanel />}
+        <SandsOfTime
+          open={sandsOpen}
+          onClose={() => setSandsOpen(false)}
+          onCountChange={setSandsCount}
+          drawerOffsetClass={activeDrawer ? "right-[min(26.5rem,calc(100vw-3rem))]" : "right-14"}
+        />
         <EditorHeader
           sceneTitle={savedScene?.title || undefined}
           backHref={
@@ -158,43 +303,64 @@ export function CanvasWorkspace({
               : "/dashboard"
           }
           showAccount={!savedScene?.roomSync}
+          boardPreset={boardPreset}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onChangePreset={(next, restyle) => {
+            setBoardPreset(next);
+            if (restyle) commit(() => {
+              const elements = scene.getElements().filter((item) => !item.isDeleted && item.type !== "image");
+              for (const item of applyBoardPresetToElements(elements, next)) scene.mutateElement(item.id, item);
+            });
+          }}
+          syncLabel={
+            presence?.syncState === "syncing"
+              ? "Syncing…"
+              : presence?.syncState === "offline"
+                ? "Offline"
+                : savedScene?.roomSync
+                  ? "Synced"
+                  : "Saved on this device"
+          }
+          onShare={savedScene?.id && !savedScene.roomSync ? () => void shareCurrentScene() : undefined}
         />
       </div>
-      {savedScene?.id && !savedScene.roomSync && (
+      {(shareUrl || shareError) && (
         <div
           data-editor-chrome
-          className="editor-scene-actions fixed left-4 top-4 z-50 max-w-[min(32rem,calc(100vw-7rem))] rounded-lg border border-neutral-200 bg-white/95 p-2 text-sm shadow-sm backdrop-blur"
+          role={shareError ? "alert" : "status"}
+          className="animate-pop-up fixed bottom-4 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 px-3.5 py-2 text-xs text-[var(--text-primary)] shadow-2xl backdrop-blur-md"
         >
-          <button
-            type="button"
-            disabled={sharing}
-            onClick={() => void shareCurrentScene()}
-            className="rounded-md bg-violet-600 px-3 py-2 font-semibold text-white disabled:opacity-60"
-          >
-            {sharing ? "Sharing…" : "Share scene"}
-          </button>
-          {shareUrl && (
-            <p role="status" className="mt-2 break-all">
+          {shareUrl ? (
+            <span>
               Room link:{" "}
-              <Link className="text-violet-700 underline" href={shareUrl}>
+              <Link className="font-medium text-[var(--text-primary)] underline" href={shareUrl}>
                 {shareUrl}
               </Link>
-            </p>
+            </span>
+          ) : (
+            <span className="text-rose-400">{shareError}</span>
           )}
-          {shareError && (
-            <p role="alert" className="mt-2 text-red-700">
-              {shareError}
-            </p>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setShareUrl("");
+              setShareError("");
+            }}
+            aria-label="Dismiss"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          >
+            ✕
+          </button>
         </div>
       )}
       {accessRemoved && (
         <div
           role="alert"
-          className="fixed inset-x-0 top-16 z-[80] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-lg border border-red-200 bg-white px-4 py-3 text-sm text-red-800 shadow-lg"
+          className="fixed inset-x-0 top-14 z-[80] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-xl border border-rose-500/40 bg-[var(--bg-elevated)] px-4 py-2.5 text-xs text-rose-300 shadow-xl"
         >
           Your room access was removed. Pending edits remain on this device.{" "}
-          <Link className="ml-2 underline" href="/dashboard">
+          <Link className="ml-2 font-medium text-[var(--text-primary)] underline" href="/dashboard">
             Open dashboard
           </Link>
         </div>
@@ -209,51 +375,103 @@ export function CanvasWorkspace({
         open={aiOpen}
         roomId={savedScene?.roomSync?.roomId}
         presetId={boardPreset}
-        onClose={() => setAiOpen(false)}
-        onRevealElements={(els, title) => {
-          window.dispatchEvent(
-            new CustomEvent("ai-elements-revealed", { detail: { elements: els, title } }),
-          );
+        onClose={() => setActiveDrawer(null)}
+        onRevealElements={(elements) => {
+          if (readOnly) return;
+          window.dispatchEvent(new CustomEvent("canvas-reveal", { detail: elements.map(({ id }) => id) }));
+          commit(() => {
+            for (const element of elements) scene.addElement(element);
+          });
         }}
       />
       <DiagramCodePane
         open={codeOpen}
         presetId={boardPreset}
-        onClose={() => setCodeOpen(false)}
-        onApplyElements={(els, mode, diagramGroupId) => {
-          window.dispatchEvent(
-            new CustomEvent("diagram-code-apply", {
-              detail: { elements: els, mode, diagramGroupId },
-            }),
-          );
-        }}
+        onClose={() => setActiveDrawer(null)}
+        onApplyElements={insertElements}
       />
       <VersionHistoryDrawer
         open={historyOpen}
         sceneId={savedScene?.id}
-        onClose={() => setHistoryOpen(false)}
+        canRestore={!savedScene?.roomSync || activeRole === "owner"}
+        onClose={() => setActiveDrawer(null)}
         onRestored={() => window.location.reload()}
       />
       <SlidesFilmstrip
         open={slidesOpen && !presentMode}
-        slides={[]}
-        activeSlideId={null}
-        onSelectSlide={() => undefined}
-        onReorder={() => undefined}
+        slides={slides}
+        activeSlideId={activeSlideId}
+        onSelectSlide={selectSlide}
+        onReorder={(ids) => commit(() => {
+          for (const frame of reorderSlides(scene.getElements(), ids))
+            scene.mutateElement(frame.id, { slideOrder: frame.slideOrder });
+        })}
+        onAddSlide={readOnly ? undefined : () => commit(() => {
+          const viewport = getCurrentViewport();
+          scene.addElement({
+            id: crypto.randomUUID(),
+            type: "frame",
+            x: (160 - viewport.scrollX) / viewport.zoom,
+            y: (120 - viewport.scrollY) / viewport.zoom,
+            width: 960,
+            height: 540,
+            title: `Slide ${slides.length + 1}`,
+            slideOrder: Math.max(-1, ...slides.map((item) => item.slideOrder)) + 1,
+          });
+        })}
         onStartPresent={() => {
           setPresentIndex(0);
           setPresentMode(true);
         }}
-        onClose={() => setSlidesOpen(false)}
+        onClose={() => setActiveDrawer(null)}
+      />
+      {libraryOpen && (
+        <aside
+          data-editor-chrome
+          aria-label="Library"
+          className="animate-drawer-right fixed bottom-0 right-0 top-0 z-50 flex w-[min(22.5rem,100vw)] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl"
+        >
+          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
+            <h2 className="text-sm font-semibold">Your library</h2>
+            <button
+              type="button"
+              onClick={() => setActiveDrawer(null)}
+              aria-label="Close Library"
+              className="grid h-7 w-7 place-items-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <PersonalLibraryPanel
+              readOnly={readOnly}
+              roomId={savedScene?.roomSync?.roomId}
+              selectionCount={selectionStore.getSnapshot().size}
+            />
+          </div>
+        </aside>
+      )}
+      <ExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        defaultDark={theme === "dark"}
+        slidesCount={slides.length}
       />
       <PresentModeOverlay
         active={presentMode}
-        slides={[]}
-        currentIndex={presentIndex}
+        slides={slides}
+        currentIndex={Math.min(presentIndex, Math.max(0, slides.length - 1))}
         laserActive={laserActive}
         onNavigate={setPresentIndex}
-        onToggleLaser={() => setLaserActive((v) => !v)}
-        onExit={() => setPresentMode(false)}
+        onToggleLaser={() => {
+          toolManager.setActiveTool(laserActive ? "selection" : "laser");
+          setLaserActive(!laserActive);
+        }}
+        onExit={() => {
+          if (laserActive) toolManager.setActiveTool("selection");
+          setLaserActive(false);
+          setPresentMode(false);
+        }}
       />
     </main>
   );

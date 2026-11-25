@@ -8,7 +8,7 @@
 
 .editor-account-link {
   display: inline-flex;
-  min-height: 44px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   line-height: 1.25;
@@ -28,16 +28,16 @@
 }
 
 .editor-header-scene-title {
-  max-width: min(18rem, 22vw);
+  max-width: min(16rem, 20vw);
 }
 
 .editor-room-header-status {
-  top: max(0.25rem, env(safe-area-inset-top));
+  top: max(0.75rem, env(safe-area-inset-top));
 }
 
 .editor-scene-actions,
 .editor-room-status {
-  top: 4rem;
+  top: 3.75rem;
 }
 
 .mobile-tools-toggle {
@@ -49,23 +49,21 @@
 }
 
 .editor-bottom-dock button {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  min-height: 32px;
 }
 
 .editor-style-panel {
-  top: 5.25rem;
-  right: 1rem;
-  bottom: 5.25rem;
-  width: 16rem;
+  top: 4.25rem;
+  left: 0.75rem;
+  bottom: 4.25rem;
+  width: 15.5rem;
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgb(15 23 42 / 0.12);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
 }
 
 .editor-style-panel[data-collapsed="true"] {
-  top: 5.25rem;
-  right: 1rem;
+  top: 4.25rem;
+  left: 0.75rem;
   bottom: auto;
   width: auto;
 }
@@ -130,15 +128,15 @@
   }
 
   .editor-style-panel {
-    top: 4.5rem;
-    right: 0.5rem;
+    top: 7rem;
+    left: 0.5rem;
     bottom: calc(5rem + env(safe-area-inset-bottom));
     width: min(19rem, calc(100vw - 1rem));
   }
 
   .editor-style-panel[data-collapsed="true"] {
-    top: 4rem;
-    right: 0.5rem;
+    top: 7rem;
+    left: 0.5rem;
     bottom: auto;
     width: auto;
   }
@@ -165,7 +163,6 @@
 
 @media (max-width: 640px) {
   .editor-room-header-status {
-    right: 0.5rem;
     gap: 0.125rem;
   }
 

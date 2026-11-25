@@ -34,7 +34,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'1f693455ce1da9cbb06683336e68c5994c69e135914302e4d7a432d83cd61381'>;
+  StorageHashBase<'c05570a7899243f80a738090788647cda835e84f1e4db34adf6faf5c523e61ec'>;
 export type ExecutionHash =
   ExecutionHashBase<'877ea987b88e92a4975a288cd1266e120e4450fb0c126d76b5a863124fde4aef'>;
 export type ProfileHash =
@@ -316,6 +316,18 @@ export type FieldOutputTypes = {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     };
+    readonly RoomApiToken: {
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly roomId: CodecTypes['pg/int4@1']['output'];
+      readonly sceneId: CodecTypes['pg/text@1']['output'];
+      readonly tokenHash: CodecTypes['pg/text@1']['output'];
+      readonly role: CodecTypes['pg/text@1']['output'];
+      readonly label: CodecTypes['pg/text@1']['output'] | null;
+      readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly revokedAt: CodecTypes['pg/timestamptz-string@1']['output'] | null;
+      readonly createdById: CodecTypes['pg/text@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    };
     readonly RoomMember: {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
@@ -446,6 +458,18 @@ export type FieldInputTypes = {
       readonly sceneId: CodecTypes['pg/text@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
+    };
+    readonly RoomApiToken: {
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly roomId: CodecTypes['pg/int4@1']['input'];
+      readonly sceneId: CodecTypes['pg/text@1']['input'];
+      readonly tokenHash: CodecTypes['pg/text@1']['input'];
+      readonly role: CodecTypes['pg/text@1']['input'];
+      readonly label: CodecTypes['pg/text@1']['input'] | null;
+      readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly revokedAt: CodecTypes['pg/timestamptz-string@1']['input'] | null;
+      readonly createdById: CodecTypes['pg/text@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
     };
     readonly RoomMember: {
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -578,6 +602,18 @@ export type StorageColumnTypes = {
       readonly slug: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     };
+    readonly roomApiToken: {
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly createdById: CodecTypes['pg/text@1']['output'];
+      readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly label: CodecTypes['pg/text@1']['output'] | null;
+      readonly revokedAt: CodecTypes['pg/timestamptz-string@1']['output'] | null;
+      readonly role: CodecTypes['pg/text@1']['output'];
+      readonly roomId: CodecTypes['pg/int4@1']['output'];
+      readonly sceneId: CodecTypes['pg/text@1']['output'];
+      readonly tokenHash: CodecTypes['pg/text@1']['output'];
+    };
     readonly roomMember: {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly joinedAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -709,6 +745,18 @@ export type StorageColumnInputTypes = {
       readonly slug: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
     };
+    readonly roomApiToken: {
+      readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly createdById: CodecTypes['pg/text@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamptz-string@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly label: CodecTypes['pg/text@1']['input'] | null;
+      readonly revokedAt: CodecTypes['pg/timestamptz-string@1']['input'] | null;
+      readonly role: CodecTypes['pg/text@1']['input'];
+      readonly roomId: CodecTypes['pg/int4@1']['input'];
+      readonly sceneId: CodecTypes['pg/text@1']['input'];
+      readonly tokenHash: CodecTypes['pg/text@1']['input'];
+    };
     readonly roomMember: {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly joinedAt: CodecTypes['pg/timestamptz-string@1']['input'];
@@ -780,11 +828,19 @@ export namespace Models {
     chats: public_Chat[];
     libraryItems: public_LibraryItem[];
     membership: public_RoomMember[];
+    roomApiTokens: public_RoomApiToken[];
     rooms: public_Room[];
     scenes: public_Scene[];
     sessions: public_Session[];
     readonly [RelationKeys]?:
-      'accounts' | 'chats' | 'libraryItems' | 'membership' | 'rooms' | 'scenes' | 'sessions';
+      | 'accounts'
+      | 'chats'
+      | 'libraryItems'
+      | 'membership'
+      | 'roomApiTokens'
+      | 'rooms'
+      | 'scenes'
+      | 'sessions';
   };
   export type public_LibraryItem = {
     id: CodecTypes['pg/text@1']['output'];
@@ -804,12 +860,14 @@ export namespace Models {
     createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
     updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
     admin: public_User;
+    apiTokens: public_RoomApiToken[];
     chats: public_Chat[];
     invites: public_Invite[];
     joinCodes: public_JoinCode[];
     members: public_RoomMember[];
     scene: public_Scene | null;
-    readonly [RelationKeys]?: 'admin' | 'chats' | 'invites' | 'joinCodes' | 'members' | 'scene';
+    readonly [RelationKeys]?:
+      'admin' | 'apiTokens' | 'chats' | 'invites' | 'joinCodes' | 'members' | 'scene';
   };
   export type public_RoomMember = {
     id: CodecTypes['pg/int4@1']['output'];
@@ -938,6 +996,21 @@ export namespace Models {
     user: public_User;
     readonly [RelationKeys]?: 'room' | 'user';
   };
+  export type public_RoomApiToken = {
+    id: CodecTypes['pg/text@1']['output'];
+    roomId: CodecTypes['pg/int4@1']['output'];
+    sceneId: CodecTypes['pg/text@1']['output'];
+    tokenHash: CodecTypes['pg/text@1']['output'];
+    role: CodecTypes['pg/text@1']['output'];
+    label: CodecTypes['pg/text@1']['output'] | null;
+    expiresAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    revokedAt: CodecTypes['pg/timestamptz-string@1']['output'] | null;
+    createdById: CodecTypes['pg/text@1']['output'];
+    createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
+    createdBy: public_User;
+    room: public_Room;
+    readonly [RelationKeys]?: 'createdBy' | 'room';
+  };
 }
 
 export declare const models: {
@@ -956,6 +1029,7 @@ export declare const models: {
     Account: Models.public_Account;
     Verification: Models.public_Verification;
     Chat: Models.public_Chat;
+    RoomApiToken: Models.public_RoomApiToken;
   };
 };
 
@@ -1572,6 +1646,107 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly roomApiToken: {
+              columns: {
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly roomId: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly sceneId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly tokenHash: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly role: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/text@1', 'editor'>;
+                  };
+                };
+                readonly label: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly expiresAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                  readonly nullable: false;
+                };
+                readonly revokedAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                  readonly nullable: true;
+                };
+                readonly createdById: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly createdAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['tokenHash'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'roomApiToken_roomId_idx_fe51d647';
+                  readonly prefix: 'roomApiToken_roomId_idx';
+                  readonly columns: readonly ['roomId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'roomApiToken_createdById_idx_8bf640ed';
+                  readonly prefix: 'roomApiToken_createdById_idx';
+                  readonly columns: readonly ['createdById'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'roomApiToken';
+                    readonly columns: readonly ['roomId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'room';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'roomApiToken';
+                    readonly columns: readonly ['createdById'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'user';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly roomMember: {
               columns: {
                 readonly id: {
@@ -2027,6 +2202,10 @@ type ContractBase = Omit<
       readonly model: 'Verification';
     };
     readonly chat: { readonly namespace: 'public' & NamespaceId; readonly model: 'Chat' };
+    readonly roomApiToken: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'RoomApiToken';
+    };
   };
   readonly domain: {
     readonly namespaces: {
@@ -2572,6 +2751,17 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['id'];
                 };
               };
+              readonly apiTokens: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'RoomApiToken';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['roomId'];
+                };
+              };
               readonly chats: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Chat' };
                 readonly cardinality: '1:N';
@@ -2636,6 +2826,95 @@ type ContractBase = Omit<
                 readonly sceneId: { readonly column: 'sceneId' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly RoomApiToken: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly roomId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly sceneId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly tokenHash: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly role: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly label: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                };
+              };
+              readonly revokedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                };
+              };
+              readonly createdById: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-string@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly createdBy: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['createdById'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly room: {
+                readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Room' };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['roomId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'roomApiToken';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly roomId: { readonly column: 'roomId' };
+                readonly sceneId: { readonly column: 'sceneId' };
+                readonly tokenHash: { readonly column: 'tokenHash' };
+                readonly role: { readonly column: 'role' };
+                readonly label: { readonly column: 'label' };
+                readonly expiresAt: { readonly column: 'expiresAt' };
+                readonly revokedAt: { readonly column: 'revokedAt' };
+                readonly createdById: { readonly column: 'createdById' };
+                readonly createdAt: { readonly column: 'createdAt' };
               };
             };
           };
@@ -2991,6 +3270,17 @@ type ContractBase = Omit<
                 readonly on: {
                   readonly localFields: readonly ['id'];
                   readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly roomApiTokens: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'RoomApiToken';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['createdById'];
                 };
               };
               readonly rooms: {

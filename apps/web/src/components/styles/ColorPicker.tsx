@@ -125,10 +125,10 @@ function ColorGrid({
           onFocus={() => setFocusedIndex(index)}
           onKeyDown={(event) => handleKeyDown(event, index)}
           onClick={() => onSelect(color.value)}
-          className={`h-7 w-7 rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white ${
+          className={`h-7 w-7 rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${
             value === color.value
-              ? "border-indigo-600 ring-1 ring-indigo-500"
-              : "border-black/10 hover:scale-105 hover:border-black/30"
+              ? "border-[var(--accent)] ring-1 ring-[var(--accent)]"
+              : "border-[var(--border-subtle)] hover:scale-105 hover:border-[var(--border-soft)]"
           }`}
           style={{ backgroundColor: color.value }}
         />
@@ -173,7 +173,7 @@ export function ColorPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-neutral-700">{label}</span>
+        <span className="text-xs font-medium text-[var(--text-primary)]">{label}</span>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
           <input
             aria-label={`${label} hex color`}
@@ -201,7 +201,7 @@ export function ColorPicker({
                 event.currentTarget.blur();
               }
             }}
-            className="h-8 w-16 rounded-md border border-neutral-200 bg-white px-2 font-mono text-xs uppercase text-neutral-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="h-8 w-16 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2 font-mono text-xs uppercase text-[var(--text-primary)] outline-none transition focus:border-[var(--border-soft)] focus:ring-2 focus:ring-[var(--focus-ring)]"
           />
           <input
             aria-label={`${label} color picker`}
@@ -209,7 +209,7 @@ export function ColorPicker({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onBlur={(event) => onCommit(event.currentTarget.value)}
-            className="h-8 w-9 cursor-pointer rounded-md border border-neutral-200 bg-white p-1"
+            className="h-8 w-9 cursor-pointer rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] p-1"
           />
           <button
             type="button"
@@ -217,10 +217,10 @@ export function ColorPicker({
             aria-pressed={eyedropperActive}
             title="Pick a color from the canvas"
             onClick={onPickFromCanvas}
-            className={`grid h-8 w-8 place-items-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+            className={`grid h-8 w-8 place-items-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${
               eyedropperActive
-                ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
+                ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)]"
+                : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
             }`}
           >
             <svg
@@ -249,7 +249,7 @@ export function ColorPicker({
 
       {recentPalette.length > 0 && (
         <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-neutral-500">Recent</p>
+            <p className="text-[11px] font-medium text-[var(--text-muted)]">Recent</p>
           <ColorGrid
             label={`Recent ${label.toLowerCase()} colors`}
             colors={recentPalette}

@@ -9,10 +9,12 @@ import { loadScene } from "@/lib/persistence/indexedDb";
 import { buildSavedSceneData } from "@/lib/persistence/savedScene";
 import { updateSceneData } from "@/lib/api/scenes";
 import { setCurrentViewport } from "@/lib/persistence/viewportStore";
+import { generateBoardThumbnail } from "@/lib/canvas/thumbnail";
 
 export function useCanvasPersistence(
   savedScene: SavedCanvasScene | undefined,
   viewportRef: RefObject<Viewport>,
+  canvasRef: RefObject<HTMLCanvasElement | null>,
 ) {
   const [readyFor, setReadyFor] = useState<SavedCanvasScene | undefined | null>(
     null,
@@ -23,6 +25,9 @@ export function useCanvasPersistence(
     let cancelled = false;
     let autosave: AutosaveHandle | null = null;
     const document = savedScene ? Promise.resolve(savedScene) : loadScene();
+    const remoteFiles = new Map(Object.entries(savedScene?.files ?? {}).filter(
+      ([, file]) => /^\/api\/files\/[\w-]+$/.test(file.dataURL),
+    ));
 
     function startSaving() {
       // Room sync mode retires the whole-scene autosave loop: RoomSync owns
@@ -36,7 +41,14 @@ export function useCanvasPersistence(
               scene,
               () => viewportRef.current,
               async (elements, viewport) => {
-                const data = await buildSavedSceneData(elements, viewport);
+                const data = await buildSavedSceneData(elements, viewport, remoteFiles);
+                data.appState = { ...savedScene.appState, ...data.appState };
+                const canvas = canvasRef.current;
+                if (canvas) {
+                  const preview = await generateBoardThumbnail(canvas).catch(() => null);
+                  if (preview && preview.dataUrl.length <= 100_000)
+                    data.appState = { ...data.appState, thumbnail: preview.dataUrl };
+                }
                 if (savedScene.saveData) await savedScene.saveData(data);
                 else await updateSceneData(savedScene.id, data);
               },
@@ -84,7 +96,7 @@ export function useCanvasPersistence(
       autosave?.stop();
       autosaveRef.current = null;
     };
-  }, [savedScene, viewportRef]);
+  }, [savedScene, viewportRef, canvasRef]);
 
   return { persistenceReady: readyFor === savedScene, autosaveRef };
 }

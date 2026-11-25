@@ -1,19 +1,41 @@
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Router } from "express";
 import { z } from "zod";
+import { validateSyncBatch } from "@repo/common";
 
 export const aiRouter: Router = Router();
 
-export const AiDiagramStepSchema = z.object({
+const AiMermaidStepSchema = z.strictObject({
   title: z.string().min(1).max(120),
   mermaidChunk: z.string().min(1).max(4000),
 });
+const AiElementsStepSchema = z.strictObject({
+  title: z.string().min(1).max(120),
+  elements: z.array(z.unknown()).transform((elements, context) => {
+    const result = validateSyncBatch(elements);
+    if (!result.ok) {
+      context.addIssue({ code: "custom", message: result.error });
+      return z.NEVER;
+    }
+    return result.elements;
+  }),
+});
+export const AiDiagramStepSchema = z.union([AiMermaidStepSchema, AiElementsStepSchema]);
 
-export const AiDiagramPlanSchema = z.object({
+export const AiDiagramPlanSchema = z.strictObject({
   summary: z.string().min(1).max(300).optional(),
   steps: z.array(AiDiagramStepSchema).min(1).max(12),
 });
 
 export type AiDiagramPlan = z.infer<typeof AiDiagramPlanSchema>;
+
+export type AiHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 export const GenerateDiagramRequestSchema = z.object({
   prompt: z.string().trim().min(2).max(2000),
@@ -25,135 +47,29 @@ export const GenerateDiagramRequestSchema = z.object({
       "opencode",
       "codex-cli",
       "antigravity-cli",
-      "template",
     ])
     .optional()
-    .default("template"),
+    .default("opencode"),
   apiKey: z.string().trim().optional(),
   baseUrl: z.string().trim().url().optional(),
   model: z.string().trim().max(120).optional(),
   roomId: z.string().trim().optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(4000),
+      }),
+    )
+    .max(20)
+    .optional()
+    .default([]),
 });
-
-const BUILTIN_TEMPLATES: Record<string, AiDiagramPlan> = {
-  "redis-write-behind": {
-    summary: "Redis Write-Behind Collaboration Architecture",
-    steps: [
-      {
-        title: "Step 1: Clients & Edge Gateway",
-        mermaidChunk: `graph TD
-  BrowserA[Browser Tab A] --> Edge[Caddy Edge Proxy]
-  BrowserB[Browser Tab B] --> Edge`,
-      },
-      {
-        title: "Step 2: Realtime Services & Redis Delta CAS",
-        mermaidChunk: `graph TD
-  Edge --> WS[WebSocket Server]
-  Edge --> API[HTTP API Server]
-  WS --> Redis[(Redis Delta Lua CAS)]
-  API --> Redis`,
-      },
-      {
-        title: "Step 3: BullMQ Flush Worker & Postgres Durability",
-        mermaidChunk: `graph TD
-  Redis --> Queue[BullMQ Flush Queue]
-  Queue --> Worker[Flush Worker x8]
-  Worker --> Postgres[(PostgreSQL SceneRevision)]`,
-      },
-    ],
-  },
-  "rag-pipeline": {
-    summary: "Production RAG Pipeline",
-    steps: [
-      {
-        title: "Step 1: Ingestion & Chunking",
-        mermaidChunk: `graph LR
-  Docs[Source Docs] --> Chunker[Semantic Chunker]
-  Chunker --> Embed[Embedding Model]`,
-      },
-      {
-        title: "Step 2: Vector Index & Hybrid Retrieval",
-        mermaidChunk: `graph LR
-  Embed --> VectorDB[(Vector Database)]
-  Query[User Query] --> Retriever[Hybrid Retriever]
-  VectorDB --> Retriever`,
-      },
-      {
-        title: "Step 3: Reranker & LLM Synthesis",
-        mermaidChunk: `graph LR
-  Retriever --> Reranker[Cross-Encoder Reranker]
-  Reranker --> LLM[Foundation LLM]
-  LLM --> Answer[Grounded Answer]`,
-      },
-    ],
-  },
-  "auth-flow": {
-    summary: "OAuth + Session Authentication Flow",
-    steps: [
-      {
-        title: "Step 1: Sign-In Entry",
-        mermaidChunk: `graph TD
-  User[User Browser] --> AuthUI[Sign-In / Sign-Up]
-  AuthUI --> BetterAuth[Better Auth Handler]`,
-      },
-      {
-        title: "Step 2: Identity Verification",
-        mermaidChunk: `graph TD
-  BetterAuth --> OAuth{Google OAuth / Password}
-  OAuth --> SessionDB[(Postgres Sessions)]`,
-      },
-      {
-        title: "Step 3: WS Ticket & Room Access",
-        mermaidChunk: `graph TD
-  SessionDB --> Ticket[Presence Ticket Signer]
-  Ticket --> WS[Authenticated WebSocket]`,
-      },
-    ],
-  },
-  "er-diagram": {
-    summary: "Collaborative Whiteboard ER Model",
-    steps: [
-      {
-        title: "Step 1: Users & Rooms",
-        mermaidChunk: `graph LR
-  User[User] --> Room[Room]
-  User --> RoomMember[RoomMember]
-  Room --> RoomMember`,
-      },
-      {
-        title: "Step 2: Scenes & Revisions",
-        mermaidChunk: `graph LR
-  Room --> Scene[Scene]
-  Scene --> SceneRevision[SceneRevision]`,
-      },
-      {
-        title: "Step 3: MCP Tokens & Invites",
-        mermaidChunk: `graph LR
-  Room --> RoomApiToken[RoomApiToken]
-  Room --> RoomInvite[RoomInvite]`,
-      },
-    ],
-  },
-};
-
-export function selectTemplatePlan(prompt: string): AiDiagramPlan {
-  const lower = prompt.toLowerCase();
-  if (lower.includes("rag") || lower.includes("retrieval") || lower.includes("vector")) {
-    return BUILTIN_TEMPLATES["rag-pipeline"]!;
-  }
-  if (lower.includes("auth") || lower.includes("oauth") || lower.includes("login")) {
-    return BUILTIN_TEMPLATES["auth-flow"]!;
-  }
-  if (lower.includes("er ") || lower.includes("entity") || lower.includes("schema") || lower.includes("database")) {
-    return BUILTIN_TEMPLATES["er-diagram"]!;
-  }
-  return BUILTIN_TEMPLATES["redis-write-behind"]!;
-}
 
 const SYSTEM_PROMPT = `You are a system architecture diagram planner.
 Return ONLY valid JSON matching:
 {"summary":"short title","steps":[{"title":"Step 1: ...","mermaidChunk":"graph TD\\n  A[Node] --> B[Node]"}]}
-Break the diagram into 3 to 5 topological build steps (Step 1: Entry/Clients, Step 2: Core Services, Step 3: Storage/Async). Every mermaidChunk must be valid Mermaid flowchart syntax.`;
+Break the diagram into 2 to 4 topological build steps (Step 1: Entry/Clients, Step 2: Core Services, Step 3: Storage/Async). Every mermaidChunk must be valid Mermaid flowchart syntax (graph TD or graph LR). Do not include markdown fences or commentary outside the JSON object.`;
 
 function extractJsonObject(raw: string): unknown {
   const trimmed = raw.trim();
@@ -167,16 +83,38 @@ function extractJsonObject(raw: string): unknown {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
+async function readUpstreamError(res: Response, label: string): Promise<Error> {
+  const raw = await res.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(raw) as { error?: { message?: string } | string; message?: string };
+    const msg =
+      typeof parsed.error === "string"
+        ? parsed.error
+        : parsed.error?.message || parsed.message;
+    if (msg) return new Error(`${label} (HTTP ${res.status}): ${msg}`);
+  } catch {
+    // Ignore non-JSON error body.
+  }
+  return new Error(
+    raw.trim()
+      ? `${label} (HTTP ${res.status}): ${raw.trim().slice(0, 200)}`
+      : `${label} returned HTTP ${res.status}`,
+  );
+}
+
 async function callOpenAiCompatible(params: {
   prompt: string;
+  history: AiHistoryMessage[];
   apiKey: string;
   baseUrl?: string;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<AiDiagramPlan> {
   const base = (params.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
   const model = params.model || "gpt-4o-mini";
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
+    signal: params.signal,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${params.apiKey}`,
@@ -187,12 +125,13 @@ async function callOpenAiCompatible(params: {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
+        ...params.history,
         { role: "user", content: params.prompt },
       ],
     }),
   });
   if (!res.ok) {
-    throw new Error(`OpenAI-compatible provider returned HTTP ${res.status}`);
+    throw await readUpstreamError(res, "OpenAI-compatible provider");
   }
   const payload = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -203,12 +142,15 @@ async function callOpenAiCompatible(params: {
 
 async function callAnthropic(params: {
   prompt: string;
+  history: AiHistoryMessage[];
   apiKey: string;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<AiDiagramPlan> {
-  const model = params.model || "claude-3-5-sonnet-latest";
+  const model = params.model || "claude-sonnet-4-5";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
+    signal: params.signal,
     headers: {
       "Content-Type": "application/json",
       "x-api-key": params.apiKey,
@@ -218,11 +160,11 @@ async function callAnthropic(params: {
       model,
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: params.prompt }],
+      messages: [...params.history, { role: "user", content: params.prompt }],
     }),
   });
   if (!res.ok) {
-    throw new Error(`Anthropic provider returned HTTP ${res.status}`);
+    throw await readUpstreamError(res, "Anthropic provider");
   }
   const payload = (await res.json()) as {
     content?: { type?: string; text?: string }[];
@@ -233,17 +175,26 @@ async function callAnthropic(params: {
 
 async function callGemini(params: {
   prompt: string;
+  history: AiHistoryMessage[];
   apiKey: string;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<AiDiagramPlan> {
   const model = params.model || "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(params.apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
+    signal: params.signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: "user", parts: [{ text: params.prompt }] }],
+      contents: [
+        ...params.history.map((msg) => ({
+          role: msg.role === "assistant" ? "model" : "user",
+          parts: [{ text: msg.content }],
+        })),
+        { role: "user", parts: [{ text: params.prompt }] },
+      ],
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.2,
@@ -251,7 +202,7 @@ async function callGemini(params: {
     }),
   });
   if (!res.ok) {
-    throw new Error(`Gemini provider returned HTTP ${res.status}`);
+    throw await readUpstreamError(res, "Gemini provider");
   }
   const payload = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -260,10 +211,165 @@ async function callGemini(params: {
   return AiDiagramPlanSchema.parse(extractJsonObject(text));
 }
 
+function execProcess(params: {
+  command: string;
+  args: string[];
+  stdinText?: string;
+  shell?: boolean;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    if (params.signal?.aborted) {
+      reject(new Error("Request cancelled."));
+      return;
+    }
+
+    const child = spawn(params.command, params.args, {
+      shell: params.shell ?? false,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      params.signal?.removeEventListener("abort", onAbort);
+    };
+
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      child.kill();
+      reject(new Error("Request cancelled."));
+    };
+
+    params.signal?.addEventListener("abort", onAbort, { once: true });
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      child.kill();
+      reject(new Error(`${params.command} timed out after ${Math.round((params.timeoutMs ?? 90_000) / 1000)}s.`));
+    }, params.timeoutMs ?? 90_000);
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (code !== 0) {
+        const detail = (stderr || stdout).trim().slice(0, 300);
+        reject(new Error(detail || `${params.command} exited with code ${code}.`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+
+    if (params.stdinText !== undefined) {
+      child.stdin.write(params.stdinText);
+    }
+    child.stdin.end();
+  });
+}
+
+async function callLocalCli(params: {
+  provider: "opencode" | "codex-cli" | "antigravity-cli";
+  prompt: string;
+  history: AiHistoryMessage[];
+  model?: string;
+  signal?: AbortSignal;
+}): Promise<AiDiagramPlan> {
+  const historyBlock =
+    params.history.length > 0
+      ? `\n\nConversation context:\n${params.history
+          .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+          .join("\n")}`
+      : "";
+  const fullPrompt = `${SYSTEM_PROMPT}${historyBlock}\n\nUser request: ${params.prompt}`;
+  const workDir = await mkdtemp(join(tmpdir(), "chitran-ai-"));
+
+  try {
+    if (params.provider === "codex-cli") {
+      const outputFile = join(workDir, "codex-last.txt");
+      const args = [
+        "exec",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "-s",
+        "read-only",
+        "-o",
+        outputFile,
+      ];
+      if (params.model) {
+        args.push("-m", params.model);
+      }
+      args.push("-");
+      const { stdout } = await execProcess({
+        command: "codex",
+        args,
+        stdinText: fullPrompt,
+        shell: process.platform === "win32",
+        signal: params.signal,
+      });
+      const fileText = await readFile(outputFile, "utf8").catch(() => "");
+      return AiDiagramPlanSchema.parse(extractJsonObject(fileText || stdout));
+    }
+
+    if (params.provider === "opencode") {
+      const promptFile = join(workDir, "prompt.txt");
+      await writeFile(promptFile, fullPrompt, "utf8");
+      const args = ["run", "--archived", "--format", "default", "--file", promptFile];
+      if (params.model) {
+        args.push("--model", params.model);
+      }
+      args.push("Read the attached prompt.txt and return ONLY the JSON object.");
+      const { stdout } = await execProcess({
+        command: "opencode",
+        args,
+        shell: process.platform === "win32",
+        signal: params.signal,
+      });
+      return AiDiagramPlanSchema.parse(extractJsonObject(stdout));
+    }
+
+    // antigravity-cli (agy)
+    const args = ["-p", fullPrompt, "--output-format", "text"];
+    if (params.model) {
+      args.push("--model", params.model);
+    }
+    const { stdout } = await execProcess({
+      command: "agy",
+      args,
+      shell: false,
+      signal: params.signal,
+    });
+    return AiDiagramPlanSchema.parse(extractJsonObject(stdout));
+  } finally {
+    await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 /**
  * POST /api/ai/generate-diagram
- * Supports BYOK OpenAI-compatible, Anthropic, Gemini, local CLI agent bridge
- * (OpenCode, Codex CLI, AntiGravity CLI), and built-in architectural templates.
+ * Supports BYOK (OpenAI-compatible, Anthropic, Gemini) and live local CLI
+ * execution (OpenCode, Codex CLI, AntiGravity CLI). No canned templates.
  */
 aiRouter.post("/generate-diagram", async (req, res) => {
   const parsed = GenerateDiagramRequestSchema.safeParse(req.body);
@@ -275,73 +381,101 @@ aiRouter.post("/generate-diagram", async (req, res) => {
     return;
   }
 
-  const { prompt, provider, apiKey, baseUrl, model, roomId } = parsed.data;
-
-  // Local CLI agent bridge modes: return exact MCP-ready command + starter plan
-  if (
-    provider === "opencode" ||
-    provider === "codex-cli" ||
-    provider === "antigravity-cli"
-  ) {
-    const fallbackPlan = selectTemplatePlan(prompt);
-    const cliCommand =
-      provider === "opencode"
-        ? `opencode run "Use excalidraw MCP mermaid_to_canvas for room ${roomId ?? "<roomId>"}: ${prompt.replace(/"/g, '\\"')}"`
-        : provider === "codex-cli"
-          ? `codex exec "Use excalidraw MCP mermaid_to_canvas for room ${roomId ?? "<roomId>"}: ${prompt.replace(/"/g, '\\"')}"`
-          : `antigravity run "Use excalidraw MCP mermaid_to_canvas for room ${roomId ?? "<roomId>"}: ${prompt.replace(/"/g, '\\"')}"`;
-
-    res.json({
-      provider,
-      mode: "local-cli-bridge",
-      cliCommand,
-      plan: fallbackPlan,
-    });
-    return;
-  }
-
-  const resolvedKey =
-    apiKey ||
-    (provider === "openai-compatible"
-      ? process.env.OPENAI_API_KEY
-      : provider === "anthropic"
-        ? process.env.ANTHROPIC_API_KEY
-        : provider === "gemini"
-          ? process.env.GEMINI_API_KEY
-          : undefined);
-
-  if (provider === "template" || !resolvedKey) {
-    res.json({
-      provider: "template",
-      mode: "local-template",
-      plan: selectTemplatePlan(prompt),
-    });
-    return;
-  }
+  const { prompt, provider, apiKey, baseUrl, model, history } = parsed.data;
+  const controller = new AbortController();
+  const handleClose = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  req.on("close", handleClose);
 
   try {
-    let plan: AiDiagramPlan;
-    if (provider === "openai-compatible") {
-      plan = await callOpenAiCompatible({
-        prompt,
-        apiKey: resolvedKey,
-        baseUrl,
-        model,
-      });
-    } else if (provider === "anthropic") {
-      plan = await callAnthropic({ prompt, apiKey: resolvedKey, model });
-    } else {
-      plan = await callGemini({ prompt, apiKey: resolvedKey, model });
+    if (
+      provider === "opencode" ||
+      provider === "codex-cli" ||
+      provider === "antigravity-cli"
+    ) {
+      try {
+        const plan = await callLocalCli({
+          provider,
+          prompt,
+          history,
+          model,
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) {
+          res.json({ provider, mode: "local-cli", plan });
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error(`Local CLI (${provider}) diagram generation failed:`, error);
+        res.status(502).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : `Local CLI (${provider}) failed to generate diagram.`,
+        });
+      }
+      return;
     }
 
-    res.json({ provider, mode: "byok", plan });
-  } catch (error) {
-    console.error("AI diagram generation failed:", error);
-    res.status(502).json({
-      error:
-        error instanceof Error
-          ? error.message
-          : "AI provider failed to generate diagram.",
-    });
+    const resolvedKey =
+      apiKey ||
+      (provider === "openai-compatible"
+        ? process.env.OPENAI_API_KEY
+        : provider === "anthropic"
+          ? process.env.ANTHROPIC_API_KEY
+          : process.env.GEMINI_API_KEY);
+
+    if (!resolvedKey) {
+      res.status(400).json({
+        error: `API key is required for ${provider}. Open Connect AI to enter your key or select a local CLI.`,
+      });
+      return;
+    }
+
+    try {
+      let plan: AiDiagramPlan;
+      if (provider === "openai-compatible") {
+        plan = await callOpenAiCompatible({
+          prompt,
+          history,
+          apiKey: resolvedKey,
+          baseUrl,
+          model,
+          signal: controller.signal,
+        });
+      } else if (provider === "anthropic") {
+        plan = await callAnthropic({
+          prompt,
+          history,
+          apiKey: resolvedKey,
+          model,
+          signal: controller.signal,
+        });
+      } else {
+        plan = await callGemini({
+          prompt,
+          history,
+          apiKey: resolvedKey,
+          model,
+          signal: controller.signal,
+        });
+      }
+
+      if (!controller.signal.aborted) {
+        res.json({ provider, mode: "byok", plan });
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      console.error("AI diagram generation failed:", error);
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "AI provider failed to generate diagram.",
+      });
+    }
+  } finally {
+    req.off("close", handleClose);
   }
 });

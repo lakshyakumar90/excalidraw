@@ -32,7 +32,8 @@ export function safeRoomAuthReturnPath(value: unknown): string {
       decoded.includes("\\") ||
       path.origin !== "https://app.invalid" ||
       (!path.pathname.startsWith("/invite/") &&
-        !path.pathname.startsWith("/join/"))
+        !path.pathname.startsWith("/join/") &&
+        path.pathname !== "/boards")
     ) return "/dashboard";
     return `${path.pathname}${path.search}${path.hash}`;
   } catch {

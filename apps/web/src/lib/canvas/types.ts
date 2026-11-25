@@ -6,6 +6,8 @@ export interface SavedCanvasScene {
   title?: string;
   elements: Element[];
   viewport: Viewport;
+  appState?: SceneData["appState"];
+  files?: SceneData["files"];
   saveData?: (data: SceneData) => Promise<void>;
   /**
    * Room sync mode: RoomSync owns initial content, the draft, and the

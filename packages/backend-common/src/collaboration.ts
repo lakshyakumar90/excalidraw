@@ -62,7 +62,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readStoredSync(data: unknown): {
+export function readStoredSync(data: unknown): {
   elements: Element[];
   appState: Record<string, unknown> | undefined;
   files: Record<string, StoredSceneFile>;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import type { BoardPresetId, Element } from "@repo/common";
-import { getBoardPreset } from "@repo/common";
+import { layoutGraphToElements, mermaidToCanvasElements } from "@repo/common";
 import { db } from "@repo/db";
 import {
   createCollaborationService,
@@ -16,6 +16,7 @@ export interface McpServerDeps {
     "applyCommit" | "readSyncScene"
   >;
   getRoomRedis?: () => Pick<RoomRedis, "publish"> | null;
+  verifyToken?: typeof verifyRoomApiToken;
 }
 
 let configuredDeps: McpServerDeps = {};
@@ -136,202 +137,6 @@ interface SimpleEdge {
   label?: string;
 }
 
-function layoutGraphServerSide(
-  nodes: SimpleNode[],
-  edges: SimpleEdge[],
-  direction: "TD" | "LR" | "TB" | "RL" = "TD",
-  presetId: BoardPresetId = "clean-sketch",
-): Record<string, unknown>[] {
-  const isHorizontal = direction === "LR" || direction === "RL";
-  const nodeW = 180;
-  const nodeH = 68;
-  const rankGap = 96;
-  const nodeGap = 52;
-  const preset = getBoardPreset(presetId);
-
-  const inDeg = new Map<string, number>();
-  const adj = new Map<string, string[]>();
-  for (const n of nodes) {
-    inDeg.set(n.id, 0);
-    adj.set(n.id, []);
-  }
-  for (const e of edges) {
-    if (!adj.has(e.from) || !inDeg.has(e.to) || e.from === e.to) continue;
-    adj.get(e.from)!.push(e.to);
-    inDeg.set(e.to, (inDeg.get(e.to) ?? 0) + 1);
-  }
-
-  const rank = new Map<string, number>();
-  const queue: string[] = [];
-  for (const n of nodes) {
-    if ((inDeg.get(n.id) ?? 0) === 0) {
-      rank.set(n.id, 0);
-      queue.push(n.id);
-    }
-  }
-  if (queue.length === 0 && nodes.length > 0) {
-    rank.set(nodes[0]!.id, 0);
-    queue.push(nodes[0]!.id);
-  }
-  let head = 0;
-  while (head < queue.length) {
-    const cur = queue[head++]!;
-    const r = rank.get(cur) ?? 0;
-    for (const nxt of adj.get(cur) ?? []) {
-      const cand = Math.min(nodes.length, r + 1);
-      if (cand > (rank.get(nxt) ?? -1)) {
-        rank.set(nxt, cand);
-        queue.push(nxt);
-      }
-    }
-  }
-  for (const n of nodes) {
-    if (!rank.has(n.id)) rank.set(n.id, 0);
-  }
-
-  const layers = new Map<number, SimpleNode[]>();
-  for (const n of nodes) {
-    const r = rank.get(n.id) ?? 0;
-    const list = layers.get(r) ?? [];
-    list.push(n);
-    layers.set(r, list);
-  }
-
-  const sortedRanks = [...layers.keys()].sort((a, b) =>
-    direction === "RL" ? b - a : a - b,
-  );
-  const groupId = `mcp-${Date.now().toString(36)}`;
-  const out: Record<string, unknown>[] = [];
-  const boxes = new Map<string, { id: string; x: number; y: number }>();
-  let seed = 2001;
-
-  sortedRanks.forEach((r, layerIdx) => {
-    const bucket = layers.get(r)!;
-    bucket.forEach((node, idx) => {
-      const x = isHorizontal
-        ? 80 + layerIdx * (nodeW + rankGap)
-        : 80 + idx * (nodeW + nodeGap);
-      const y = isHorizontal
-        ? 80 + idx * (nodeH + nodeGap)
-        : 80 + layerIdx * (nodeH + rankGap);
-      const shapeId = `${groupId}-${node.id}`;
-      const textId = `${shapeId}-txt`;
-      const stroke = preset.palette[layerIdx % preset.palette.length] ?? preset.defaultStrokeColor;
-      boxes.set(node.id, { id: shapeId, x, y });
-
-      out.push({
-        id: shapeId,
-        type: node.shape ?? "rectangle",
-        x,
-        y,
-        width: nodeW,
-        height: nodeH,
-        strokeColor: stroke,
-        backgroundColor: "transparent",
-        strokeWidth: preset.strokeWidth,
-        roughness: Math.round(preset.roughness),
-        version: 1,
-        versionNonce: seed++ * 37,
-        isDeleted: false,
-      });
-
-      out.push({
-        id: textId,
-        type: "text",
-        x: x + 10,
-        y: y + nodeH / 2 - 10,
-        width: nodeW - 20,
-        height: 22,
-        text: node.label,
-        fontSize: 16,
-        fontFamily: "sans-serif",
-        textAlign: "center",
-        verticalAlign: "middle",
-        strokeColor: stroke,
-        containerId: shapeId,
-        version: 1,
-        versionNonce: seed++ * 53,
-        isDeleted: false,
-      });
-    });
-  });
-
-  edges.forEach((edge, idx) => {
-    const src = boxes.get(edge.from);
-    const dst = boxes.get(edge.to);
-    if (!src || !dst) return;
-    const sx = isHorizontal ? src.x + nodeW : src.x + nodeW / 2;
-    const sy = isHorizontal ? src.y + nodeH / 2 : src.y + nodeH;
-    const ex = isHorizontal ? dst.x : dst.x + nodeW / 2;
-    const ey = isHorizontal ? dst.y + nodeH / 2 : dst.y;
-    out.push({
-      id: `${groupId}-arrow-${idx}`,
-      type: "arrow",
-      x: sx,
-      y: sy,
-      width: Math.abs(ex - sx),
-      height: Math.abs(ey - sy),
-      points: [
-        { x: 0, y: 0 },
-        { x: ex - sx, y: ey - sy },
-      ],
-      strokeColor: preset.defaultStrokeColor,
-      strokeWidth: preset.strokeWidth,
-      roughness: Math.round(preset.roughness),
-      version: 1,
-      versionNonce: seed++ * 71,
-      isDeleted: false,
-    });
-  });
-
-  return out;
-}
-
-function parseSimpleMermaid(source: string): {
-  direction: "TD" | "LR" | "TB" | "RL";
-  nodes: SimpleNode[];
-  edges: SimpleEdge[];
-} {
-  let direction: "TD" | "LR" | "TB" | "RL" = "TD";
-  const nodeMap = new Map<string, SimpleNode>();
-  const edges: SimpleEdge[] = [];
-
-  const ensure = (raw: string): string => {
-    const t = raw.trim();
-    const m = /^([A-Za-z0-9_-]+)\s*(?:\[(.+)\]|\{(.+)\}|\(\((.+)\)\)|\[\((.+)\)\])?$/.exec(t);
-    const id = m?.[1] ?? t.replace(/[^A-Za-z0-9_-]/g, "_");
-    const label = m?.[2] ?? m?.[3] ?? m?.[4] ?? m?.[5];
-    const shape: SimpleNode["shape"] = m?.[3]
-      ? "diamond"
-      : m?.[4]
-        ? "ellipse"
-        : "rectangle";
-    if (!nodeMap.has(id)) {
-      nodeMap.set(id, { id, label: label?.trim() || id, shape });
-    } else if (label) {
-      nodeMap.get(id)!.label = label.trim();
-    }
-    return id;
-  };
-
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("%%")) continue;
-    const hdr = /^(?:graph|flowchart)\s+(TD|TB|LR|RL)\b/i.exec(line);
-    if (hdr) {
-      direction = hdr[1]!.toUpperCase() as "TD" | "LR" | "TB" | "RL";
-      continue;
-    }
-    const edgeMatch = /^(.+?)\s*(?:-->|---|==>)\s*(?:\|([^|]+)\|\s*)?(.+)$/.exec(line);
-    if (edgeMatch) {
-      const from = ensure(edgeMatch[1]!);
-      const to = ensure(edgeMatch[3]!);
-      edges.push({ from, to, label: edgeMatch[2]?.trim() });
-    }
-  }
-  return { direction, nodes: [...nodeMap.values()], edges };
-}
-
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -413,11 +218,11 @@ function renderElementsToSvg(
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}"><rect x="${minX}" y="${minY}" width="${width}" height="${height}" fill="${bg}" />${body.join("")}</svg>`;
 }
 
-function authenticateBearer(req: Request): RoomApiTokenRecord | null {
+async function authenticateBearer(req: Request): Promise<RoomApiTokenRecord | null> {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) return null;
   const rawToken = header.slice("Bearer ".length).trim();
-  return verifyRoomApiToken(rawToken);
+  return (configuredDeps.verifyToken ?? verifyRoomApiToken)(rawToken);
 }
 
 function sendRpcResult(res: Response, id: string | number | null, result: unknown) {
@@ -445,7 +250,7 @@ export const mcpRouter: Router = Router();
  * Streamable HTTP JSON-RPC 2.0 MCP Server authenticated via Bearer RoomApiToken.
  */
 mcpRouter.post("/", async (req, res) => {
-  const tokenRecord = authenticateBearer(req);
+  const tokenRecord = await authenticateBearer(req);
   if (!tokenRecord) {
     res.status(401).json({
       jsonrpc: "2.0",
@@ -580,7 +385,10 @@ mcpRouter.post("/", async (req, res) => {
       const preset = (
         typeof args.preset === "string" ? args.preset : "clean-sketch"
       ) as BoardPresetId;
-      const generated = layoutGraphServerSide(nodes, edges, direction, preset);
+      const generated = layoutGraphToElements({
+        nodes: nodes.map((node) => ({ ...node, shape: node.shape ?? "rectangle" })),
+        edges, direction,
+      }, { presetId: preset, diagramGroupId: `mcp-${randomUUID().slice(0, 13)}` });
       const committed = await commitAndBroadcast(generated);
       sendRpcResult(res, rpcId, {
         content: [
@@ -602,13 +410,10 @@ mcpRouter.post("/", async (req, res) => {
       const preset = (
         typeof args.preset === "string" ? args.preset : "clean-sketch"
       ) as BoardPresetId;
-      const parsed = parseSimpleMermaid(source);
-      const generated = layoutGraphServerSide(
-        parsed.nodes,
-        parsed.edges,
-        parsed.direction,
-        preset,
-      );
+      const { parsed, elements: generated } = mermaidToCanvasElements(source, {
+        presetId: preset,
+        diagramGroupId: `mcp-${randomUUID().slice(0, 13)}`,
+      });
       const committed = await commitAndBroadcast(generated);
       sendRpcResult(res, rpcId, {
         content: [

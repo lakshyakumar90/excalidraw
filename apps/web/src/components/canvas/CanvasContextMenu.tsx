@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Point } from "@repo/common";
 
 export type CanvasContextMenuAction =
@@ -76,6 +76,20 @@ export function CanvasContextMenu({
 }) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const firstItemRef = useRef<HTMLButtonElement | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({
+    left: state.x,
+    top: state.y,
+  });
+
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pad = 12;
+    const left = Math.max(pad, Math.min(state.x, window.innerWidth - rect.width - pad));
+    const top = Math.max(pad, Math.min(state.y, window.innerHeight - rect.height - pad));
+    setPos({ left, top });
+  }, [state.x, state.y]);
   const selectionItems = SELECTION_ITEMS.filter(({ action }) => {
     if (action.startsWith("align-")) return state.selectedCount >= 2;
     if (action.startsWith("distribute-")) return state.selectedCount >= 3;
@@ -100,8 +114,12 @@ export function CanvasContextMenu({
     const handlePointerDown = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) onClose();
     };
-    const handleScroll = () => onClose();
-    const handleWheel = () => onClose();
+    const handleScroll = (event: Event) => {
+      if (!menuRef.current?.contains(event.target as Node)) onClose();
+    };
+    const handleWheel = (event: WheelEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) onClose();
+    };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -128,11 +146,15 @@ export function CanvasContextMenu({
       type="button"
       role="menuitem"
       onClick={() => onAction(item.action, state.scenePoint)}
-      className="flex h-8 w-full items-center justify-between gap-5 rounded-md px-2.5 text-left text-sm text-neutral-800 outline-none transition hover:bg-blue-50 hover:text-blue-800 focus-visible:bg-blue-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+      className={`flex h-7.5 w-full cursor-pointer items-center justify-between gap-4 rounded-lg px-2.5 text-left text-xs outline-none transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus-ring)] ${
+        item.action === "delete"
+          ? "text-rose-400 hover:bg-rose-500/10 focus-visible:bg-rose-500/10"
+          : "text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]"
+      }`}
     >
       <span>{item.label}</span>
       {item.shortcut && (
-        <span className="shrink-0 text-xs text-neutral-500">
+        <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
           {item.shortcut}
         </span>
       )}
@@ -148,29 +170,30 @@ export function CanvasContextMenu({
         event.preventDefault();
         event.stopPropagation();
       }}
-      style={{ left: state.x, top: state.y }}
-      className="fixed z-[90] max-h-[calc(100vh-1rem)] w-56 overflow-y-auto rounded-lg border border-neutral-200 bg-white p-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.18)] [scrollbar-color:#d4d4d8_transparent] [scrollbar-width:thin]"
+      onWheel={(event) => event.stopPropagation()}
+      style={{ left: pos.left, top: pos.top }}
+      className="animate-pop-up fixed z-[90] max-h-[min(24rem,calc(100vh-1.5rem))] w-56 overflow-y-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 p-1.5 shadow-2xl backdrop-blur-md [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--border-soft)]"
     >
       {CANVAS_ITEMS.map((item, index) => (
         <span key={item.action}>
-          {index > 0 && <span className="my-1 block h-px bg-neutral-100" />}
+          {index > 0 && <span className="my-1 block h-px bg-[var(--border-subtle)]" />}
           {renderItem(item, index === 0)}
         </span>
       ))}
 
       {selectionItems.length > 0 && (
         <>
-          <span className="my-1 block h-px bg-neutral-200" />
+          <span className="my-1 block h-px bg-[var(--border-soft)]" />
           {basicSelectionItems.map((item) => renderItem(item))}
           {arrangeItems.length > 0 && (
             <>
-              <span className="my-1 block h-px bg-neutral-100" />
+              <span className="my-1 block h-px bg-[var(--border-subtle)]" />
               {arrangeItems.map((item) => renderItem(item))}
             </>
           )}
           {deleteItem && (
             <>
-              <span className="my-1 block h-px bg-neutral-100" />
+              <span className="my-1 block h-px bg-[var(--border-subtle)]" />
               {renderItem(deleteItem)}
             </>
           )}

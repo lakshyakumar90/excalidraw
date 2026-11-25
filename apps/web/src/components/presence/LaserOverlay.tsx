@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { clearLaser, laserTrails, subscribeLaser } from "@/lib/presence/laser";
 import { getCurrentViewport } from "@/lib/persistence/viewportStore";
 import { colorForUserId } from "@/lib/presence/colors";
+import { sampleCatmullRom } from "@repo/engine";
 
 export function LaserOverlay() {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -46,15 +47,38 @@ export function LaserOverlay() {
           ctx.fill();
           continue;
         }
-        for (let i = 1; i < trail.points.length; i++) {
-          const a = trail.points[i - 1]!,
-            b = trail.points[i]!;
-          ctx.globalAlpha = Math.max(0, 1 - (now - a.time) / 1000);
+        const screenPoints = trail.points.map((point) => ({
+          x: point.x * v.zoom + v.scrollX,
+          y: point.y * v.zoom + v.scrollY,
+        }));
+        const smoothed = sampleCatmullRom(screenPoints, 4);
+        const samplesPerSegment = 4;
+        const times: number[] = [];
+        if (trail.points.length === 2) {
+          times.push(trail.points[0]!.time, trail.points[1]!.time);
+        }
+        for (let i = 0; i < trail.points.length - 1; i++) {
+          const from = trail.points[i]!.time;
+          const to = trail.points[i + 1]!.time;
+          for (let step = 0; step < samplesPerSegment; step++) {
+            times.push(from + ((to - from) * step) / samplesPerSegment);
+          }
+        }
+        times.push(trail.points[trail.points.length - 1]!.time);
+
+        ctx.shadowColor = ctx.strokeStyle;
+        ctx.shadowBlur = 8;
+        for (let i = 1; i < smoothed.length; i++) {
+          const a = smoothed[i - 1]!,
+            b = smoothed[i]!;
+          ctx.globalAlpha = Math.max(0, 1 - (now - (times[i] ?? 0)) / 1000);
           ctx.beginPath();
-          ctx.moveTo(a.x * v.zoom + v.scrollX, a.y * v.zoom + v.scrollY);
-          ctx.lineTo(b.x * v.zoom + v.scrollX, b.y * v.zoom + v.scrollY);
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
           ctx.stroke();
         }
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
         const p = trail.points.at(-1)!;
         ctx.beginPath();
         ctx.arc(

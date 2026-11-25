@@ -58,9 +58,15 @@ const INITIAL_VIEWPORT: Viewport = {
 export function Canvas({
   savedScene,
   readOnly = false,
+  theme = "dark",
+  presetId = "excali-font",
+  gridEnabled = false,
 }: {
   savedScene?: SavedCanvasScene;
   readOnly?: boolean;
+  theme?: import("@repo/engine").CanvasTheme;
+  presetId?: import("@repo/common").BoardPresetId;
+  gridEnabled?: boolean;
 } = {}) {
   const [contextMenu, setContextMenu] = useState<CanvasContextMenuState | null>(
     null,
@@ -87,6 +93,7 @@ export function Canvas({
   const { persistenceReady, autosaveRef } = useCanvasPersistence(
     savedScene,
     viewportRef,
+    staticCanvasRef,
   );
   const imageAssetsRef = useRef(new Map<string, ImageBitmap>());
 
@@ -131,6 +138,9 @@ export function Canvas({
   );
 
   useCanvasInteraction({
+    theme,
+    presetId,
+    gridEnabled,
     staticCanvasRef,
     interactiveCanvasRef,
     viewportRef,

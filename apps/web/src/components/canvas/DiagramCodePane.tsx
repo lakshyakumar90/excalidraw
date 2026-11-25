@@ -28,10 +28,10 @@ export function DiagramCodePane({
   onApplyElements,
 }: DiagramCodePaneProps) {
   const [code, setCode] = useState(STARTER_MERMAID);
-  const [groupId] = useState(() => `mermaid-${Date.now().toString(36)}`);
+  const [groupId, setGroupId] = useState<string | null>(null);
 
   const preview = useMemo(
-    () => mermaidToCanvasElements(code, { presetId, diagramGroupId: groupId }),
+    () => mermaidToCanvasElements(code, { presetId, diagramGroupId: groupId ?? "diagram-preview" }),
     [code, presetId, groupId],
   );
 
@@ -41,7 +41,7 @@ export function DiagramCodePane({
     <aside
       data-editor-chrome
       aria-label="Diagram Code Pane"
-      className="fixed bottom-4 right-4 top-16 z-40 flex w-96 max-w-[calc(100vw-2rem)] flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 shadow-2xl backdrop-blur-md"
+      className="animate-drawer-right fixed bottom-0 right-0 top-0 z-50 flex w-[min(22.5rem,100vw)] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl"
     >
       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
         <div>
@@ -94,16 +94,21 @@ export function DiagramCodePane({
           <button
             type="button"
             disabled={preview.elements.length === 0}
-            onClick={() => onApplyElements(preview.elements, "insert", groupId)}
+            onClick={() => {
+              const nextGroup = `diagram-${crypto.randomUUID().slice(0, 13)}`;
+              const { elements } = mermaidToCanvasElements(code, { presetId, diagramGroupId: nextGroup });
+              onApplyElements(elements, "insert", nextGroup);
+              setGroupId(nextGroup);
+            }}
             className="flex-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-canvas)] disabled:opacity-40"
           >
             Insert at viewport
           </button>
           <button
             type="button"
-            disabled={preview.elements.length === 0}
-            onClick={() => onApplyElements(preview.elements, "replace", groupId)}
-            className="flex-1 rounded-xl bg-[var(--accent)] py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-40"
+            disabled={preview.elements.length === 0 || !groupId}
+            onClick={() => { if (groupId) onApplyElements(preview.elements, "replace", groupId); }}
+            className="flex-1 rounded-xl bg-[var(--accent)] py-2 text-xs font-semibold text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
           >
             Replace linked group
           </button>

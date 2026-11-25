@@ -156,7 +156,7 @@ export function EditorExtras({
     selectionStore.set([id]);
   };
   const button =
-    "min-h-11 rounded-md px-3 text-sm text-neutral-700 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 disabled:opacity-40";
+    "min-h-9 rounded-lg px-2.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-40";
   return (
     <>
       <div aria-live="polite" aria-atomic="true" className="sr-only">
@@ -173,7 +173,7 @@ export function EditorExtras({
       {zen && (
         <button
           aria-label="Exit zen mode"
-          className="fixed right-4 top-4 z-[90] min-h-11 rounded-lg bg-white px-4 text-sm shadow-sm focus-visible:outline-2 focus-visible:outline-violet-600"
+          className="fixed right-3 top-3 z-[90] h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 px-3 text-xs font-medium text-[var(--text-primary)] shadow-lg backdrop-blur-md"
           onClick={() => setZen(false)}
         >
           Exit zen · Esc
@@ -190,10 +190,10 @@ export function EditorExtras({
                   ? "Personal library"
                   : "Find text"
           }
-          className="editor-extra-panel fixed bottom-36 right-4 z-[70] max-h-[min(32rem,70dvh)] w-[min(23rem,calc(100vw-2rem))] overflow-auto rounded-xl border border-neutral-200 bg-white p-4 shadow-lg"
+          className="editor-extra-panel fixed bottom-20 left-3 z-[70] max-h-[min(30rem,70dvh)] w-[min(22rem,calc(100vw-1.5rem))] overflow-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 p-3.5 text-[var(--text-primary)] shadow-2xl backdrop-blur-md"
         >
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold">
+            <h2 className="text-sm font-semibold">
               {panel === "summary"
                 ? "Drawing elements"
                 : panel === "layout"
@@ -203,7 +203,7 @@ export function EditorExtras({
                     : "Find text"}
             </h2>
             <button className={button} aria-label="Close panel" onClick={close}>
-              Close
+              ✕
             </button>
           </div>
           {panel === "layout" && !readOnly && (

@@ -23,5 +23,14 @@ export const toolManager = new ToolManager({
             frameId: frameForElement(child, scene.getElements()),
           });
     }
+
+    // Once a shape/stroke is created, return to the select (V) arrow so the
+    // new element can be moved or resized straight away. Defer to a microtask
+    // so the current pointer/key handler can finish committing history first.
+    queueMicrotask(() => {
+      if (toolManager.getActiveTool() !== "selection") {
+        toolManager.setActiveTool("selection");
+      }
+    });
   },
 });

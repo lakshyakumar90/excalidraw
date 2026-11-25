@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { apiUrl } from "@/lib/api/client";
+import { renderSceneToSvg } from "@repo/engine";
+import type { Element } from "@repo/common";
 
 export interface SceneRevisionEntry {
   revision: number;
   actorId: string;
   createdAt: string;
   elementCount: number;
+  author?: string;
 }
 
 export interface VersionHistoryDrawerProps {
   open: boolean;
   sceneId?: string;
   onClose: () => void;
-  onPreviewRevision?: (revision: number) => void;
+  canRestore?: boolean;
   onRestored?: (newRevision: number) => void;
 }
 
@@ -22,19 +25,23 @@ export function VersionHistoryDrawer({
   open,
   sceneId,
   onClose,
-  onPreviewRevision,
+  canRestore = true,
   onRestored,
 }: VersionHistoryDrawerProps) {
   const [revisions, setRevisions] = useState<SceneRevisionEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringRev, setRestoringRev] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<{ revision: number; url: string } | null>(null);
 
   useEffect(() => {
     if (!open || !sceneId) return;
     let active = true;
-    setLoading(true);
-    setError("");
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      setError("");
+    });
     void fetch(apiUrl(`/api/revisions/${encodeURIComponent(sceneId)}`), {
       credentials: "include",
     })
@@ -58,6 +65,22 @@ export function VersionHistoryDrawer({
   }, [open, sceneId]);
 
   if (!open) return null;
+
+  async function handlePreview(revision: number) {
+    if (!sceneId) return;
+    setError("");
+    try {
+      const res = await fetch(apiUrl(`/api/revisions/${encodeURIComponent(sceneId)}/${revision}`), {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Preview failed (${res.status})`);
+      const { elements } = await res.json() as { elements: Element[] };
+      const svg = renderSceneToSvg(elements, { background: "#ffffff" });
+      setPreview({ revision, url: `data:image/svg+xml,${encodeURIComponent(svg)}` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not preview revision.");
+    }
+  }
 
   async function handleRestore(revision: number) {
     if (!sceneId) return;
@@ -87,7 +110,7 @@ export function VersionHistoryDrawer({
     <aside
       data-editor-chrome
       aria-label="Version History"
-      className="fixed bottom-4 right-4 top-16 z-50 flex w-80 flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 shadow-2xl backdrop-blur-md"
+      className="animate-drawer-right fixed bottom-0 right-0 top-0 z-50 flex w-[min(22.5rem,100vw)] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl"
     >
       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
         <div>
@@ -147,18 +170,21 @@ export function VersionHistoryDrawer({
               </div>
               <div className="mt-1 text-[11px] text-[var(--text-muted)]">
                 {new Date(entry.createdAt).toLocaleString()}
+                {entry.author && ` · ${entry.author}`}
               </div>
+              {preview?.revision === entry.revision && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview.url} alt={`Preview of revision ${entry.revision}`} className="mt-2 max-h-44 w-full object-contain" />
+              )}
               <div className="mt-2.5 flex items-center gap-2">
-                {onPreviewRevision && (
                   <button
                     type="button"
-                    onClick={() => onPreviewRevision(entry.revision)}
+                    onClick={() => void handlePreview(entry.revision)}
                     className="rounded-lg border border-[var(--border-subtle)] px-2.5 py-1 text-[11px] hover:bg-[var(--bg-elevated)]"
                   >
                     Preview
                   </button>
-                )}
-                {idx > 0 && (
+                {canRestore && idx > 0 && (
                   <button
                     type="button"
                     disabled={restoringRev === entry.revision}

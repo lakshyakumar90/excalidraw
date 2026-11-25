@@ -44,7 +44,7 @@ export function SlidesFilmstrip({
     <aside
       data-editor-chrome
       aria-label="Slides Filmstrip"
-      className="fixed bottom-16 left-4 top-16 z-40 flex w-60 flex-col rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/95 shadow-2xl backdrop-blur-md"
+      className="animate-drawer-right fixed bottom-0 right-0 top-0 z-50 flex w-[min(22.5rem,100vw)] flex-col border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-2xl"
     >
       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-3.5 py-2.5">
         <span className="text-xs font-semibold text-[var(--text-primary)]">
@@ -56,7 +56,7 @@ export function SlidesFilmstrip({
             disabled={slides.length === 0}
             onClick={onStartPresent}
             title="Start Present Mode (Cmd/Ctrl+Shift+P)"
-            className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
+            className="rounded-lg bg-[var(--accent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
           >
             Present
           </button>

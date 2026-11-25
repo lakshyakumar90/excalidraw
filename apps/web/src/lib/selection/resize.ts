@@ -37,26 +37,28 @@ function resizeBounds(
   const left = handle.includes("w");
   const top = handle.includes("n");
 
-  // Once the pointer crosses the fixed edge, the active side changes. Keep
-  // the same fixed edge, but let the resized bounds extend across it.
-  const flipX =
-    horizontal &&
-    (altKey
-      ? left
-        ? pointer.x > centerX
-        : pointer.x < centerX
-      : left
-        ? pointer.x > original.maxX
-        : pointer.x < original.minX);
-  const flipY =
-    vertical &&
-    (altKey
-      ? top
-        ? pointer.y > centerY
-        : pointer.y < centerY
-      : top
-        ? pointer.y > original.maxY
-        : pointer.y < original.minY);
+  // Never invert or grow again while resizing. These are signed distances in
+  // the handle's outward direction: they turn negative once the cursor crosses
+  // the anchored edge (or the center with Alt). Clamping them at zero means the
+  // size stops at MIN_SIZE instead of expanding in the opposite direction.
+  const flipX = false;
+  const flipY = false;
+  const outwardX = Math.max(
+    0,
+    left ? original.maxX - pointer.x : pointer.x - original.minX,
+  );
+  const outwardY = Math.max(
+    0,
+    top ? original.maxY - pointer.y : pointer.y - original.minY,
+  );
+  const centerOutwardX = Math.max(
+    0,
+    left ? centerX - pointer.x : pointer.x - centerX,
+  );
+  const centerOutwardY = Math.max(
+    0,
+    top ? centerY - pointer.y : pointer.y - centerY,
+  );
 
   const aspectRatio =
     originalWidth > 0 && originalHeight > 0
@@ -69,60 +71,40 @@ function resizeBounds(
   if (shiftKey && horizontal && vertical) {
     if (altKey) {
       const scaleX =
-        Math.abs(pointer.x - centerX) /
-        Math.max(originalWidth / 2, MIN_SIZE / 2);
+        centerOutwardX / Math.max(originalWidth / 2, MIN_SIZE / 2);
       const scaleY =
-        Math.abs(pointer.y - centerY) /
-        Math.max(originalHeight / 2, MIN_SIZE / 2);
+        centerOutwardY / Math.max(originalHeight / 2, MIN_SIZE / 2);
       const scale = Math.max(scaleX, scaleY);
       width = Math.max(MIN_SIZE, originalWidth * scale);
       height = Math.max(MIN_SIZE, originalHeight * scale);
     } else {
-      const fixedX = left ? original.maxX : original.minX;
-      const fixedY = top ? original.maxY : original.minY;
-      const scaleX =
-        Math.abs(pointer.x - fixedX) / Math.max(originalWidth, MIN_SIZE);
-      const scaleY =
-        Math.abs(pointer.y - fixedY) / Math.max(originalHeight, MIN_SIZE);
+      const scaleX = outwardX / Math.max(originalWidth, MIN_SIZE);
+      const scaleY = outwardY / Math.max(originalHeight, MIN_SIZE);
       const scale = Math.max(scaleX, scaleY);
       width = Math.max(MIN_SIZE, originalWidth * scale);
       height = Math.max(MIN_SIZE, originalHeight * scale);
     }
   } else if (shiftKey && horizontal !== vertical) {
     if (horizontal) {
-      const fixedX = left ? original.maxX : original.minX;
       width = Math.max(
         MIN_SIZE,
-        altKey
-          ? 2 * Math.abs(pointer.x - centerX)
-          : Math.abs(pointer.x - fixedX),
+        altKey ? 2 * centerOutwardX : outwardX,
       );
       height = Math.max(MIN_SIZE, width / aspectRatio);
     } else {
-      const fixedY = top ? original.maxY : original.minY;
       height = Math.max(
         MIN_SIZE,
-        altKey
-          ? 2 * Math.abs(pointer.y - centerY)
-          : Math.abs(pointer.y - fixedY),
+        altKey ? 2 * centerOutwardY : outwardY,
       );
       width = Math.max(MIN_SIZE, height * aspectRatio);
     }
   } else {
     if (horizontal) {
-      const fixedX = left ? original.maxX : original.minX;
-      width = Math.max(
-        MIN_SIZE,
-        altKey ? 2 * Math.abs(pointer.x - centerX) : Math.abs(pointer.x - fixedX),
-      );
+      width = Math.max(MIN_SIZE, altKey ? 2 * centerOutwardX : outwardX);
     }
 
     if (vertical) {
-      const fixedY = top ? original.maxY : original.minY;
-      height = Math.max(
-        MIN_SIZE,
-        altKey ? 2 * Math.abs(pointer.y - centerY) : Math.abs(pointer.y - fixedY),
-      );
+      height = Math.max(MIN_SIZE, altKey ? 2 * centerOutwardY : outwardY);
     }
   }
 
@@ -139,7 +121,7 @@ function resizeBounds(
     maxX = original.maxX;
   } else {
     const fixedX = left ? original.maxX : original.minX;
-    const activeSideIsLeft = left !== flipX;
+    const activeSideIsLeft = left;
 
     if (activeSideIsLeft) {
       maxX = fixedX;
@@ -158,7 +140,7 @@ function resizeBounds(
     maxY = original.maxY;
   } else {
     const fixedY = top ? original.maxY : original.minY;
-    const activeSideIsTop = top !== flipY;
+    const activeSideIsTop = top;
 
     if (activeSideIsTop) {
       maxY = fixedY;

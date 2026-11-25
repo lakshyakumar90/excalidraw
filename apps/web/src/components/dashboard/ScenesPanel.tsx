@@ -33,14 +33,16 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
   return (
     <>
       <GuestDrawingOffer userId={user.id} onSaved={dashboard.addSavedScene} />
-      <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <section className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
         <div>
-          <p className="break-words font-medium">{user.name || user.email}</p>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="break-words text-sm font-semibold text-[var(--text-primary)]">
+            {user.name || user.email}
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--text-muted)]">
             Saved scenes are separate from your guest canvas.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => void dashboard.handleSignOut()}
             className={secondaryButton}
@@ -60,7 +62,7 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
       {dashboard.notice && (
         <p
           role="status"
-          className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-800 break-words [overflow-wrap:anywhere]"
+          className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-400 break-words [overflow-wrap:anywhere]"
         >
           {dashboard.notice}
         </p>
@@ -68,24 +70,24 @@ export function ScenesPanel({ user }: { user: DashboardUser }) {
       {dashboard.error && (
         <p
           role="alert"
-          className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700"
+          className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-400"
         >
           {dashboard.error}
         </p>
       )}
       <InvitationsPanel />
       {dashboard.loadingScenes ? (
-        <p className="p-5 text-sm text-neutral-500">Loading scenes…</p>
+        <p className="p-4 text-xs text-[var(--text-muted)]">Loading scenes…</p>
       ) : dashboard.scenes.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-neutral-300 bg-white/70 px-6 py-14 text-center">
-          <h2 className="text-lg font-semibold">No saved scenes yet</h2>
-          <p className="mt-2 text-sm text-neutral-600">
+        <section className="mt-4 rounded-2xl border border-dashed border-[var(--border-soft)] bg-[var(--bg-surface)] px-6 py-12 text-center">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">No saved scenes yet</h2>
+          <p className="mt-1.5 text-xs text-[var(--text-muted)]">
             Create a scene here, or keep drawing in guest mode.
           </p>
           <button
             disabled={dashboard.creating}
             onClick={() => void dashboard.handleCreateScene()}
-            className={`${primaryButton} mt-5`}
+            className={`${primaryButton} mt-4`}
           >
             Create your first scene
           </button>

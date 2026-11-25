@@ -1,4 +1,5 @@
 import type { Point } from "@repo/common";
+import { sampleCatmullRom } from "@repo/engine";
 
 export interface EraserTrailPoint extends Point {
   time: number;
@@ -15,52 +16,63 @@ export function drawEraserTrail(
   active: boolean,
 ): void {
   context.save();
-  context.lineCap = "butt";
+  context.lineCap = "round";
   context.lineJoin = "round";
 
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    const next = points[index + 1];
-    if (!previous || !current) continue;
+  const visible = points.filter(
+    (point) => now - point.time <= ERASER_TRAIL_LIFETIME_MS,
+  );
+  const newest = visible[visible.length - 1];
+  const life = newest
+    ? Math.max(0, 1 - (now - newest.time) / ERASER_TRAIL_LIFETIME_MS)
+    : 0;
+  const fade = life * life;
 
-    const age = Math.max(0, now - current.time);
-    const life = Math.max(0, 1 - age / ERASER_TRAIL_LIFETIME_MS);
-    if (life <= 0) continue;
-    const fade = life * life;
-    const start =
-      index === 1
-        ? previous
-        : {
-            x: (previous.x + current.x) / 2,
-            y: (previous.y + current.y) / 2,
-          };
-    const end = next
-      ? { x: (current.x + next.x) / 2, y: (current.y + next.y) / 2 }
-      : current;
+  if (visible.length >= 2 && fade > 0) {
+    const strokeTrail = (
+      subset: EraserTrailPoint[],
+      width: number,
+      alpha: number,
+      glow: number,
+    ) => {
+      if (subset.length < 2) return;
+      const smoothed = sampleCatmullRom(
+        subset.map((point) => ({ x: point.x, y: point.y })),
+        4,
+      );
+      const first = smoothed[0];
+      if (!first) return;
+      context.beginPath();
+      context.moveTo(first.x, first.y);
+      for (let index = 1; index < smoothed.length; index += 1) {
+        const point = smoothed[index];
+        if (point) context.lineTo(point.x, point.y);
+      }
+      context.globalAlpha = alpha * fade;
+      context.lineWidth = width;
+      context.shadowBlur = glow;
+      context.stroke();
+    };
 
-    context.beginPath();
-    context.moveTo(start.x, start.y);
-    if (next) context.quadraticCurveTo(current.x, current.y, end.x, end.y);
-    else context.lineTo(end.x, end.y);
-    context.strokeStyle = "#8275ff";
-    context.shadowColor = "rgba(117, 103, 237, 0.32)";
-    context.shadowBlur = 9;
-    context.lineWidth = 15;
-    context.globalAlpha = 0.16 * fade;
-    context.stroke();
-    context.shadowBlur = 0;
-    context.strokeStyle = "#7567ed";
-    context.lineWidth = 6;
-    context.globalAlpha = 0.52 * fade;
-    context.stroke();
+    // Layered chunks give a soft comet-like fade without drawing each segment
+    // as a separate stroke (which made the trail look blocky).
+    const chunks = [
+      { portion: 1, width: 16, alpha: 0.12, glow: 9 },
+      { portion: 0.6, width: 10, alpha: 0.18, glow: 6 },
+      { portion: 0.3, width: 5, alpha: 0.5, glow: 0 },
+    ];
+    for (const chunk of chunks) {
+      const start = Math.max(0, visible.length - Math.ceil(visible.length * chunk.portion));
+      context.strokeStyle = chunk.glow > 0 ? "#8275ff" : "#7567ed";
+      context.shadowColor = "rgba(117, 103, 237, 0.32)";
+      strokeTrail(visible.slice(start), chunk.width, chunk.alpha, chunk.glow);
+    }
   }
 
   if (active && cursor) {
-    context.lineCap = "round";
     context.globalAlpha = 1;
-    context.shadowColor = "rgba(91, 77, 220, 0.28)";
     context.shadowBlur = 12;
+    context.shadowColor = "rgba(91, 77, 220, 0.28)";
     context.fillStyle = "rgba(130, 117, 255, 0.17)";
     context.strokeStyle = "#7567ed";
     context.lineWidth = 2;

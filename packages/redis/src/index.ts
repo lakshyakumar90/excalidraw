@@ -659,7 +659,7 @@ export class RoomRedis {
   }
 
   async startWorker(
-    persist: (snapshot: RoomSnapshot) => Promise<void>,
+    persist: (snapshot: RoomSnapshot) => Promise<void | false>,
     concurrency = 1,
   ): Promise<Worker> {
     const worker = new Worker(
@@ -671,12 +671,44 @@ export class RoomRedis {
           await this.scheduleFlush(job.data.sceneId, Date.now(), false);
           return;
         }
+        const lockKey = flushLockKey(job.data.sceneId);
+        let lockValid = true;
+        let renewal: Promise<void> | undefined;
+        const renewalTimer = setInterval(() => {
+          if (renewal || !lockValid) return;
+          renewal = this.redis.eval(
+            `if redis.call('GET', KEYS[1]) == ARGV[1] then
+              return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+            end
+            return 0`,
+            1, lockKey, lockToken, FLUSH_LOCK_TTL_MS,
+          ).then((value) => {
+            lockValid = Number(value) === 1;
+          }).catch(() => {
+            lockValid = false;
+          }).finally(() => {
+            renewal = undefined;
+          });
+        }, FLUSH_LOCK_TTL_MS / 3);
         try {
           const snapshot = await this.readSnapshot(job.data.sceneId);
           if (!snapshot || snapshot.revision <= snapshot.persistedRevision)
             return;
           const startedAt = Date.now();
-          await persist(snapshot);
+          const saved = await persist(snapshot);
+          await renewal;
+          if (!lockValid) throw new Error("Room flush lock was lost");
+          if (saved === false) {
+            await this.redis.eval(
+              `if tonumber(redis.call('HGET', KEYS[1], '__version') or '-1') ~= tonumber(ARGV[1]) then
+                return 0
+              end
+              redis.call('DEL', KEYS[1])
+              return redis.call('ZREM', KEYS[2], ARGV[2])`,
+              2, roomHashKey(snapshot.sceneId), DIRTY_KEY, snapshot.revision, snapshot.sceneId,
+            );
+            return;
+          }
           await this.markPersisted(snapshot.sceneId, snapshot.revision);
           console.info(
             JSON.stringify({
@@ -687,6 +719,8 @@ export class RoomRedis {
             }),
           );
         } finally {
+          clearInterval(renewalTimer);
+          await renewal;
           await this.releaseFlushLock(job.data.sceneId, lockToken).catch(
             () => undefined,
           );

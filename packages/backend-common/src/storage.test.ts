@@ -52,6 +52,8 @@ describe("object storage presigning and validation", () => {
     expect(presigned.storageMode).toBe("s3");
     expect(presigned.fileId).toBe("file-abc");
     expect(presigned.objectKey).toBe("canvas-assets/file-abc.webp");
+    expect(new URL(presigned.uploadUrl).searchParams.get("X-Amz-SignedHeaders"))
+      .toBe("content-length;content-type;host");
   });
 
   it("falls back to local storage URLs when S3 credentials are not configured", () => {

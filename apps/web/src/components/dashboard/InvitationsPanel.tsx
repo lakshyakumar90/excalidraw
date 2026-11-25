@@ -85,12 +85,12 @@ export function InvitationsPanel() {
           {invitations.map((invite) => (
             <li key={invite.id}>
               <div className="min-w-0">
-                <p className="truncate font-semibold">{invite.roomName}</p>
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{invite.roomName}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                   Invited by {invite.inviterName}
                   {invite.inviterEmail ? ` · ${invite.inviterEmail}` : ""}
                 </p>
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                   {invite.role} access · Expires {new Date(invite.expiresAt).toLocaleDateString()}
                 </p>
               </div>

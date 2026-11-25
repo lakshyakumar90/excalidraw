@@ -55,7 +55,7 @@ export function validateImageUploadInput(input: {
   }
   if (
     typeof input.sizeBytes !== "number" ||
-    !Number.isFinite(input.sizeBytes) ||
+    !Number.isSafeInteger(input.sizeBytes) ||
     input.sizeBytes <= 0 ||
     input.sizeBytes > MAX_UPLOAD_BYTES
   ) {
@@ -64,7 +64,7 @@ export function validateImageUploadInput(input: {
       error: `File size must be between 1 byte and ${MAX_UPLOAD_BYTES} bytes (10 MB).`,
     };
   }
-  return { ok: true, mimeType: input.mimeType, sizeBytes: Math.floor(input.sizeBytes) };
+  return { ok: true, mimeType: input.mimeType, sizeBytes: input.sizeBytes };
 }
 
 export function readObjectStorageConfigFromEnv(
@@ -112,10 +112,11 @@ function encodeS3Key(key: string): string {
  */
 export function signS3PresignedUrl(params: {
   config: ObjectStorageConfig;
-  method: "GET" | "PUT";
+  method: "GET" | "HEAD" | "PUT";
   objectKey: string;
   expiresInSeconds?: number;
   contentType?: string;
+  contentLength?: number;
   now?: Date;
 }): string {
   const { config, method, objectKey } = params;
@@ -147,6 +148,10 @@ export function signS3PresignedUrl(params: {
   if (method === "PUT" && params.contentType) {
     signedHeadersList.push("content-type");
     canonicalHeadersLines.push(`content-type:${params.contentType}`);
+  }
+  if (method === "PUT" && params.contentLength !== undefined) {
+    signedHeadersList.push("content-length");
+    canonicalHeadersLines.push(`content-length:${params.contentLength}`);
   }
   signedHeadersList.sort();
   canonicalHeadersLines.sort();
@@ -230,6 +235,7 @@ export function createPresignedUpload(
     objectKey,
     expiresInSeconds,
     contentType: request.mimeType,
+    contentLength: request.sizeBytes,
   });
 
   const downloadUrl = config.publicBaseUrl

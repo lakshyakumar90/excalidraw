@@ -12,30 +12,39 @@ export function ToolButton({
   onClick: () => void;
 }) {
   const label = TOOL_LABELS[type];
+  const shortcut = TOOL_SHORTCUTS[type];
   const tooltip =
     type === "selection"
-      ? `${label} · ${TOOL_SHORTCUTS[type]} · Alt-click cycles overlaps`
-      : `${label} · ${TOOL_SHORTCUTS[type]}`;
+      ? `${label} · ${shortcut} · Alt-click cycles overlaps`
+      : `${label} · ${shortcut}`;
 
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
-      aria-keyshortcuts={TOOL_SHORTCUTS[type]}
+      aria-keyshortcuts={shortcut}
       aria-pressed={active}
       tabIndex={active ? 0 : -1}
       className={[
-        "group relative grid h-11 w-11 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
+        "group relative grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
         active
-          ? "bg-neutral-900 text-white"
-          : "text-neutral-700 hover:bg-neutral-100",
+          ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-xs"
+          : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
       ].join(" ")}
     >
       <ToolIcon type={type} />
       <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute right-1 bottom-0.5 font-mono text-[8px] font-semibold leading-none ${
+          active ? "opacity-75" : "opacity-55"
+        }`}
+      >
+        {shortcut}
+      </span>
+      <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[60] hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-visible:block"
+        className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-[60] hidden -translate-y-1/2 whitespace-nowrap rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-primary)] shadow-xl group-hover:block group-focus-visible:block"
       >
         {tooltip}
       </span>

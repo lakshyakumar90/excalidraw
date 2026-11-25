@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { authClient } from "@repo/auth/client";
 import { AuthField } from "../dashboard/AuthField";
 import { primaryButton } from "../dashboard/dashboardStyles";
+import { ChitranBrand } from "../brand/ChitranLogo";
 
 export function PasswordRecovery({
   mode,
@@ -63,21 +64,21 @@ export function PasswordRecovery({
   }
 
   return (
-    <main className="dashboard-page auth-page min-h-dvh text-neutral-900">
-      <header className="dashboard-topbar auth-topbar">
-        <Link href="/" className="dashboard-brand">
-          Excalidraw
+    <main className="auth-grid-bg flex min-h-dvh flex-col text-[var(--text-primary)]">
+      <header className="flex items-center justify-between px-5 py-4 sm:px-8">
+        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
+          <ChitranBrand />
         </Link>
         <Link
           href="/login"
-          className="text-sm font-medium text-blue-700 underline underline-offset-4"
+          className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3.5 py-1.5 text-xs font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-hover)]"
         >
           Back to sign in
         </Link>
       </header>
-      <div className="dashboard-main auth-main">
-        <section className="auth-panel mx-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-          <h1 className="text-2xl font-semibold">
+      <div className="flex flex-1 items-center justify-center px-4 pb-12 pt-4">
+        <section className="auth-panel mx-auto w-full max-w-[400px] rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6 shadow-2xl sm:p-7">
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
             {expired
               ? "This reset link has expired"
               : complete
@@ -89,7 +90,7 @@ export function PasswordRecovery({
                   : "Choose a new password"}
           </h1>
           <p
-            className="mt-3 text-base leading-6 text-neutral-700"
+            className="mt-1.5 text-xs leading-5 text-[var(--text-muted)]"
             role={complete ? "status" : undefined}
           >
             {expired

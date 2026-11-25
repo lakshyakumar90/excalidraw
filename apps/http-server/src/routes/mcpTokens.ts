@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
-import type { RoomSceneRole } from "@repo/db";
+import { db, getRoomSceneAccess, type RoomSceneRole } from "@repo/db";
 
 export interface RoomApiTokenRecord {
   id: string;
@@ -15,14 +15,15 @@ export interface RoomApiTokenRecord {
   createdAt: string;
 }
 
-const tokensById = new Map<string, RoomApiTokenRecord>();
-const tokenIdByHash = new Map<string, string>();
+function tokens() {
+  return db.orm!.public!.RoomApiToken;
+}
 
 export function hashRoomApiToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
 }
 
-export function mintRoomApiToken(input: {
+export function createRoomApiToken(input: {
   roomId: number;
   sceneId: string;
   role?: RoomSceneRole;
@@ -46,55 +47,39 @@ export function mintRoomApiToken(input: {
     createdById: input.createdById,
     createdAt: new Date(now).toISOString(),
   };
-  tokensById.set(record.id, record);
-  tokenIdByHash.set(tokenHash, record.id);
   return { token: rawSecret, record };
 }
 
-export function verifyRoomApiToken(rawToken: string): RoomApiTokenRecord | null {
+export async function verifyRoomApiToken(rawToken: string): Promise<RoomApiTokenRecord | null> {
   if (!rawToken || rawToken.length < 12) return null;
-  const hash = hashRoomApiToken(rawToken);
-  const id = tokenIdByHash.get(hash);
-  if (!id) return null;
-  const record = tokensById.get(id);
-  if (!record) return null;
-  if (record.revokedAt) return null;
-  if (Date.parse(record.expiresAt) <= Date.now()) return null;
-  return record;
-}
-
-export function revokeRoomApiToken(tokenId: string): boolean {
-  const record = tokensById.get(tokenId);
-  if (!record) return false;
-  record.revokedAt = new Date().toISOString();
-  return true;
-}
-
-export function listRoomApiTokens(roomId: number): Omit<RoomApiTokenRecord, "tokenHash">[] {
-  const results: Omit<RoomApiTokenRecord, "tokenHash">[] = [];
-  for (const record of tokensById.values()) {
-    if (record.roomId !== roomId) continue;
-    const { tokenHash: _hidden, ...safe } = record;
-    results.push(safe);
-  }
-  return results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const record = await tokens().where({ tokenHash: hashRoomApiToken(rawToken) }).first();
+  if (!record || record.revokedAt || Date.parse(record.expiresAt) <= Date.now()) return null;
+  if (record.role !== "editor" && record.role !== "viewer") return null;
+  const access = await getRoomSceneAccess(db, record.roomId, record.createdById);
+  if (access?.role !== "owner" || access.sceneId !== record.sceneId) return null;
+  return { ...record, label: record.label ?? "MCP Agent Token", role: record.role };
 }
 
 export const mcpTokensRouter: Router = Router();
 
-mcpTokensRouter.get("/:roomId", (req, res) => {
+mcpTokensRouter.get("/:roomId", async (req, res) => {
   const roomId = Number(req.params.roomId);
   if (!Number.isSafeInteger(roomId) || roomId <= 0) {
     res.status(400).json({ error: "Invalid roomId." });
     return;
   }
-  res.json({ tokens: listRoomApiTokens(roomId) });
+  const access = req.userId && await getRoomSceneAccess(db, roomId, req.userId);
+  if (!access || access.role !== "owner") {
+    res.status(403).json({ error: "Room ownership is required." });
+    return;
+  }
+  const records = await tokens().where({ roomId }).orderBy((row) => row.createdAt.desc()).all();
+  res.json({ tokens: records.map(({ tokenHash: _hidden, ...record }) => record) });
 });
 
-mcpTokensRouter.post("/", (req, res) => {
-  const { roomId, sceneId, role, label, expiresInHours } = (req.body ?? {}) as {
+mcpTokensRouter.post("/", async (req, res) => {
+  const { roomId, role, label, expiresInHours } = (req.body ?? {}) as {
     roomId?: unknown;
-    sceneId?: unknown;
     role?: unknown;
     label?: unknown;
     expiresInHours?: unknown;
@@ -104,35 +89,40 @@ mcpTokensRouter.post("/", (req, res) => {
     res.status(400).json({ error: "Valid numeric roomId is required." });
     return;
   }
-  const parsedSceneId =
-    typeof sceneId === "string" && sceneId.trim().length > 0
-      ? sceneId.trim()
-      : `room-${parsedRoomId}`;
+  const userId = req.userId;
+  const access = userId && await getRoomSceneAccess(db, parsedRoomId, userId);
+  if (!userId || !access || access.role !== "owner") {
+    res.status(403).json({ error: "Room ownership is required." });
+    return;
+  }
   const parsedRole: RoomSceneRole =
-    role === "viewer" || role === "editor" || role === "owner" ? role : "editor";
+    role === "viewer" ? "viewer" : "editor";
 
-  const { token, record } = mintRoomApiToken({
+  const { token, record } = createRoomApiToken({
     roomId: parsedRoomId,
-    sceneId: parsedSceneId,
+    sceneId: access.sceneId,
     role: parsedRole,
     label: typeof label === "string" ? label : undefined,
     expiresInHours:
       typeof expiresInHours === "number" && Number.isFinite(expiresInHours)
         ? expiresInHours
         : undefined,
-    createdById: req.userId ?? "system",
+    createdById: userId,
   });
+  await tokens().create(record);
 
   const { tokenHash: _hidden, ...safeRecord } = record;
   res.status(201).json({ token, record: safeRecord });
 });
 
-mcpTokensRouter.delete("/:tokenId", (req, res) => {
+mcpTokensRouter.delete("/:tokenId", async (req, res) => {
   const tokenId = String(req.params.tokenId ?? "");
-  const ok = revokeRoomApiToken(tokenId);
-  if (!ok) {
+  const token = await tokens().where({ id: tokenId }).first();
+  const access = token && req.userId && await getRoomSceneAccess(db, token.roomId, req.userId);
+  if (!access || access.role !== "owner") {
     res.status(404).json({ error: "Token not found." });
     return;
   }
+  await tokens().where({ id: tokenId }).update({ revokedAt: new Date().toISOString() });
   res.json({ revoked: true, tokenId });
 });
