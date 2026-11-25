@@ -10,3 +10,4 @@ export * from "./element";
 export * from "./slides/slides";
 
 export * from "./diagram/mermaidParser";
+export * from "./diagram/playbackQueue";
