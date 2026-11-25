@@ -11,7 +11,7 @@ import {
   createScene,
   deleteScene,
   listScenes,
-  updateScene,
+  renameScene,
   type SceneSummary,
 } from "@/lib/api/scenes";
 
@@ -78,12 +78,8 @@ export default function MyBoardsPage() {
     setError("");
     try {
       setTheme(newTheme);
-      const created = await createScene({
-        title: newTitle.trim() || "Untitled Board",
-        data: {
-          elements: [],
-          appState: { boardPreset: newPreset, theme: newTheme },
-        },
+      const created = await createScene(newTitle.trim() || "Untitled Board", {
+        elements: [],
       });
       setBoards((prev) => [created, ...prev]);
       setNewModalOpen(false);
@@ -97,9 +93,8 @@ export default function MyBoardsPage() {
 
   async function handleDuplicate(board: SceneSummary) {
     try {
-      const copy = await createScene({
-        title: `${board.title || "Untitled"} (Copy)`,
-        data: { elements: [] },
+      const copy = await createScene(`${board.title || "Untitled"} (Copy)`, {
+        elements: [],
       });
       setBoards((prev) => [copy, ...prev]);
     } catch (err) {
@@ -111,7 +106,7 @@ export default function MyBoardsPage() {
     const title = renameDraft.trim();
     if (!title) return;
     try {
-      const updated = await updateScene(id, { title });
+      const updated = await renameScene(id, title);
       setBoards((prev) => prev.map((b) => (b.id === id ? updated : b)));
       setRenamingId(null);
     } catch (err) {
