@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+  Architects_Daughter,
+  Caveat,
+  Geist,
+  Geist_Mono,
+  Inter,
+  JetBrains_Mono,
+  Plus_Jakarta_Sans,
+} from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,9 +20,36 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+});
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+});
+
+const caveat = Caveat({
+  variable: "--font-caveat",
+  subsets: ["latin"],
+  weight: ["500", "700"],
+});
+
+const architectsDaughter = Architects_Daughter({
+  variable: "--font-chalk",
+  subsets: ["latin"],
+  weight: ["400"],
+});
+
 export const metadata: Metadata = {
   title: "Excalidraw",
-  description: "A collaborative drawing canvas.",
+  description: "A collaborative drawing canvas with Slides, AI, and MCP.",
 };
 
 const THEME_INIT_SCRIPT = `
@@ -29,11 +64,21 @@ const THEME_INIT_SCRIPT = `
 `;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const fontClasses = [
+    geistSans.variable,
+    geistMono.variable,
+    plusJakartaSans.variable,
+    inter.variable,
+    jetBrainsMono.variable,
+    caveat.variable,
+    architectsDaughter.variable,
+  ].join(" ");
+
   return (
     <html
       lang="en"
       data-theme="dark"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fontClasses} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
