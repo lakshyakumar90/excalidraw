@@ -8,6 +8,7 @@ import { scenesRouter } from "./routes/scenes.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { libraryRouter } from "./routes/library.js";
 import { filesRouter } from "./routes/files.js";
+import { revisionsRouter } from "./routes/revisions.js";
 
 export interface HealthProbeConfig {
   pingDb?: () => Promise<boolean>;
@@ -83,6 +84,7 @@ app.get("/me", requireAuth, (req, res) => {
 });
 
 app.use("/api/files", requireAuth, filesRouter);
+app.use("/api/revisions", requireAuth, revisionsRouter);
 app.use("/scenes", requireAuth, scenesRouter);
 app.use("/library", requireAuth, libraryRouter);
 
