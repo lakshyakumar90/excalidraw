@@ -7,6 +7,7 @@ import { ElementBitmapCache } from "./elementBitmapCache";
 
 import { drawArrow, drawCurvedLine, drawElement } from "./drawElements";
 import { drawCachedShape } from "./bitmapRendering";
+import { adaptElementForTheme, getCanvasThemePalette, type CanvasTheme } from "./theme";
 export { drawArrow, drawCurvedLine } from "./drawElements";
 export { createElementBitmapCache } from "./bitmapRendering";
 
@@ -15,6 +16,7 @@ export interface RenderContext {
   width: number;
   height: number;
   viewport: Viewport;
+  theme?: CanvasTheme;
 }
 
 export interface StaticRenderOptions {
@@ -24,6 +26,9 @@ export interface StaticRenderOptions {
   bitmapCache?: ElementBitmapCache;
   pixelRatio?: number;
   bypassBitmapCache?: boolean;
+  theme?: CanvasTheme;
+  backgroundColorOverride?: string;
+  dotGrid?: boolean;
 }
 
 //This moves the drawing context to the element’s center, rotates it, and moves back. The resulting transform matches the center-based rotation already used by getElementCorners.
@@ -40,8 +45,11 @@ function drawBackground(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
+  theme: CanvasTheme,
+  backgroundColorOverride?: string,
 ): void {
-  context.fillStyle = "#faf9f6";
+  context.fillStyle =
+    backgroundColorOverride ?? getCanvasThemePalette(theme).background;
   context.fillRect(0, 0, width, height);
 }
 
@@ -50,6 +58,8 @@ function drawGrid(
   width: number,
   height: number,
   viewport: Viewport,
+  theme: CanvasTheme,
+  dotGrid = false,
 ): void {
   const baseGridSize = 20;
 
@@ -79,7 +89,9 @@ function drawGrid(
 
   context.save();
 
-  context.strokeStyle = "#e5e5e5";
+  const palette = getCanvasThemePalette(theme);
+  context.strokeStyle = palette.grid;
+  context.fillStyle = palette.dotGrid;
   context.lineWidth = 1;
 
   const offsetX =
@@ -88,18 +100,28 @@ function drawGrid(
   const offsetY =
     ((viewport.scrollY % scaledGridSize) + scaledGridSize) % scaledGridSize;
 
-  for (let x = offsetX; x <= width; x += scaledGridSize) {
-    context.beginPath();
-    context.moveTo(x, 0);
-    context.lineTo(x, height);
-    context.stroke();
-  }
+  if (dotGrid) {
+    for (let x = offsetX; x <= width; x += scaledGridSize) {
+      for (let y = offsetY; y <= height; y += scaledGridSize) {
+        context.beginPath();
+        context.arc(x, y, 1.15, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+  } else {
+    for (let x = offsetX; x <= width; x += scaledGridSize) {
+      context.beginPath();
+      context.moveTo(x, 0);
+      context.lineTo(x, height);
+      context.stroke();
+    }
 
-  for (let y = offsetY; y <= height; y += scaledGridSize) {
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(width, y);
-    context.stroke();
+    for (let y = offsetY; y <= height; y += scaledGridSize) {
+      context.beginPath();
+      context.moveTo(0, y);
+      context.lineTo(width, y);
+      context.stroke();
+    }
   }
 
   context.restore();
@@ -108,12 +130,13 @@ function drawGrid(
 function drawOrigin(
   context: CanvasRenderingContext2D,
   viewport: Viewport,
+  theme: CanvasTheme,
 ): void {
   context.save();
 
   context.translate(viewport.scrollX, viewport.scrollY);
   context.scale(viewport.zoom, viewport.zoom);
-  context.strokeStyle = "#999999";
+  context.strokeStyle = getCanvasThemePalette(theme).origin;
   context.lineWidth = 1 / viewport.zoom;
   context.beginPath();
   context.moveTo(-20, 0);
@@ -139,10 +162,13 @@ export function renderStatic(
   imageAssets: ReadonlyMap<string, CanvasImageSource> = new Map(),
 ): number {
   const { context, width, height, viewport } = renderContext;
+  const theme: CanvasTheme = options.theme ?? renderContext.theme ?? "light";
   clearCanvas(context, width, height);
-  if (options.background !== false) drawBackground(context, width, height);
-  if (options.grid !== false) drawGrid(context, width, height, viewport);
-  if (options.origin !== false) drawOrigin(context, viewport);
+  if (options.background !== false)
+    drawBackground(context, width, height, theme, options.backgroundColorOverride);
+  if (options.grid !== false)
+    drawGrid(context, width, height, viewport, theme, options.dotGrid ?? false);
+  if (options.origin !== false) drawOrigin(context, viewport, theme);
 
   const viewportBounds = viewportToSceneBounds({ width, height }, viewport);
   const frameMap = new Map(
@@ -175,9 +201,16 @@ export function renderStatic(
             options.bitmapCache,
             viewport.zoom,
             options.pixelRatio ?? 1,
+            theme,
           )
         : false;
-    if (!cached) drawElement(context, element, elements, imageAssets);
+    if (!cached)
+      drawElement(
+        context,
+        adaptElementForTheme(element, theme),
+        elements,
+        imageAssets,
+      );
     context.restore();
   }
   context.restore();
@@ -204,7 +237,8 @@ export function renderInteractive(
   context.scale(renderContext.viewport.zoom, renderContext.viewport.zoom);
   context.globalAlpha = 0.6;
   context.setLineDash([6, 4]);
-  drawElement(context, previewElement);
+  const theme: CanvasTheme = renderContext.theme ?? "light";
+  drawElement(context, adaptElementForTheme(previewElement, theme));
 
   context.restore();
 }

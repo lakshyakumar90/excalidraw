@@ -7,3 +7,5 @@ export * from "./culling";
 export * from "./elementBitmapCache";
 export * from "./sketch";
 export * from "./benchmark";
+
+export * from "./theme";

@@ -10,10 +10,12 @@ import {
 } from "./elementBitmapCache";
 
 import { applyElementTransform, drawElement } from "./drawElements";
+import { adaptElementForTheme, type CanvasTheme } from "./theme";
 export function cachedShapeKey(
   element: Element,
   bucket: number,
   pixelRatio: number,
+  theme: CanvasTheme = "light",
 ): string {
   return JSON.stringify([
     element.id,
@@ -21,6 +23,7 @@ export function cachedShapeKey(
     element.versionNonce,
     bucket,
     pixelRatio,
+    theme,
     element.type,
     element.width,
     element.height,
@@ -48,6 +51,7 @@ export function drawCachedShape(
   cache: ElementBitmapCache,
   zoom: number,
   pixelRatio: number,
+  theme: CanvasTheme = "light",
 ): boolean {
   if (
     element.type !== "rectangle" &&
@@ -100,7 +104,7 @@ export function drawCachedShape(
   const height = Math.ceil(logicalHeight * scale);
   // Avoid browser canvas dimension limits and very large single-entry allocations.
   if (width > 2048 || height > 2048 || width * height > 2_000_000) return false;
-  const key = cachedShapeKey(element, bucket, ratio);
+  const key = cachedShapeKey(element, bucket, ratio, theme);
   let bitmap = cache.get(key);
   if (!bitmap) {
     const canvas = createBitmapCanvas(width, height);
@@ -116,8 +120,9 @@ export function drawCachedShape(
       (padding - minX) * scale,
       (padding - minY) * scale,
     );
+    const adapted = adaptElementForTheme(element, theme);
     const unrotated = {
-      ...element,
+      ...adapted,
       x: 0,
       y: 0,
       angle: 0,
