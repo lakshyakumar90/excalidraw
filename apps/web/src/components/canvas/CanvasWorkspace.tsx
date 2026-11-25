@@ -16,6 +16,12 @@ import { useCanvasTheme } from "@/lib/theme";
 import { FloatingCollabBar } from "./FloatingCollabBar";
 import { BoardPresetSwitcher } from "@/components/toolbar/BoardPresetSwitcher";
 import type { BoardPresetId } from "@repo/common";
+import { ConnectMcpModal } from "./ConnectMcpModal";
+import { AiCommandPalette } from "./AiCommandPalette";
+import { DiagramCodePane } from "./DiagramCodePane";
+import { VersionHistoryDrawer } from "./VersionHistoryDrawer";
+import { SlidesFilmstrip } from "./SlidesFilmstrip";
+import { PresentModeOverlay } from "./PresentModeOverlay";
 
 export function CanvasWorkspace({
   savedScene,
@@ -39,6 +45,45 @@ export function CanvasWorkspace({
   const { theme, toggleTheme } = useCanvasTheme();
   const [boardPreset, setBoardPreset] = useState<BoardPresetId>("excali-font");
   const [followingConnectionId, setFollowingConnectionId] = useState<string | null>(null);
+  const [mcpOpen, setMcpOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [slidesOpen, setSlidesOpen] = useState(false);
+  const [presentMode, setPresentMode] = useState(false);
+  const [presentIndex, setPresentIndex] = useState(0);
+  const [laserActive, setLaserActive] = useState(false);
+
+  useEffect(() => {
+    const onOpenMcp = () => setMcpOpen(true);
+    const onOpenAi = () => setAiOpen(true);
+    const onToggleCode = () => setCodeOpen((v) => !v);
+    const onToggleHistory = () => setHistoryOpen((v) => !v);
+    const onToggleSlides = () => setSlidesOpen((v) => !v);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setAiOpen((v) => !v);
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setPresentMode((v) => !v);
+      }
+    };
+    window.addEventListener("open-mcp-modal", onOpenMcp);
+    window.addEventListener("open-ai-palette", onOpenAi);
+    window.addEventListener("toggle-diagram-code", onToggleCode);
+    window.addEventListener("toggle-version-history", onToggleHistory);
+    window.addEventListener("toggle-slides-panel", onToggleSlides);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("open-mcp-modal", onOpenMcp);
+      window.removeEventListener("open-ai-palette", onOpenAi);
+      window.removeEventListener("toggle-diagram-code", onToggleCode);
+      window.removeEventListener("toggle-version-history", onToggleHistory);
+      window.removeEventListener("toggle-slides-panel", onToggleSlides);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
   useEffect(() => {
     const onAccessChanged = (event: Event) => {
       const role = (event as CustomEvent<{ role: RoomRole | null }>).detail
@@ -154,6 +199,62 @@ export function CanvasWorkspace({
           </Link>
         </div>
       )}
+      <ConnectMcpModal
+        open={mcpOpen}
+        roomId={savedScene?.roomSync?.roomId}
+        sceneId={savedScene?.id}
+        onClose={() => setMcpOpen(false)}
+      />
+      <AiCommandPalette
+        open={aiOpen}
+        roomId={savedScene?.roomSync?.roomId}
+        presetId={boardPreset}
+        onClose={() => setAiOpen(false)}
+        onRevealElements={(els, title) => {
+          window.dispatchEvent(
+            new CustomEvent("ai-elements-revealed", { detail: { elements: els, title } }),
+          );
+        }}
+      />
+      <DiagramCodePane
+        open={codeOpen}
+        presetId={boardPreset}
+        onClose={() => setCodeOpen(false)}
+        onApplyElements={(els, mode, diagramGroupId) => {
+          window.dispatchEvent(
+            new CustomEvent("diagram-code-apply", {
+              detail: { elements: els, mode, diagramGroupId },
+            }),
+          );
+        }}
+      />
+      <VersionHistoryDrawer
+        open={historyOpen}
+        sceneId={savedScene?.id}
+        onClose={() => setHistoryOpen(false)}
+        onRestored={() => window.location.reload()}
+      />
+      <SlidesFilmstrip
+        open={slidesOpen && !presentMode}
+        slides={[]}
+        activeSlideId={null}
+        onSelectSlide={() => undefined}
+        onReorder={() => undefined}
+        onStartPresent={() => {
+          setPresentIndex(0);
+          setPresentMode(true);
+        }}
+        onClose={() => setSlidesOpen(false)}
+      />
+      <PresentModeOverlay
+        active={presentMode}
+        slides={[]}
+        currentIndex={presentIndex}
+        laserActive={laserActive}
+        onNavigate={setPresentIndex}
+        onToggleLaser={() => setLaserActive((v) => !v)}
+        onExit={() => setPresentMode(false)}
+      />
     </main>
   );
 }
