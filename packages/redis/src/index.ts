@@ -18,6 +18,13 @@ export interface RoomSnapshot {
   lastDirtyAt: number;
 }
 
+export interface SnapshotDelta {
+  /** Map of element id -> element object (or serialized JSON string) to HSET. */
+  changedElements: Record<string, unknown>;
+  /** Element IDs to HDEL from the room hash. */
+  deletedIds?: string[];
+}
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -33,6 +40,45 @@ const roomParticipantsKey = (sceneId: string) =>
 const DIRTY_KEY = "collab:dirty-rooms";
 const METRIC_ROOMS_KEY = "collab:metric-rooms";
 const EVENTS_CHANNEL = "collab:events";
+
+/**
+ * Atomic CAS Lua script supporting both O(k) delta HSET/HDEL patches and
+ * full-hash initialization/replacement (when ARGV[4] == '1').
+ */
+const WRITE_SNAPSHOT_LUA = `
+local current = tonumber(redis.call('HGET', KEYS[1], '__version') or '0')
+local expected = tonumber(ARGV[1])
+if current ~= expected and current ~= 0 then
+  return 0
+end
+local isFullReplace = tonumber(ARGV[4])
+if isFullReplace == 1 then
+  local old = redis.call('HKEYS', KEYS[1])
+  for _, field in ipairs(old) do
+    if string.sub(field, 1, 8) == 'element:' then
+      redis.call('HDEL', KEYS[1], field)
+    end
+  end
+elseif current == 0 and expected > 0 then
+  -- Cannot apply a delta patch onto a cold/evicted room hash; force caller to re-read/warm.
+  return 0
+end
+redis.call('HSET', KEYS[1], '__version', ARGV[2], '__meta', ARGV[3])
+local changedCount = tonumber(ARGV[5])
+local idx = 6
+for i = 1, changedCount do
+  redis.call('HSET', KEYS[1], ARGV[idx], ARGV[idx + 1])
+  idx = idx + 2
+end
+local deletedCount = tonumber(ARGV[idx])
+idx = idx + 1
+for i = 1, deletedCount do
+  redis.call('HDEL', KEYS[1], ARGV[idx])
+  idx = idx + 1
+end
+redis.call('ZADD', KEYS[2], ARGV[idx], ARGV[idx + 1])
+return 1
+`;
 
 /** Redis live snapshots and the write-behind queue share one configured Redis URL. */
 export class RoomRedis {
@@ -53,6 +99,34 @@ export class RoomRedis {
     this.queue = new Queue(ROOM_FLUSH_QUEUE, {
       connection: this.redis,
     });
+  }
+
+  /** O(1) metadata-only read avoiding full HGETALL on hot paths. */
+  private async readSnapshotMeta(sceneId: string): Promise<{
+    revision: number;
+    persistedRevision: number;
+    firstDirtyAt: number;
+    lastDirtyAt: number;
+  } | null> {
+    const [rawMeta, rawVersion, rawPersisted] = await this.redis.hmget(
+      roomHashKey(sceneId),
+      "__meta",
+      "__version",
+      "__persisted",
+    );
+    if (!rawMeta) return null;
+    const meta = JSON.parse(rawMeta) as {
+      revision?: number;
+      firstDirtyAt?: number;
+      lastDirtyAt?: number;
+    };
+    const now = Date.now();
+    return {
+      revision: Number(rawVersion ?? meta.revision ?? 0),
+      persistedRevision: Number(rawPersisted ?? 0),
+      firstDirtyAt: typeof meta.firstDirtyAt === "number" ? meta.firstDirtyAt : now,
+      lastDirtyAt: typeof meta.lastDirtyAt === "number" ? meta.lastDirtyAt : now,
+    };
   }
 
   async readSnapshot(sceneId: string): Promise<RoomSnapshot | null> {
@@ -118,7 +192,10 @@ export class RoomRedis {
     return Number(result) === 1;
   }
 
-  /** Atomic version check, snapshot replacement, and dirty-index update. */
+  /**
+   * Atomic version check, O(k) delta HSET/HDEL patch (or full replace when
+   * `delta` is omitted), and dirty-index update.
+   */
   async writeSnapshot(
     sceneId: string,
     expectedRevision: number,
@@ -126,12 +203,13 @@ export class RoomRedis {
     actorId: string,
     data: Record<string, unknown> & { elements: unknown[] },
     now = Date.now(),
+    delta?: SnapshotDelta,
   ): Promise<boolean> {
     const key = roomHashKey(sceneId);
-    const previous = await this.readSnapshot(sceneId);
+    const previousMeta = await this.readSnapshotMeta(sceneId);
     const firstDirtyAt =
-      previous && previous.persistedRevision < previous.revision
-        ? previous.firstDirtyAt
+      previousMeta && previousMeta.persistedRevision < previousMeta.revision
+        ? previousMeta.firstDirtyAt
         : now;
     const meta = JSON.stringify({
       sceneId,
@@ -141,37 +219,53 @@ export class RoomRedis {
       firstDirtyAt,
       lastDirtyAt: now,
     });
-    const elementFields: string[] = [];
-    for (const item of data.elements) {
-      if (
-        !item ||
-        typeof item !== "object" ||
-        typeof (item as { id?: unknown }).id !== "string"
-      )
-        continue;
-      elementFields.push(
-        `element:${(item as { id: string }).id}`,
-        JSON.stringify(item),
-      );
+
+    const isDelta = delta !== undefined;
+    const changedFields: string[] = [];
+    const deletedFields: string[] = [];
+
+    if (isDelta) {
+      for (const [id, value] of Object.entries(delta.changedElements)) {
+        if (!id) continue;
+        changedFields.push(
+          `element:${id}`,
+          typeof value === "string" ? value : JSON.stringify(value),
+        );
+      }
+      if (delta.deletedIds) {
+        for (const id of delta.deletedIds) {
+          if (!id) continue;
+          deletedFields.push(`element:${id}`);
+        }
+      }
+    } else {
+      for (const item of data.elements) {
+        if (
+          !item ||
+          typeof item !== "object" ||
+          typeof (item as { id?: unknown }).id !== "string"
+        )
+          continue;
+        changedFields.push(
+          `element:${(item as { id: string }).id}`,
+          JSON.stringify(item),
+        );
+      }
     }
+
     const result = await this.redis.eval(
-      `local current=tonumber(redis.call('HGET',KEYS[1],'__version') or '0')
-       if current~=tonumber(ARGV[1]) and current~=0 then return 0 end
-       local old=redis.call('HKEYS',KEYS[1])
-       for _,field in ipairs(old) do if string.sub(field,1,8)=='element:' then redis.call('HDEL',KEYS[1],field) end end
-       redis.call('HSET',KEYS[1],'__version',ARGV[2],'__meta',ARGV[3])
-       local count=tonumber(ARGV[4])
-       for i=5,4+(count*2),2 do redis.call('HSET',KEYS[1],ARGV[i],ARGV[i+1]) end
-       redis.call('ZADD',KEYS[2],ARGV[5+(count*2)],ARGV[6+(count*2)])
-       return 1`,
+      WRITE_SNAPSHOT_LUA,
       2,
       key,
       DIRTY_KEY,
       expectedRevision,
       revision,
       meta,
-      elementFields.length / 2,
-      ...elementFields,
+      isDelta ? 0 : 1,
+      changedFields.length / 2,
+      ...changedFields,
+      deletedFields.length,
+      ...deletedFields,
       now + ROOM_DEBOUNCE_MS,
       sceneId,
     );
@@ -179,7 +273,10 @@ export class RoomRedis {
     await this.recordMessage(sceneId, now).catch((error: unknown) => {
       console.error("Room message metric update failed:", error);
     });
-    await this.scheduleFlush(sceneId, now).catch((error: unknown) => {
+    await this.scheduleFlush(sceneId, now, false, {
+      firstDirtyAt,
+      lastDirtyAt: now,
+    }).catch((error: unknown) => {
       // The atomic write added this room to the dirty index; the worker's
       // recovery scan will enqueue it after a queue outage.
       console.error("Room flush scheduling failed:", error);
@@ -211,14 +308,15 @@ export class RoomRedis {
     sceneId: string,
     now = Date.now(),
     immediate = false,
+    dirtyTimestamps?: { firstDirtyAt: number; lastDirtyAt: number },
   ): Promise<void> {
-    const snapshot = await this.readSnapshot(sceneId);
-    if (!snapshot) return;
+    const timestamps = dirtyTimestamps ?? (await this.readSnapshotMeta(sceneId));
+    if (!timestamps) return;
     const dueAt = immediate
       ? now
       : Math.min(
-          snapshot.lastDirtyAt + ROOM_DEBOUNCE_MS,
-          snapshot.firstDirtyAt + ROOM_MAX_WAIT_MS,
+          timestamps.lastDirtyAt + ROOM_DEBOUNCE_MS,
+          timestamps.firstDirtyAt + ROOM_MAX_WAIT_MS,
         );
     // A fixed job ID coalesces updates. Replace only a delayed job so a running
     // worker cannot be removed; the dirty index remains the crash-recovery source.
@@ -446,8 +544,8 @@ export class RoomRedis {
     if (count === 0) {
       await this.redis.del(key, roomParticipantsKey(sceneId));
       await this.scheduleFlush(sceneId, Date.now(), true);
-      const snapshot = await this.readSnapshot(sceneId);
-      if (snapshot && snapshot.persistedRevision >= snapshot.revision) {
+      const meta = await this.readSnapshotMeta(sceneId);
+      if (meta && meta.persistedRevision >= meta.revision) {
         await this.redis.expire(
           roomHashKey(sceneId),
           Math.ceil(ROOM_REDIS_GRACE_MS / 1000),

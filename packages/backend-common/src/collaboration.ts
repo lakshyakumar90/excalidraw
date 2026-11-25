@@ -19,7 +19,7 @@ import {
   type SyncDb,
 } from "@repo/db";
 import type { RoomSceneRole } from "@repo/db";
-import type { RoomRedis } from "@repo/redis";
+import type { RoomRedis, SnapshotDelta } from "@repo/redis";
 
 /**
  * Durable collaboration authority (Phase 15), shared by the WS commit path
@@ -189,6 +189,35 @@ function isValidFile(file: unknown, fileId: string): file is StoredSceneFile {
   return true;
 }
 
+function computeElementDelta(
+  previousElements: Element[],
+  nextElements: Element[],
+): SnapshotDelta {
+  const prevById = new Map<string, string>();
+  for (const el of previousElements) {
+    if (typeof el.id === "string") {
+      prevById.set(el.id, JSON.stringify(el));
+    }
+  }
+  const nextIds = new Set<string>();
+  const changedElements: Record<string, unknown> = {};
+  for (const el of nextElements) {
+    if (typeof el.id !== "string") continue;
+    nextIds.add(el.id);
+    const serialized = JSON.stringify(el);
+    if (prevById.get(el.id) !== serialized) {
+      changedElements[el.id] = serialized;
+    }
+  }
+  const deletedIds: string[] = [];
+  for (const id of prevById.keys()) {
+    if (!nextIds.has(id)) {
+      deletedIds.push(id);
+    }
+  }
+  return { changedElements, deletedIds };
+}
+
 export interface CollaborationQueries {
   readHead: (
     sceneId: string,
@@ -231,7 +260,7 @@ export function configureCollaborationLiveStore(
 }
 
 type ComputedWrite =
-  | { data: StoredSyncData }
+  | { data: StoredSyncData; delta?: SnapshotDelta }
   | { missingFiles: string[] }
   | { fileTableFull: true };
 
@@ -315,6 +344,8 @@ export function createCollaborationService(options: CollaborationServiceOptions)
             current.revision + 1,
             actorId,
             computed.data as Record<string, unknown> & { elements: unknown[] },
+            undefined,
+            live ? computed.delta : undefined,
           );
           if (!accepted) {
             await new Promise((resolve) =>
@@ -446,13 +477,17 @@ export function createCollaborationService(options: CollaborationServiceOptions)
         }
       }
 
+      const sortedElements = sortElementsByOrder(pruned.elements);
+      const delta = computeElementDelta(stored.elements, sortedElements);
+
       return {
         data: {
-          elements: sortElementsByOrder(pruned.elements),
+          elements: sortedElements,
           ...(appState ? { appState } : {}),
           ...(Object.keys(files).length > 0 ? { files } : {}),
           sync: { revision: current.revision + 1, tombstones },
         },
+        delta,
       };
     });
 
@@ -533,6 +568,7 @@ export function createCollaborationService(options: CollaborationServiceOptions)
           files,
           sync: { revision: current.revision + 1, tombstones: stored.tombstones },
         },
+        delta: { changedElements: {}, deletedIds: [] },
       };
     });
     if (!written.ok && "fileTableFull" in written) {
