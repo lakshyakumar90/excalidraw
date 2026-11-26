@@ -52,17 +52,17 @@ const PROVIDER_CARDS: Array<{
   {
     id: "opencode",
     title: "OpenCode CLI",
-    subtitle: "Runs local `opencode run`",
+    subtitle: "Uses local `opencode` via bridge",
   },
   {
     id: "codex-cli",
     title: "Codex CLI",
-    subtitle: "Runs local `codex exec`",
+    subtitle: "Uses local `codex` (ChatGPT login) via bridge",
   },
   {
     id: "antigravity-cli",
     title: "AntiGravity CLI",
-    subtitle: "Runs local `agy -p`",
+    subtitle: "Uses local `agy` via bridge",
   },
 ];
 
@@ -195,7 +195,8 @@ function isLocalCliProvider(provider: AiProviderId): boolean {
   );
 }
 
-const LOCAL_CLI_RUNNER_URL = "http://127.0.0.1:5000/api/local-cli/generate-diagram";
+const LOCAL_CLI_BRIDGE_URL = "http://127.0.0.1:4319/generate-diagram";
+const LOCAL_CLI_SERVER_URL = "http://127.0.0.1:5000/api/local-cli/generate-diagram";
 
 async function callAiGenerateEndpoint(params: {
   provider: AiProviderId;
@@ -212,21 +213,25 @@ async function callAiGenerateEndpoint(params: {
     });
   }
 
-  try {
-    return await fetch(LOCAL_CLI_RUNNER_URL, {
-      method: "POST",
-      signal: params.signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params.body),
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw err;
+  for (const url of [LOCAL_CLI_BRIDGE_URL, LOCAL_CLI_SERVER_URL]) {
+    try {
+      return await fetch(url, {
+        method: "POST",
+        signal: params.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params.body),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw err;
+      }
+      // Try next local runner URL if this port is not listening.
     }
-    throw new Error(
-      "Could not reach your local CLI runner at http://127.0.0.1:5000. Run 'pnpm --filter http-server dev' on your computer so the browser can execute your local OpenCode / Codex / AntiGravity CLI.",
-    );
   }
+
+  throw new Error(
+    "Local CLI bridge is not running on your computer. Run 'node scripts/local-cli-bridge.mjs' (or 'pnpm ai-bridge') in a terminal whenever you use OpenCode, Codex CLI, or AntiGravity CLI.",
+  );
 }
 
 function getElementsMaxY(elements: readonly Element[], fallbackY: number): number {
@@ -1013,6 +1018,33 @@ export function AiCommandPalette({
                 );
               })}
             </div>
+
+            {(config.provider === "opencode" ||
+              config.provider === "codex-cli" ||
+              config.provider === "antigravity-cli") && (
+              <div className="mt-4 space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5 text-xs">
+                <div className="font-semibold text-[var(--text-primary)]">
+                  Run the local CLI bridge on your computer
+                </div>
+                <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                  Browsers cannot run local terminal CLIs directly. Keep this lightweight script running in a terminal whenever you use OpenCode, Codex CLI, or AntiGravity CLI—it uses your local CLI login and config directly (no cloud API key needed):
+                </p>
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2.5 py-2">
+                  <code className="truncate font-mono text-[11px] text-[var(--text-primary)]">
+                    node scripts/local-cli-bridge.mjs
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void navigator.clipboard?.writeText("node scripts/local-cli-bridge.mjs")
+                    }
+                    className="shrink-0 cursor-pointer rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
 
             {(config.provider === "anthropic" ||
               config.provider === "openai-compatible" ||
