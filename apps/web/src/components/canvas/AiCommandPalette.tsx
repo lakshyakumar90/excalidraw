@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardPresetId, Element } from "@repo/common";
 import {
   mermaidToCanvasElements,
   TimedPlaybackQueue,
   type PlaybackStatus,
 } from "@repo/engine";
+import { SelectDropdown } from "@/components/ui/SelectDropdown";
 import { apiUrl } from "@/lib/api/client";
 
 type AiProviderId =
@@ -264,6 +265,11 @@ export function AiCommandPalette({
   );
   const [config, setConfig] = useState<ByokConfig>(readStoredByokConfig);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState<"checking" | "running" | "offline">("checking");
+  const [bridgeOsTab, setBridgeOsTab] = useState<"windows" | "unix" | "file">("windows");
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState("");
   const [loading, setLoading] = useState(false);
   const [testingConn, setTestingConn] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -292,9 +298,106 @@ export function AiCommandPalette({
     return () => window.clearInterval(timer);
   }, [loading, playbackStatus]);
 
+  const checkBridgeHealth = useCallback(async (): Promise<boolean> => {
+    setBridgeStatus("checking");
+    try {
+      const res = await fetch("http://127.0.0.1:4319/health", { method: "GET" });
+      const ok = res.ok;
+      setBridgeStatus(ok ? "running" : "offline");
+      return ok;
+    } catch {
+      setBridgeStatus("offline");
+      return false;
+    }
+  }, []);
+
+  const fetchAvailableModels = useCallback(
+    async (
+      targetProvider: AiProviderId = config.provider,
+      targetApiKey: string = config.apiKey,
+      targetBaseUrl: string = config.baseUrl,
+    ) => {
+      setLoadingModels(true);
+      setModelsError("");
+      try {
+        if (isLocalCliProvider(targetProvider)) {
+          const res = await fetch(
+            `http://127.0.0.1:4319/models?provider=${encodeURIComponent(targetProvider)}`,
+          );
+          const data = (await res.json().catch(() => ({}))) as {
+            models?: string[];
+            error?: string;
+          };
+          if (!res.ok) {
+            throw new Error(data.error || `Failed to load ${targetProvider} models (${res.status})`);
+          }
+          setAvailableModels(data.models ?? []);
+          if ((data.models?.length ?? 0) === 0) {
+            setModelsError("No models returned by CLI.");
+          }
+          return;
+        }
+
+        if (!targetApiKey.trim()) {
+          setModelsError("Enter your API key above, then click Fetch models.");
+          return;
+        }
+        const res = await fetch(apiUrl("/api/ai/models"), {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: targetProvider,
+            apiKey: targetApiKey.trim(),
+            baseUrl:
+              targetProvider === "openai-compatible" && targetBaseUrl
+                ? targetBaseUrl
+                : undefined,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          models?: string[];
+          error?: string;
+        };
+        if (!res.ok) {
+          throw new Error(data.error || `Failed to fetch models (${res.status})`);
+        }
+        setAvailableModels(data.models ?? []);
+        if ((data.models?.length ?? 0) === 0) {
+          setModelsError("Provider returned 0 models.");
+        }
+      } catch (err) {
+        setAvailableModels([]);
+        setModelsError(
+          err instanceof Error
+            ? err.message
+            : "Could not fetch models from provider.",
+        );
+      } finally {
+        setLoadingModels(false);
+      }
+    },
+    [config.apiKey, config.baseUrl, config.provider],
+  );
+
+  useEffect(() => {
+    if (!connectOpen) return;
+    queueMicrotask(() => {
+      void checkBridgeHealth().then((running) => {
+        if (running && isLocalCliProvider(config.provider)) {
+          void fetchAvailableModels(config.provider);
+        } else if (!isLocalCliProvider(config.provider) && config.apiKey.trim()) {
+          void fetchAvailableModels(config.provider, config.apiKey, config.baseUrl);
+        }
+      });
+    });
+  }, [connectOpen, checkBridgeHealth, fetchAvailableModels, config.provider, config.apiKey, config.baseUrl]);
+
   function updateConfig(patch: Partial<ByokConfig>) {
     if (patch.provider !== undefined) {
       setTestResult(null);
+      setAvailableModels([]);
+      setModelsError("");
     }
     setConfig((prev) => {
       const next = { ...prev, ...patch };
@@ -930,9 +1033,15 @@ export function AiCommandPalette({
               className="w-full resize-none border-0 bg-transparent p-0 text-xs leading-5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus-visible:outline-none"
             />
             <div className="mt-2 flex items-center justify-between gap-2 pt-1">
-              <span className="truncate text-[11px] text-[var(--text-muted)]">
+              <button
+                type="button"
+                onClick={() => setConnectOpen(true)}
+                className="truncate cursor-pointer text-left text-[11px] text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+                title="Change provider or model"
+              >
                 Using {activeProviderCard?.title ?? config.provider}
-              </span>
+                {config.model ? ` · ${config.model}` : ""}
+              </button>
               <button
                 type="submit"
                 disabled={!prompt.trim()}
@@ -999,10 +1108,10 @@ export function AiCommandPalette({
                     onClick={() =>
                       updateConfig({
                         provider: card.id,
-                        model: card.defaultModel ?? config.model,
+                        model: "",
                       })
                     }
-                    className={`rounded-xl border p-3 text-left transition ${
+                    className={`cursor-pointer rounded-xl border p-3 text-left transition ${
                       selected
                         ? "border-[var(--accent)] bg-[var(--bg-surface)]"
                         : "border-[var(--border-subtle)] bg-[var(--bg-canvas)] hover:border-[var(--border-soft)]"
@@ -1022,27 +1131,133 @@ export function AiCommandPalette({
             {(config.provider === "opencode" ||
               config.provider === "codex-cli" ||
               config.provider === "antigravity-cli") && (
-              <div className="mt-4 space-y-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5 text-xs">
-                <div className="font-semibold text-[var(--text-primary)]">
-                  Run the local CLI bridge on your computer
+              <div className="mt-4 space-y-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        bridgeStatus === "running"
+                          ? "bg-emerald-400"
+                          : bridgeStatus === "checking"
+                            ? "animate-pulse bg-amber-400"
+                            : "bg-rose-400"
+                      }`}
+                    />
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {bridgeStatus === "running"
+                        ? "Local bridge connected (127.0.0.1:4319)"
+                        : bridgeStatus === "checking"
+                          ? "Checking local bridge..."
+                          : "Local bridge not running"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => void checkBridgeHealth()}
+                      className="cursor-pointer rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                    >
+                      Check
+                    </button>
+                    <a
+                      href="/local-cli-bridge.mjs"
+                      download="local-cli-bridge.mjs"
+                      className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                    >
+                      Download .mjs
+                    </a>
+                  </div>
                 </div>
+
                 <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
-                  Browsers cannot run local terminal CLIs directly. Keep this lightweight script running in a terminal whenever you use OpenCode, Codex CLI, or AntiGravity CLI—it uses your local CLI login and config directly (no cloud API key needed):
+                  Browsers cannot run terminal CLIs directly. Run one of these commands in your terminal (requires Node.js) to connect your local OpenCode, Codex, or AntiGravity CLI:
                 </p>
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2.5 py-2">
-                  <code className="truncate font-mono text-[11px] text-[var(--text-primary)]">
-                    node scripts/local-cli-bridge.mjs
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void navigator.clipboard?.writeText("node scripts/local-cli-bridge.mjs")
-                    }
-                    className="shrink-0 cursor-pointer rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-                  >
-                    Copy
-                  </button>
+
+                <div className="flex items-center gap-1">
+                  {(
+                    [
+                      { id: "windows", label: "Windows (PowerShell)" },
+                      { id: "unix", label: "macOS / Linux" },
+                      { id: "file", label: "If file is downloaded / repo" },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setBridgeOsTab(tab.id)}
+                      className={`cursor-pointer rounded-lg px-2 py-1 text-[11px] font-medium transition ${
+                        bridgeOsTab === tab.id
+                          ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                          : "bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
+
+                {bridgeOsTab === "windows" && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2.5 py-2">
+                    <code className="overflow-x-auto font-mono text-[11px] text-[var(--text-primary)]">
+                      {`irm ${typeof window !== "undefined" ? window.location.origin : "https://excalidraw.lakshyakumar.in"}/local-cli-bridge.mjs -OutFile "$env:USERPROFILE\\.chitran-bridge.mjs"; node "$env:USERPROFILE\\.chitran-bridge.mjs"`}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const origin =
+                          typeof window !== "undefined"
+                            ? window.location.origin
+                            : "https://excalidraw.lakshyakumar.in";
+                        void navigator.clipboard?.writeText(
+                          `irm ${origin}/local-cli-bridge.mjs -OutFile "$env:USERPROFILE\\.chitran-bridge.mjs"; node "$env:USERPROFILE\\.chitran-bridge.mjs"`,
+                        );
+                      }}
+                      className="shrink-0 cursor-pointer rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
+
+                {bridgeOsTab === "unix" && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-2.5 py-2">
+                    <code className="overflow-x-auto font-mono text-[11px] text-[var(--text-primary)]">
+                      {`curl -fsSL ${typeof window !== "undefined" ? window.location.origin : "https://excalidraw.lakshyakumar.in"}/local-cli-bridge.mjs -o ~/.chitran-bridge.mjs && node ~/.chitran-bridge.mjs`}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const origin =
+                          typeof window !== "undefined"
+                            ? window.location.origin
+                            : "https://excalidraw.lakshyakumar.in";
+                        void navigator.clipboard?.writeText(
+                          `curl -fsSL ${origin}/local-cli-bridge.mjs -o ~/.chitran-bridge.mjs && node ~/.chitran-bridge.mjs`,
+                        );
+                      }}
+                      className="shrink-0 cursor-pointer rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
+
+                {bridgeOsTab === "file" && (
+                  <div className="space-y-1.5 text-[11px] text-[var(--text-muted)]">
+                    <div>
+                      <span className="text-[var(--text-primary)]">In your Downloads folder:</span>{" "}
+                      <code className="rounded bg-[var(--bg-canvas)] px-1.5 py-0.5 font-mono text-[var(--text-primary)]">
+                        node ~/Downloads/local-cli-bridge.mjs
+                      </code>
+                    </div>
+                    <div>
+                      <span className="text-[var(--text-primary)]">In the cloned repo folder:</span>{" "}
+                      <code className="rounded bg-[var(--bg-canvas)] px-1.5 py-0.5 font-mono text-[var(--text-primary)]">
+                        node scripts/local-cli-bridge.mjs
+                      </code>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1068,18 +1283,6 @@ export function AiCommandPalette({
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-[var(--text-primary)]">
-                    Model
-                  </label>
-                  <input
-                    value={config.model}
-                    onChange={(e) => updateConfig({ model: e.target.value })}
-                    placeholder={activeProviderCard?.defaultModel ?? "Model name"}
-                    className="mt-1.5 h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-soft)]"
-                  />
-                </div>
-
                 {config.provider === "openai-compatible" && (
                   <div>
                     <label className="block text-xs font-medium text-[var(--text-primary)]">
@@ -1095,6 +1298,43 @@ export function AiCommandPalette({
                 )}
               </div>
             )}
+
+            {/* Dynamic Model Selector (for both BYOK APIs and Local CLIs) */}
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-[var(--text-primary)]">
+                  Model
+                </label>
+                <button
+                  type="button"
+                  disabled={loadingModels}
+                  onClick={() => void fetchAvailableModels()}
+                  className="cursor-pointer rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-hover)] disabled:opacity-50"
+                >
+                  {loadingModels ? "Fetching..." : "Fetch models"}
+                </button>
+              </div>
+              {availableModels.length > 0 && (
+                <SelectDropdown
+                  value={availableModels.includes(config.model) ? config.model : ""}
+                  options={[
+                    { value: "", label: `Default (${availableModels.length} models fetched)` },
+                    ...availableModels.map((m) => ({ value: m, label: m })),
+                  ]}
+                  onChange={(nextModel) => updateConfig({ model: nextModel })}
+                  ariaLabel="Select AI model"
+                />
+              )}
+              <input
+                value={config.model}
+                onChange={(e) => updateConfig({ model: e.target.value })}
+                placeholder="Leave blank for provider default, or enter model ID"
+                className="h-10 w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] px-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--border-soft)]"
+              />
+              {modelsError && (
+                <p className="text-[11px] text-amber-400">{modelsError}</p>
+              )}
+            </div>
 
             <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3.5">
               <input

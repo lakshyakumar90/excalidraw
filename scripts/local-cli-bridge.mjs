@@ -9,7 +9,7 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 const PORT = Number(process.env.CHITRAN_CLI_BRIDGE_PORT || 4319);
@@ -207,6 +207,79 @@ async function runCli({ provider, prompt, history = [], model, signal }) {
   }
 }
 
+async function listCliModels(provider) {
+  if (provider === "opencode") {
+    const { stdout } = await execProcess({
+      command: "opencode",
+      args: ["models"],
+      shell: process.platform === "win32",
+      timeoutMs: 20_000,
+    });
+    const models = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("Fetching") && !line.startsWith("Error:"));
+    return { models: Array.from(new Set(models)) };
+  }
+
+  if (provider === "antigravity-cli") {
+    const { stdout } = await execProcess({
+      command: "agy",
+      args: ["models"],
+      shell: false,
+      timeoutMs: 20_000,
+    });
+    const lines = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const errorLine = lines.find((line) => line.toLowerCase().startsWith("error:"));
+    const models = lines
+      .filter(
+        (line) =>
+          !line.startsWith("Fetching") &&
+          !line.toLowerCase().startsWith("error:") &&
+          !line.includes(" "),
+      );
+    if (models.length === 0 && errorLine) {
+      throw new Error(errorLine.replace(/^error:\s*/i, ""));
+    }
+    return { models: Array.from(new Set(models)) };
+  }
+
+  if (provider === "codex-cli") {
+    const models = [];
+    const codexDir = process.env.CODEX_HOME || join(homedir(), ".codex");
+    try {
+      const cfg = await readFile(join(codexDir, "config.toml"), "utf8");
+      const match = /^\s*model\s*=\s*"([^"]+)"/m.exec(cfg);
+      if (match?.[1]) models.push(match[1]);
+    } catch {
+      // Ignore missing config.toml
+    }
+    try {
+      const rawCache = await readFile(join(codexDir, "models_cache.json"), "utf8");
+      const cache = JSON.parse(rawCache);
+      if (Array.isArray(cache?.models)) {
+        for (const item of cache.models) {
+          const slug = typeof item?.slug === "string" ? item.slug : typeof item?.id === "string" ? item.id : "";
+          if (slug && item?.visibility !== "hide" && !models.includes(slug)) {
+            models.push(slug);
+          }
+        }
+      }
+    } catch {
+      // Ignore missing models_cache.json
+    }
+    if (models.length === 0) {
+      throw new Error("No local Codex models found. Run 'codex login' or 'codex' once to populate ~/.codex/models_cache.json.");
+    }
+    return { models };
+  }
+
+  throw new Error(`Unsupported provider: ${provider}`);
+}
+
 const server = http.createServer(async (req, res) => {
   setCors(req, res);
 
@@ -216,12 +289,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && req.url === "/health") {
+  const parsedUrl = new URL(req.url || "/", `http://${HOST}:${PORT}`);
+
+  if (req.method === "GET" && parsedUrl.pathname === "/health") {
     sendJson(res, 200, { status: "ok", service: "chitran-local-cli-bridge" });
     return;
   }
 
-  if (req.method === "POST" && req.url === "/generate-diagram") {
+  if (req.method === "GET" && parsedUrl.pathname === "/models") {
+    const provider = parsedUrl.searchParams.get("provider") || "";
+    try {
+      const result = await listCliModels(provider);
+      sendJson(res, 200, result);
+    } catch (error) {
+      const code = error && typeof error === "object" ? error.code : undefined;
+      const message = error instanceof Error ? error.message : String(error);
+      if (code === "ENOENT" || /\bENOENT\b/i.test(message)) {
+        sendJson(res, 404, {
+          error: `${provider} CLI is not installed or not on PATH on this computer.`,
+        });
+        return;
+      }
+      sendJson(res, 502, { error: message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && parsedUrl.pathname === "/generate-diagram") {
     let raw = "";
     for await (const chunk of req) {
       raw += chunk.toString("utf8");

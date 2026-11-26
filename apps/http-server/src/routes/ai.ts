@@ -465,6 +465,84 @@ localCliRouter.post("/generate-diagram", async (req, res) => {
   }
 });
 
+const ListModelsRequestSchema = z.object({
+  provider: z.enum(["openai-compatible", "anthropic", "gemini"]),
+  apiKey: z.string().trim().optional(),
+  baseUrl: z.string().trim().url().optional(),
+});
+
+aiRouter.post("/models", async (req, res) => {
+  const parsed = ListModelsRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid model list request." });
+    return;
+  }
+
+  const { provider, apiKey, baseUrl } = parsed.data;
+  const resolvedKey =
+    apiKey ||
+    (provider === "openai-compatible"
+      ? process.env.OPENAI_API_KEY
+      : provider === "anthropic"
+        ? process.env.ANTHROPIC_API_KEY
+        : process.env.GEMINI_API_KEY);
+
+  if (!resolvedKey) {
+    res.status(400).json({ error: `Enter an API key for ${provider} to fetch models.` });
+    return;
+  }
+
+  try {
+    if (provider === "openai-compatible") {
+      const base = (baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+      const upstream = await fetch(`${base}/models`, {
+        headers: { Authorization: `Bearer ${resolvedKey}` },
+      });
+      if (!upstream.ok) throw await readUpstreamError(upstream, "OpenAI-compatible models");
+      const payload = (await upstream.json()) as { data?: { id?: string }[] };
+      const models = (payload.data ?? [])
+        .map((m) => m.id)
+        .filter((id): id is string => Boolean(id))
+        .sort();
+      res.json({ models });
+      return;
+    }
+
+    if (provider === "anthropic") {
+      const upstream = await fetch("https://api.anthropic.com/v1/models", {
+        headers: {
+          "x-api-key": resolvedKey,
+          "anthropic-version": "2023-06-01",
+        },
+      });
+      if (!upstream.ok) throw await readUpstreamError(upstream, "Anthropic models");
+      const payload = (await upstream.json()) as { data?: { id?: string }[] };
+      const models = (payload.data ?? [])
+        .map((m) => m.id)
+        .filter((id): id is string => Boolean(id));
+      res.json({ models });
+      return;
+    }
+
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(resolvedKey)}`,
+    );
+    if (!upstream.ok) throw await readUpstreamError(upstream, "Gemini models");
+    const payload = (await upstream.json()) as {
+      models?: { name?: string; supportedGenerationMethods?: string[] }[];
+    };
+    const models = (payload.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m) => m.name?.replace(/^models\//, ""))
+      .filter((id): id is string => Boolean(id));
+    res.json({ models });
+  } catch (error) {
+    res.status(502).json({
+      error: error instanceof Error ? error.message : "Could not fetch models.",
+    });
+  }
+});
+
 /**
  * POST /api/ai/generate-diagram
  * Supports BYOK (OpenAI-compatible, Anthropic, Gemini) and local CLI
