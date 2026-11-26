@@ -9,7 +9,7 @@ import { roomsRouter } from "./routes/rooms.js";
 import { libraryRouter } from "./routes/library.js";
 import { filesRouter } from "./routes/files.js";
 import { revisionsRouter } from "./routes/revisions.js";
-import { aiRouter } from "./routes/ai.js";
+import { aiRouter, localCliRouter } from "./routes/ai.js";
 import { mcpRouter } from "./routes/mcp.js";
 import { mcpTokensRouter } from "./routes/mcpTokens.js";
 
@@ -88,6 +88,7 @@ app.get("/me", requireAuth, (req, res) => {
 
 app.use("/api/files", requireAuth, filesRouter);
 app.use("/api/revisions", requireAuth, revisionsRouter);
+app.use("/api/local-cli", localCliRouter);
 app.use("/api/ai", requireAuth, aiRouter);
 app.use("/api/mcp/tokens", requireAuth, mcpTokensRouter);
 app.use("/api/mcp", mcpRouter);

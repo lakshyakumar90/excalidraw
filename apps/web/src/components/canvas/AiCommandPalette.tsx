@@ -187,6 +187,48 @@ function nowMs(): number {
   return Date.now();
 }
 
+function isLocalCliProvider(provider: AiProviderId): boolean {
+  return (
+    provider === "opencode" ||
+    provider === "codex-cli" ||
+    provider === "antigravity-cli"
+  );
+}
+
+const LOCAL_CLI_RUNNER_URL = "http://127.0.0.1:5000/api/local-cli/generate-diagram";
+
+async function callAiGenerateEndpoint(params: {
+  provider: AiProviderId;
+  body: Record<string, unknown>;
+  signal?: AbortSignal;
+}): Promise<Response> {
+  if (!isLocalCliProvider(params.provider)) {
+    return fetch(apiUrl("/api/ai/generate-diagram"), {
+      method: "POST",
+      credentials: "include",
+      signal: params.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params.body),
+    });
+  }
+
+  try {
+    return await fetch(LOCAL_CLI_RUNNER_URL, {
+      method: "POST",
+      signal: params.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params.body),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
+    throw new Error(
+      "Could not reach your local CLI runner at http://127.0.0.1:5000. Run 'pnpm --filter http-server dev' on your computer so the browser can execute your local OpenCode / Codex / AntiGravity CLI.",
+    );
+  }
+}
+
 function getElementsMaxY(elements: readonly Element[], fallbackY: number): number {
   let maxY = fallbackY;
   for (const el of elements) {
@@ -316,11 +358,9 @@ export function AiCommandPalette({
     setTestingConn(true);
     setTestResult(null);
     try {
-      const res = await fetch(apiUrl("/api/ai/generate-diagram"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const res = await callAiGenerateEndpoint({
+        provider: config.provider,
+        body: {
           prompt: "Draw a 2-node ping to pong health check diagram",
           provider: config.provider,
           apiKey: config.apiKey || undefined,
@@ -330,7 +370,7 @@ export function AiCommandPalette({
               : undefined,
           model: config.model || undefined,
           roomId,
-        }),
+        },
       });
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as { error?: string };
@@ -341,10 +381,8 @@ export function AiCommandPalette({
         ok: true,
         message:
           data.mode === "local-cli"
-            ? `Connected via local ${activeProviderCard?.title ?? config.provider}`
-            : data.mode === "cli-handoff"
-              ? `${activeProviderCard?.title ?? config.provider} runs locally via Connect MCP (not installed on remote server)`
-              : `Connected (${activeProviderCard?.title ?? config.provider})`,
+            ? `Connected to local ${activeProviderCard?.title ?? config.provider}`
+            : `Connected (${activeProviderCard?.title ?? config.provider})`,
       });
     } catch (err) {
       setTestResult({
@@ -410,12 +448,10 @@ export function AiCommandPalette({
     ]);
 
     try {
-      const res = await fetch(apiUrl("/api/ai/generate-diagram"), {
-        method: "POST",
-        credentials: "include",
+      const res = await callAiGenerateEndpoint({
+        provider: config.provider,
         signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: {
           prompt: finalPrompt,
           provider: config.provider,
           apiKey: config.apiKey || undefined,
@@ -426,7 +462,7 @@ export function AiCommandPalette({
           model: config.model || undefined,
           roomId,
           history,
-        }),
+        },
       });
 
       if (controller.signal.aborted || myReqId !== requestIdRef.current) return;
@@ -868,7 +904,7 @@ export function AiCommandPalette({
               e.preventDefault();
               void runGeneration();
             }}
-            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 transition-colors focus-within:border-[var(--border-soft)]"
+            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3.5 py-2.5 shadow-inner transition-colors focus-within:border-[var(--border-soft)]"
           >
             <textarea
               rows={2}
@@ -885,19 +921,32 @@ export function AiCommandPalette({
                   ? "Follow up, refine, or send a new prompt..."
                   : "Ask, or select a diagram to edit it..."
               }
-              className="w-full resize-none border-0 bg-transparent text-xs leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:outline-none focus-visible:outline-none focus:ring-0"
+              style={{ outline: "none", boxShadow: "none" }}
+              className="w-full resize-none border-0 bg-transparent p-0 text-xs leading-5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus-visible:outline-none"
             />
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="truncate text-[10px] text-[var(--text-muted)]">
+            <div className="mt-2 flex items-center justify-between gap-2 pt-1">
+              <span className="truncate text-[11px] text-[var(--text-muted)]">
                 Using {activeProviderCard?.title ?? config.provider}
               </span>
               <button
                 type="submit"
                 disabled={!prompt.trim()}
                 aria-label="Send prompt"
-                className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full bg-[var(--accent)] text-xs font-bold text-[var(--accent-fg)] transition hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40"
+                className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm transition-all hover:scale-105 hover:bg-[var(--accent-hover)] active:scale-95 disabled:cursor-default disabled:opacity-35 disabled:hover:scale-100"
               >
-                ↗
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 19V5" />
+                  <path d="m5 12 7-7 7 7" />
+                </svg>
               </button>
             </div>
           </form>
