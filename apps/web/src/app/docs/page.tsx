@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { docGroups, docsEntries, docsHref } from "@/lib/docsCatalog";
+import { getDocsFileGroups } from "@/lib/docsFiles";
 
 export const metadata = {
   title: "Project documentation",
@@ -8,7 +9,8 @@ export const metadata = {
 
 const featured = ["architecture", "features", "database", "improvement-proposals"];
 
-export default function DocsHomePage() {
+export default async function DocsHomePage() {
+  const fileGroups = await getDocsFileGroups();
   const diagrams = docsEntries.filter((entry) => entry.kind === "diagram");
   const featuredDocs = featured.map((slug) => docsEntries.find((entry) => entry.slug === slug)).filter((entry) => entry !== undefined);
 
@@ -63,6 +65,21 @@ export default function DocsHomePage() {
             if (!entries.length) return null;
             return <section className="docs-topic-group" key={group}><h3>{group}</h3>{entries.map((entry) => <Link key={entry.slug} href={docsHref(entry.slug)}>{entry.title}<span aria-hidden="true">↗</span></Link>)}</section>;
           })}
+        </div>
+      </section>
+      <section className="docs-home-section docs-file-section">
+        <div className="docs-section-heading"><div><p className="docs-section-kicker">Repository map</p><h2>Every tracked file, grouped by folder</h2></div><Link href={docsHref("file-catalog")}>Open the full catalog ↗</Link></div>
+        <div className="docs-file-accordion">
+          {fileGroups.map((group) => (
+            <details className="docs-file-group" key={group.folder}>
+              <summary><span>{group.label}</span><span className="docs-file-count">{group.files.length} files</span></summary>
+              <ul className="docs-file-list">
+                {group.files.map((file) => (
+                  <li key={file.path}><code>{file.path}</code><span>{file.purpose}</span></li>
+                ))}
+              </ul>
+            </details>
+          ))}
         </div>
       </section>
       <footer className="docs-home-footer"><span>Built from the implementation in this repository.</span><Link href={docsHref("coverage")}>Review coverage and open questions</Link></footer>

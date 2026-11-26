@@ -6,7 +6,12 @@ const contentRoot = path.resolve(process.cwd(), "../../docs");
 
 export async function readDocsSource(sourcePath: string) {
   const normalized = path.posix.normalize(sourcePath.replaceAll("\\", "/"));
-  if (normalized.startsWith("../") || path.posix.isAbsolute(normalized)) {
+  const isUpgradeNote = normalized.startsWith("../notes/");
+  if (
+    path.posix.isAbsolute(normalized) ||
+    (normalized.startsWith("../") && !isUpgradeNote) ||
+    normalized.includes("..") && !isUpgradeNote
+  ) {
     throw new Error("Invalid documentation source path.");
   }
   return readFile(path.join(contentRoot, ...normalized.split("/")), "utf8");

@@ -2,17 +2,54 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { docsEntries, docsHref, type DocsEntry } from "@/lib/docsCatalog";
 
 type SearchEntry = Pick<DocsEntry, "slug" | "title" | "description" | "group"> & { searchText?: string };
+type DocsTheme = "light" | "dark";
+type DocsFont = "sans" | "mono";
+
+const THEME_KEY = "excalidraw-docs-theme";
+const FONT_KEY = "excalidraw-docs-font";
+
+const themeListeners = new Set<() => void>();
+const fontListeners = new Set<() => void>();
+
+function getThemeSnapshot(): DocsTheme {
+  if (typeof document === "undefined") return "light";
+  return document.documentElement.dataset.docsTheme === "dark" ? "dark" : "light";
+}
+
+function getFontSnapshot(): DocsFont {
+  if (typeof document === "undefined") return "sans";
+  return document.documentElement.dataset.docsFont === "mono" ? "mono" : "sans";
+}
+
+function subscribeTheme(listener: () => void) {
+  themeListeners.add(listener);
+  return () => themeListeners.delete(listener);
+}
+
+function subscribeFont(listener: () => void) {
+  fontListeners.add(listener);
+  return () => fontListeners.delete(listener);
+}
+
+function persist(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage may be unavailable; the setting still applies for this view.
+  }
+}
 
 export function DocsShell({ children, searchIndex }: { children: React.ReactNode; searchIndex: SearchEntry[] }) {
   const pathname = usePathname();
   const activeSlug = pathname.replace(/^\/docs\/?/, "") || "home";
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, () => "light");
+  const font = useSyncExternalStore(subscribeFont, getFontSnapshot, () => "sans");
   const searchRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -23,12 +60,18 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
   }, [query, searchIndex]);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("excalidraw-docs-theme");
-    if (savedTheme === "dark" || savedTheme === "light") {
-      const frame = window.requestAnimationFrame(() => setTheme(savedTheme));
-      return () => window.cancelAnimationFrame(frame);
-    }
-  }, []);
+    const frame = window.requestAnimationFrame(() => setMobileOpen(false));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -52,8 +95,22 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
     grouped.set(entry.group, items);
   }
 
+  const toggleTheme = () => {
+    const next: DocsTheme = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.docsTheme = next;
+    persist(THEME_KEY, next);
+    for (const listener of themeListeners) listener();
+  };
+
+  const toggleFont = () => {
+    const next: DocsFont = font === "mono" ? "sans" : "mono";
+    document.documentElement.dataset.docsFont = next;
+    persist(FONT_KEY, next);
+    for (const listener of fontListeners) listener();
+  };
+
   return (
-    <div className="docs-app" data-theme={theme}>
+    <div className="docs-app" data-theme={theme} data-font={font} suppressHydrationWarning>
       <header className="docs-topbar">
         <button className="docs-menu-button" type="button" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Close documentation navigation" : "Open documentation navigation"} onClick={() => setMobileOpen((open) => !open)}>
           <span aria-hidden="true">{mobileOpen ? "×" : "☰"}</span>
@@ -79,11 +136,10 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
           )}
         </div>
         <div className="docs-topbar-actions">
-          <button className="docs-theme-toggle" type="button" aria-pressed={theme === "dark"} aria-label={theme === "dark" ? "Switch documentation to light mode" : "Switch documentation to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setTheme((current) => {
-            const next = current === "dark" ? "light" : "dark";
-            window.localStorage.setItem("excalidraw-docs-theme", next);
-            return next;
-          })}>
+          <button className="docs-font-toggle" type="button" aria-pressed={font === "mono"} aria-label={font === "mono" ? "Use the sans reading font" : "Use the monospace reading font"} title={font === "mono" ? "Sans font" : "Monospace font"} onClick={toggleFont}>
+            Aa
+          </button>
+          <button className="docs-theme-toggle" type="button" aria-pressed={theme === "dark"} aria-label={theme === "dark" ? "Switch documentation to light mode" : "Switch documentation to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleTheme}>
             {theme === "dark" ? <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.5" /><path d="M10 1.8v2M10 16.2v2M18.2 10h-2M3.8 10h-2m14-5.8-1.4 1.4m-8.8 8.8-1.4 1.4m11.6 0-1.4-1.4m-8.8-8.8L4.4 4.2" /></svg> : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.8 12.7A7.2 7.2 0 0 1 7.3 3.2 7.3 7.3 0 1 0 16.8 12.7Z" /></svg>}
           </button>
           <Link className="docs-back-link" href="/">Open drawing app <span aria-hidden="true">↗</span></Link>
@@ -94,7 +150,8 @@ export function DocsShell({ children, searchIndex }: { children: React.ReactNode
         {mobileOpen && <button className="docs-scrim" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
         <aside className={`docs-sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Documentation navigation">
           <div className="docs-sidebar-scroll">
-        <Link href="/docs" className={`docs-home-link${activeSlug === "home" ? " is-active" : ""}`} onClick={() => setMobileOpen(false)}>
+            <button className="docs-sidebar-close" type="button" aria-label="Close documentation navigation" onClick={() => setMobileOpen(false)}>×</button>
+            <Link href="/docs" className={`docs-home-link${activeSlug === "home" ? " is-active" : ""}`} onClick={() => setMobileOpen(false)}>
               <span className="docs-home-icon" aria-hidden="true">⌂</span> Docs home
             </Link>
             {[...grouped.entries()].map(([group, entries]) => (
