@@ -30,10 +30,14 @@ jobs:
           require-lockfile: true
 
       - name: Run Neon database migrations (if DATABASE_URL secret is set)
-        if: ${{ secrets.DATABASE_URL != '' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: pnpm --filter @repo/db exec prisma db migrate --db "$DATABASE_URL"
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            pnpm --filter @repo/db exec prisma db migrate --db "$DATABASE_URL"
+          else
+            echo "DATABASE_URL secret not set; skipping migrations."
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

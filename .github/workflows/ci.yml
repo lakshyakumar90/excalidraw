@@ -27,16 +27,16 @@ jobs:
           runtime: node@24
           require-lockfile: true
 
+      - name: Build workspace
+        env:
+          SKIP_ENV_VALIDATION: "1"
+        run: pnpm build
+
       - name: Typecheck workspace
         run: pnpm check-types
 
       - name: Lint workspace
         run: pnpm lint
-
-      - name: Build workspace
-        env:
-          SKIP_ENV_VALIDATION: "1"
-        run: pnpm build
 
   test:
     name: Unit & integration tests
@@ -53,6 +53,9 @@ jobs:
           --health-retries 5
     env:
       REDIS_URL: redis://127.0.0.1:6379
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/excalidraw_test
+      JWT_SECRET: ci-test-jwt-secret
+      PRESENCE_TICKET_SECRET: ci-test-presence-ticket-secret-at-least-32-chars
     steps:
       - uses: actions/checkout@v7
 
