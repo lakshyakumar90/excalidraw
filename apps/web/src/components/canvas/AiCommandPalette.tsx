@@ -100,6 +100,8 @@ interface ChatTurn {
   steps?: StepProgressItem[];
   status?: "generating" | "playing" | "done" | "stopped" | "error";
   error?: string;
+  cliCommand?: string;
+  infoMessage?: string;
   elapsedSec?: number;
 }
 
@@ -340,7 +342,9 @@ export function AiCommandPalette({
         message:
           data.mode === "local-cli"
             ? `Connected via local ${activeProviderCard?.title ?? config.provider}`
-            : `Connected (${activeProviderCard?.title ?? config.provider})`,
+            : data.mode === "cli-handoff"
+              ? `${activeProviderCard?.title ?? config.provider} runs locally via Connect MCP (not installed on remote server)`
+              : `Connected (${activeProviderCard?.title ?? config.provider})`,
       });
     } catch (err) {
       setTestResult({
@@ -433,7 +437,10 @@ export function AiCommandPalette({
       }
 
       const data = (await res.json()) as {
-        plan: {
+        mode?: string;
+        cliCommand?: string;
+        message?: string;
+        plan?: {
           summary?: string;
           steps: ({ title: string; mermaidChunk: string } | { title: string; elements: Element[] })[];
         };
@@ -441,9 +448,28 @@ export function AiCommandPalette({
 
       if (controller.signal.aborted || myReqId !== requestIdRef.current) return;
 
+      const plan = data.plan;
+      if (data.mode === "cli-handoff" || !plan) {
+        setChatTurns((prev) =>
+          prev.map((turn) =>
+            turn.id === assistantTurnId
+              ? {
+                  ...turn,
+                  summary: finalPrompt,
+                  status: "done",
+                  steps: [],
+                  cliCommand: data.cliCommand,
+                  infoMessage: data.message,
+                }
+              : turn,
+          ),
+        );
+        return;
+      }
+
       const groupId = `ai-${nowMs().toString(36)}`;
       let nextOriginY = 80;
-      const playbackSteps = data.plan.steps.map((step, idx) => {
+      const playbackSteps = plan.steps.map((step, idx) => {
         if ("elements" in step) {
           nextOriginY = getElementsMaxY(step.elements, nextOriginY) + 80;
           return step;
@@ -470,7 +496,7 @@ export function AiCommandPalette({
           turn.id === assistantTurnId
             ? {
                 ...turn,
-                summary: data.plan.summary || finalPrompt,
+                summary: plan.summary || finalPrompt,
                 steps: initialSteps,
                 status: "playing",
               }
@@ -647,7 +673,9 @@ export function AiCommandPalette({
                           ? "Stopped"
                           : turn.status === "error"
                             ? "Failed"
-                            : `AI · step ${currentStepNumber} of ${Math.max(1, turnSteps.length)}`}
+                            : turn.cliCommand
+                              ? "Run locally via MCP"
+                              : `AI · step ${currentStepNumber} of ${Math.max(1, turnSteps.length)}`}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -671,8 +699,47 @@ export function AiCommandPalette({
                   </div>
 
                   {turn.status === "error" && turn.error ? (
-                    <div className="mt-2.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-2 text-xs text-rose-400">
-                      {turn.error}
+                    <div className="mt-2.5 space-y-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-2 text-xs text-rose-400">
+                      <p>{turn.error}</p>
+                      <button
+                        type="button"
+                        onClick={() => setConnectOpen(true)}
+                        className="cursor-pointer rounded-md border border-rose-400/40 bg-rose-500/15 px-2.5 py-1 text-[11px] font-medium text-rose-200 transition hover:bg-rose-500/25"
+                      >
+                        Open Connect AI
+                      </button>
+                    </div>
+                  ) : turn.cliCommand ? (
+                    <div className="mt-2.5 space-y-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-2.5 text-xs">
+                      {turn.infoMessage && (
+                        <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                          {turn.infoMessage}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-[var(--text-primary)]">
+                          Terminal command
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => void navigator.clipboard?.writeText(turn.cliCommand!)}
+                            className="cursor-pointer rounded-md border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+                          >
+                            Copy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConnectOpen(true)}
+                            className="cursor-pointer rounded-md bg-[var(--accent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"
+                          >
+                            Use BYOK
+                          </button>
+                        </div>
+                      </div>
+                      <code className="block overflow-x-auto rounded-md bg-[var(--bg-canvas)] p-2 font-mono text-[11px] text-[var(--text-muted)]">
+                        {turn.cliCommand}
+                      </code>
                     </div>
                   ) : (
                     turnSteps.length > 0 && (
@@ -801,7 +868,7 @@ export function AiCommandPalette({
               e.preventDefault();
               void runGeneration();
             }}
-            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3"
+            className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-3 transition-colors focus-within:border-[var(--border-soft)]"
           >
             <textarea
               rows={2}
@@ -818,7 +885,7 @@ export function AiCommandPalette({
                   ? "Follow up, refine, or send a new prompt..."
                   : "Ask, or select a diagram to edit it..."
               }
-              className="w-full resize-none bg-transparent text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
+              className="w-full resize-none border-0 bg-transparent text-xs leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:outline-none focus-visible:outline-none focus:ring-0"
             />
             <div className="mt-2 flex items-center justify-between gap-2">
               <span className="truncate text-[10px] text-[var(--text-muted)]">

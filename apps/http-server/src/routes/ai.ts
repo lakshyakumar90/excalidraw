@@ -366,10 +366,36 @@ async function callLocalCli(params: {
   }
 }
 
+function buildLocalCliHandoffCommand(
+  provider: "opencode" | "codex-cli" | "antigravity-cli",
+  prompt: string,
+  roomId?: string,
+): string {
+  const escaped = prompt.replace(/"/g, '\\"');
+  const scope = roomId ? `room ${roomId}` : "the active Chitran board";
+  if (provider === "opencode") {
+    return `opencode run "Use excalidraw MCP mermaid_to_canvas for ${scope}: ${escaped}"`;
+  }
+  if (provider === "codex-cli") {
+    return `codex exec "Use excalidraw MCP mermaid_to_canvas for ${scope}: ${escaped}"`;
+  }
+  return `agy -p "Use excalidraw MCP mermaid_to_canvas for ${scope}: ${escaped}"`;
+}
+
+function isCommandMissingError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: string; message?: string };
+  return (
+    err.code === "ENOENT" ||
+    Boolean(err.message && /\bENOENT\b/i.test(err.message))
+  );
+}
+
 /**
  * POST /api/ai/generate-diagram
  * Supports BYOK (OpenAI-compatible, Anthropic, Gemini) and live local CLI
- * execution (OpenCode, Codex CLI, AntiGravity CLI). No canned templates.
+ * execution (OpenCode, Codex CLI, AntiGravity CLI) with clean MCP handoff
+ * when running on a remote server where local CLIs are not present.
  */
 aiRouter.post("/generate-diagram", async (req, res) => {
   const parsed = GenerateDiagramRequestSchema.safeParse(req.body);
@@ -381,7 +407,7 @@ aiRouter.post("/generate-diagram", async (req, res) => {
     return;
   }
 
-  const { prompt, provider, apiKey, baseUrl, model, history } = parsed.data;
+  const { prompt, provider, apiKey, baseUrl, model, history, roomId } = parsed.data;
   const controller = new AbortController();
   const handleClose = () => {
     if (!res.writableEnded) controller.abort();
@@ -407,6 +433,15 @@ aiRouter.post("/generate-diagram", async (req, res) => {
         }
       } catch (error) {
         if (controller.signal.aborted) return;
+        if (isCommandMissingError(error)) {
+          res.json({
+            provider,
+            mode: "cli-handoff",
+            cliCommand: buildLocalCliHandoffCommand(provider, prompt, roomId),
+            message: `${provider} runs on your local machine, not the remote server. Run this command in your local terminal (with Connect MCP), or pick a BYOK key in Connect AI.`,
+          });
+          return;
+        }
         console.error(`Local CLI (${provider}) diagram generation failed:`, error);
         res.status(502).json({
           error:
