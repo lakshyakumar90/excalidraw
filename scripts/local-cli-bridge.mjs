@@ -50,7 +50,19 @@ function extractJsonObject(raw) {
   return parsed;
 }
 
-function execProcess({ command, args, stdinText, shell = false, timeoutMs = 90_000, signal }) {
+function killProcessTree(child) {
+  if (!child || child.killed || child.pid === undefined) return;
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    return;
+  }
+  child.kill("SIGTERM");
+}
+
+function execProcess({ command, args, cwd, stdinText, shell = false, timeoutMs = 90_000, signal }) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new Error("Request cancelled."));
@@ -58,6 +70,7 @@ function execProcess({ command, args, stdinText, shell = false, timeoutMs = 90_0
     }
 
     const child = spawn(command, args, {
+      cwd,
       shell,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
@@ -76,7 +89,7 @@ function execProcess({ command, args, stdinText, shell = false, timeoutMs = 90_0
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill();
+      killProcessTree(child);
       reject(new Error("Request cancelled."));
     };
 
@@ -86,7 +99,7 @@ function execProcess({ command, args, stdinText, shell = false, timeoutMs = 90_0
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill();
+      killProcessTree(child);
       reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s.`));
     }, timeoutMs);
 
@@ -133,7 +146,8 @@ async function runCli({ provider, prompt, history = [], model, signal }) {
 
   try {
     if (provider === "codex-cli") {
-      const outputFile = join(workDir, "codex-last.txt");
+      const outputName = "codex-last.txt";
+      const outputFile = join(workDir, outputName);
       const args = [
         "exec",
         "--skip-git-repo-check",
@@ -141,13 +155,14 @@ async function runCli({ provider, prompt, history = [], model, signal }) {
         "-s",
         "read-only",
         "-o",
-        outputFile,
+        outputName,
       ];
       if (model) args.push("-m", model);
       args.push("-");
       const { stdout } = await execProcess({
         command: "codex",
         args,
+        cwd: workDir,
         stdinText: fullPrompt,
         shell: process.platform === "win32",
         signal,
@@ -157,14 +172,16 @@ async function runCli({ provider, prompt, history = [], model, signal }) {
     }
 
     if (provider === "opencode") {
-      const promptFile = join(workDir, "prompt.txt");
+      const promptName = "prompt.txt";
+      const promptFile = join(workDir, promptName);
       await writeFile(promptFile, fullPrompt, "utf8");
-      const args = ["run", "--archived", "--format", "default", "--file", promptFile];
+      const args = ["run", "--archived", "--format", "default", "--file", promptName];
       if (model) args.push("--model", model);
       args.push("Read the attached prompt.txt and return ONLY the JSON object.");
       const { stdout } = await execProcess({
         command: "opencode",
         args,
+        cwd: workDir,
         shell: process.platform === "win32",
         signal,
       });
@@ -177,6 +194,7 @@ async function runCli({ provider, prompt, history = [], model, signal }) {
       const { stdout } = await execProcess({
         command: "agy",
         args,
+        cwd: workDir,
         shell: false,
         signal,
       });
