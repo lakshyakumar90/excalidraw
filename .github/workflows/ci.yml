@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-lint-typecheck:
+    name: Build, lint & typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          require-lockfile: true
+
+      - name: Typecheck workspace
+        run: pnpm check-types
+
+      - name: Lint workspace
+        run: pnpm lint
+
+      - name: Build workspace
+        env:
+          SKIP_ENV_VALIDATION: "1"
+        run: pnpm build
+
+  test:
+    name: Unit & integration tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          require-lockfile: true
+
+      - name: Build shared packages
+        run: pnpm exec turbo run build --filter=@repo/common --filter=@repo/db --filter=@repo/auth --filter=@repo/redis --filter=@repo/backend-common
+
+      - name: Run package and app tests
+        run: |
+          pnpm --filter @repo/redis test
+          pnpm --filter @repo/engine test
+          pnpm --filter @repo/backend-common test
+          pnpm --filter http-server test
+          pnpm --filter ws-server test
+          pnpm --filter flush-worker test
+          pnpm --filter web test
+
+  docker-build:
+    name: Verify backend Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: excalidraw-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

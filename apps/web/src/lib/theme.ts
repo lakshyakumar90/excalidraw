@@ -29,8 +29,8 @@ export function useCanvasTheme(initialTheme?: CanvasTheme) {
 
   useEffect(() => {
     const current = initialTheme ?? readStoredTheme();
-    setThemeState(current);
     applyDocumentTheme(current);
+    queueMicrotask(() => setThemeState(current));
   }, [initialTheme]);
 
   const setTheme = useCallback((next: CanvasTheme) => {
